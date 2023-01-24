@@ -1,0 +1,197 @@
+# Duckdbex sandbox
+
+```elixir
+Mix.install([{:duckdbex, path: "/Users/alex/Documents/Dev/Elixir/duckdbex"}])
+```
+
+## Starting with DuckDB
+
+Let's open DuckDB database in the memory. To do this, you do not need to specify any parameters in the Duckdbex.open/1 function.
+
+```elixir
+{:ok, db} = Duckdbex.open()
+```
+
+Now we need create a coonection to the opened database
+
+```elixir
+{:ok, conn} = Duckdbex.connection(db)
+```
+
+So, now we can use this connection `conn` to make Queries. Lets create the simple `users` table. At now, we are not interested in the results of this query, and just ignoring the the result `_r`.
+
+```elixir
+{:ok, _r} =
+  Duckdbex.query(conn, "CREATE OR REPLACE TABLE users(id INTEGER PRIMARY KEY, name VARCHAR);")
+```
+
+and add two users to it
+
+```elixir
+{:ok, _r} = Duckdbex.query(conn, "INSERT INTO users VALUES (1, 'Alex'), (2, 'Sofia');")
+```
+
+Let's get everything we just put in. `Duckdbex.query` will return the reference to the result, so to get real data we must call `Duckdbex.fetch_all` and pass the reference into.
+
+```elixir
+# Making query
+{:ok, res} = Duckdbex.query(conn, "SELECT * FROM users;")
+
+# Fetching result
+# here we pass the reference from previous call
+Duckdbex.fetch_all(res)
+```
+
+In principle, this is all :), but embedded `DuckDB` is interesting not only for this, but for the ability to support analytical query workloads, handy import/export using `CSV` and `Parquet` files format, `nested/composite` data types
+
+## Nested / Composite Types
+
+DuckDB supports three nested data types: LIST, STRUCT and MAP. Each supports different use cases and has a different structure. Let's try some of them.
+
+## MAP and Appender
+
+Create a table with `MAP` column type
+
+```elixir
+sql = "CREATE TABLE books(id INTEGER PRIMARY KEY, details MAP(STRING, STRING));"
+{:ok, _r} = Duckdbex.query(conn, sql)
+```
+
+Suppose we want to insert a lot of data into this table. Folowing the DuckDB recommendations for bulk data insertions we will use `Appender` for task. The Appender is tied to a connection, and will use the transaction context of that connection when appending. An Appender always appends to a single table in the database file. So, let's create the `Appender` for `books` table.
+
+```elixir
+{:ok, appender} = Duckdbex.appender(conn, "books")
+```
+
+Now we are preparing the huge amount of books data. `MAPs` must have a single type for all keys, and a single type for all values. In contrast, `STRUCTs` must have string keys, but each key may have a value of a different type.
+
+```elixir
+a_looot_of_books_list = [
+  [
+    1,
+    %{
+      "title" => "Computer Architecture: A Quantitative Approach",
+      "paperback pages" => "856",
+      "dimensions" => "7.5 x 1.75 x 9 inches"
+    }
+  ],
+  [
+    2,
+    %{
+      "title" => "The Pragmatic Programmer",
+      "publicher" => "David Thomas"
+    }
+  ]
+]
+```
+
+Ok, now we are inserting this data into table using our `Appender`
+
+```elixir
+Duckdbex.appender_add_rows(appender, a_looot_of_books_list)
+```
+
+Any values added to the appender are cached prior to being inserted into the database system for performance reasons. That means that, while appending, the rows might not be immediately visible in the system. The cache can be manually flushed using the `Duckdbex.appender_flush/1` method. Let's flush them.
+
+```elixir
+Duckdbex.appender_flush(appender)
+```
+
+It's time to get our data back.
+
+```elixir
+{:ok, res} = Duckdbex.query(conn, "SELECT * FROM books")
+Duckdbex.fetch_all(res)
+```
+
+## UNION
+
+A UNION type (not to be confused with the SQL UNION operator) is a nested type capable of holding one of multiple “alternative” values, much like the union in C. The main difference being that these UNION types are tagged unions and thus always carry a discriminator “tag” which signals which alternative it is currently holding, even if the inner value itself is null. Create a table with a union column.
+
+```elixir
+sql = """
+  CREATE OR REPLACE TABLE secret_question(
+    user_id INT,
+    question UNION(age INT, name VARCHAR, sequence INT[]));
+"""
+
+{:ok, _r} = Duckdbex.query(conn, sql)
+```
+
+Insert data into table
+
+```elixir
+sql = """
+  INSERT INTO secret_question
+  VALUES (1, 42) , (2, 'Ring of Power'), (3, [42, 24, 22, 44]);
+"""
+
+{:ok, _r} = Duckdbex.query(conn, sql)
+```
+
+and get it back
+
+```elixir
+{:ok, res} = Duckdbex.query(conn, "SELECT * from secret_question;")
+Duckdbex.fetch_all(res)
+```
+
+## CSV
+
+Let's assume we have a CSV file with this data
+
+```text
+FlightDate|UniqueCarrier|OriginCityName|DestCityName
+1988-01-01|AA|New York, NY|Los Angeles, CA
+1988-01-02|AA|New York, NY|Los Angeles, CA
+1988-01-03|AA|New York, NY|Los Angeles, CA
+```
+
+We can load and query this data easily. At first we will create the file with the data.
+
+```elixir
+File.write!("test.csv", """
+FlightDate|UniqueCarrier|OriginCityName|DestCityName
+1988-01-01|AA|New York, NY|Los Angeles, CA
+1988-01-02|AA|New York, NY|Los Angeles, CA
+1988-01-03|AA|New York, NY|Los Angeles, CA
+""")
+```
+
+Read a CSV file from disk, using auto-infer option
+
+```elixir
+{:ok, res} = Duckdbex.query(conn, "SELECT * FROM 'test.csv';")
+Duckdbex.fetch_all(res)
+```
+
+The DuckDB CSV reader can automatically infer which configuration flags to use by analyzing the CSV file. This will work correctly in most situations, and should be the first option attempted. In rare situations where the CSV reader cannot figure out the correct configuration it is possible to manually configure the CSV reader to correctly parse the CSV file.
+
+<!-- livebook:{"break_markdown":true} -->
+
+The same way we can write this data back into file
+
+```elixir
+{:ok, _r} =
+  Duckdbex.query(conn, """
+    CREATE OR REPLACE TABLE ontime(
+      FlightDate DATE,
+      UniqueCarrier VARCHAR,
+      OriginCityName VARCHAR,
+      DestCityName VARCHAR);
+  """)
+
+{:ok, _r} = Duckdbex.query(conn, "COPY ontime FROM 'test.csv' (AUTO_DETECT TRUE);")
+
+{:ok, res} = Duckdbex.query(conn, "SELECT * FROM ontime;")
+Duckdbex.fetch_all(res)
+```
+
+```elixir
+Duckdbex.query(
+  conn,
+  "COPY (SELECT * FROM ontime) TO 'test_2.csv' WITH (HEADER 1, DELIMITER '|');"
+)
+
+File.read!("test_2.csv")
+```
