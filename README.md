@@ -14,6 +14,8 @@ All NIF functions implemented as [**Dirty NIF**](https://www.erlang.org/doc/man/
 
 **DuckDB is in the active development phase, and new version of library may not open the database created by the old version.**
 
+[HexDocs](https://hexdocs.pm/duckdbex/)
+
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
@@ -29,7 +31,7 @@ end
 
 # Usage
 
-Using the `duckdbex` is quite simple. You need to open database file, create connection, run a query and fetch the results. [livebook](https://github.com/AlexR2D2/duckdbex/duckdbex_sandbox.livemd)
+Using the `duckdbex` is quite simple. You need to open database file, create connection, run a query and fetch the results. [livebook](https://github.com/AlexR2D2/duckdbex/blob/main/duckdbex_sandbox.livemd)
 
 ## Open database
 
