@@ -1,6 +1,6 @@
 # Duckdbex
 
-The Library embeds C++ [DuckDB](https://duckdb.org) database into you application.
+This is **Elixir** Library what embeds C++ [DuckDB](https://duckdb.org) database into you **Elixir** application.
 
 DuckDB is an in-process SQL database management system designed to support analytical query workloads, also known as Online analytical processing (OLAP). It has no external dependencies, neither for compilation nor during run-time and completely embedded (like Sqlite) within a host (BEAM in our case) process.
 
