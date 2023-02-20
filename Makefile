@@ -2,7 +2,7 @@ SRC_DIR = c_src
 
 CXXFLAGS = -O3 -std=c++11
 
-HEADERS_DIRS = $(sort $(dir $(shell find -E $(SRC_DIR) -regex ".*\.(hpp|h)")))
+HEADERS_DIRS = $(sort $(dir $(shell find $(SRC_DIR)/* | grep .h)))
 
 CXXFLAGS += -I"$(ERTS_INCLUDE_DIR)"
 CXXFLAGS += $(foreach header, $(HEADERS_DIRS), -I"$(header)")
