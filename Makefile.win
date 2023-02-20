@@ -1,1 +1,49 @@
-TODO
+!IF [where /q Makefile.auto.win]
+# The file doesn't exist, so don't include it.
+!ELSE
+!INCLUDE Makefile.auto.win
+!IF [del /f /q Makefile.auto.win] == 0
+!ENDIF
+!ENDIF
+
+NMAKE = nmake -$(MAKEFLAGS)
+
+SRC = c_src\duckdb\duckdb.cpp  \
+  c_src\duckdb\parquet-amalgamation.cpp  \
+  c_src\config.cpp  \
+  c_src\nif.cpp  \
+  c_src\term_to_value.cpp  \
+  c_src\term.cpp  \
+  c_src\value_to_term.cpp
+
+CPPFLAGS = -O2 $(CPPFLAGS)
+CPPFLAGS = -EHsc $(CPPFLAGS)
+
+# -Wall will emit a lot of warnings on Windows
+# CFLAGS = -Wall $(CFLAGS)
+CPPFLAGS = -Ic_src -Ic_src\duckdb $(CPPFLAGS)
+
+CPPFLAGS = -DNDEBUG=1 $(CPPFLAGS)
+CPPFLAGS = -DBUILD_PARQUET_EXTENSION=1 $(CPPFLAGS)
+
+# Set Erlang-specific compile flags
+!IFNDEF ERL_CFLAGS
+ERL_CFLAGS = -I"$(ERL_EI_INCLUDE_DIR)"
+!ENDIF
+
+all: clean priv\duckdb_nif.dll
+
+clean:
+    del /f /q priv
+
+Makefile.auto.win:
+    erl -noshell -s init stop -eval "io:setopts(standard_io, [{encoding, unicode}]), io:format(\"ERTS_INCLUDE_PATH=~ts/erts-~ts/include/\", [code:root_dir(), erlang:system_info(version)])." > $@
+
+!IFDEF ERTS_INCLUDE_PATH
+priv\duckdb_nif.dll:
+    if NOT EXIST "priv" mkdir "priv"
+    $(CXX) $(ERL_CFLAGS) $(CPPFLAGS) -I"$(ERTS_INCLUDE_PATH)" -LD -MD -Fe$@ $(SRC)
+!ELSE
+priv\duckdb_nif.dll: Makefile.auto.win
+    $(NMAKE) -F Makefile.win priv\duckdb_nif.dll
+!ENDIF
