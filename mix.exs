@@ -1,21 +1,32 @@
 defmodule Duckdbex.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
+  @duckdb_version "0.6.1"
 
   def project do
     [
       app: :duckdbex,
       version: @version,
       elixir: "~> 1.12",
-      compilers: [:elixir_make] ++ Mix.compilers,
-      make_targets: ["all"],
-      make_clean: ["clean"],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
       description: description(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      compilers: [:elixir_make] ++ Mix.compilers,
+      make_targets: ["all"],
+      make_clean: ["clean"],
+      # elixir_make specific config
+      make_precompiler: {:nif, CCPrecompiler},
+      make_precompiler_url:
+        "https://github.com/AlexR2D2/duckdbex/releases/download/v#{@version}/@{artefact_filename}",
+      make_precompiler_filename: "duckdb_nif",
+      make_precompiler_nif_versions: [
+        versions: ["2.15", "2.16"],
+        availability: &target_available_for_nif_version?/2
+      ],
+      cc_precompiler: [cleanup: "clean"],
       # Docs
       name: "Duckdbex",
       source_url: "https://github.com/AlexR2D2/duckdbex/",
@@ -35,9 +46,18 @@ defmodule Duckdbex.MixProject do
 
   defp deps do
     [
-      {:elixir_make, "~> 0.6", runtime: false},
+      {:elixir_make, "~> 0.7", runtime: false},
+      {:cc_precompiler, "~> 0.1", runtime: false},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
     ]
+  end
+
+  def target_available_for_nif_version?(target, nif_version) do
+    if String.contains?(target, "windows") do
+      nif_version == "2.16"
+    else
+      true
+    end
   end
 
   defp package do
@@ -48,6 +68,7 @@ defmodule Duckdbex.MixProject do
         c_src/duckdb/*
         .formatter.exs
         mix.exs
+        checksum.exs
         README.md
         LICENSE
         Makefile*
@@ -75,5 +96,7 @@ defmodule Duckdbex.MixProject do
   defp description do
     "An Elixir DuckDB library"
   end
+
+  def duckdb_version, do: @duckdb_version
 
 end
