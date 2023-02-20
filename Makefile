@@ -15,18 +15,20 @@ PRIV_DIR = $(MIX_APP_PATH)/priv
 LIB_NAME = $(PRIV_DIR)/duckdb_nif.so
 
 ifneq ($(CROSSCOMPILE),)
-	LIB_CXXFLAGS := -shared -fPIC -fvisibility=hidden
-	SO_LDFLAGS := -Wl,-soname,libduckdb.so.0
+	CXXFLAGS += -fPIC -fvisibility=hidden
+	LDFLAGS += -fPIC -shared
 else
 	ifeq ($(KERNEL_NAME), Linux)
-		LIB_CXXFLAGS := -shared -fPIC -fvisibility=hidden
-		SO_LDFLAGS := -Wl,-soname,libduckdb.so.0
+		CXXFLAGS += -fPIC -fvisibility=hidden
+		LDFLAGS += -fPIC -shared
 	endif
 	ifeq ($(KERNEL_NAME), Darwin)
-		LIB_CXXFLAGS := -dynamiclib -undefined dynamic_lookup
+		CXXFLAGS += -fPIC
+		LDFLAGS += -dynamiclib -undefined dynamic_lookup
 	endif
 	ifeq ($(KERNEL_NAME), $(filter $(KERNEL_NAME),OpenBSD FreeBSD NetBSD))
-		LIB_CXXFLAGS := -shared -fPIC
+		CXXFLAGS += -fPIC
+		LDFLAGS += -fPIC -shared
 	endif
 endif
 
@@ -51,7 +53,7 @@ $(PRIV_DIR)/%.o: $(SRC_DIR)/%.cpp | $$(@D)/.
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(LIB_NAME): $(OBJ)
-	$(CXX) $(CXXFLAGS) $(LIB_CXXFLAGS) $(SO_LDFLAGS) $^ -o $@
+	$(CXX) $(LDFLAGS) $^ -o $@
 
 all: $(PRIV_DIR) $(SRC) $(LIB_NAME)
 
