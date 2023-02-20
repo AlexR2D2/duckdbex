@@ -69,6 +69,12 @@ jobs:
             gcc-powerpc64le-linux-gnu g++-powerpc64le-linux-gnu \
             gcc-s390x-linux-gnu g++-s390x-linux-gnu
 
+      - name: Set Swap Space
+        if: matrix.os == 'ubuntu-20.04'
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 10
+
       - name: Create precompiled library
         shell: bash
         run: |
