@@ -70,7 +70,6 @@ jobs:
             gcc-s390x-linux-gnu g++-s390x-linux-gnu
 
       - name: Set Swap Space
-        if: matrix.os == 'ubuntu-20.04'
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 10
