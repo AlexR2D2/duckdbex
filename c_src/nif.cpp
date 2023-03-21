@@ -3,10 +3,9 @@
 #include "term.h"
 #include "term_to_value.h"
 #include "value_to_term.h"
-#include "parquet-amalgamation.hpp"
 #include "duckdb.hpp"
 #include <erl_nif.h>
-#include <string.h>
+#include <string>
 #include <iostream>
 
 /*
@@ -22,6 +21,73 @@ static ErlNifResourceType* appender_nif_type = nullptr;
 /*
  * DuckDB API
  */
+
+static ERL_NIF_TERM
+number_of_threads(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
+  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
+    return enif_make_badarg(env);
+
+  return enif_make_uint64(env, dbres->data->NumberOfThreads());
+}
+
+static ERL_NIF_TERM
+extension_is_loaded(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2)
+    return enif_make_badarg(env);
+
+  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
+  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
+    return enif_make_badarg(env);
+
+  ErlNifBinary extension;
+  if (!enif_inspect_binary(env, argv[1], &extension))
+    return enif_make_badarg(env);
+
+  return dbres->data->ExtensionIsLoaded(std::string((const char*)extension.data, extension.size))
+    ? nif::make_atom(env, "true")
+    : nif::make_atom(env, "false");
+}
+
+static ERL_NIF_TERM
+source_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  static const char* source_id = duckdb::DuckDB::SourceID();
+  return nif::make_binary_term(env, source_id, std::strlen(source_id));
+}
+
+static ERL_NIF_TERM
+library_version(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  static const char* lib_vsn = duckdb::DuckDB::LibraryVersion();
+  return nif::make_binary_term(env, lib_vsn, std::strlen(lib_vsn));
+}
+
+static ERL_NIF_TERM
+library_version_of_storage(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  ErlNifUInt64 storage_format_version;
+  if (!enif_get_uint64(env, argv[0], &storage_format_version))
+    return enif_make_badarg(env);
+
+  if (const char* lib_vsn = duckdb::GetDuckDBVersion(storage_format_version))
+    return nif::make_binary_term(env, lib_vsn, std::strlen(lib_vsn));
+  else
+    return nif::make_atom(env, "nil");
+}
+
+static ERL_NIF_TERM
+storage_format_version(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return enif_make_uint64(env, duckdb::VERSION_NUMBER);
+}
+
+static ERL_NIF_TERM
+platform(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  return nif::make_binary_term(env, duckdb::DuckDB::Platform());
+}
 
 static ERL_NIF_TERM
 open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
@@ -43,7 +109,6 @@ open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   try {
     ErlangResourceBuilder<duckdb::DuckDB> resource_builder(database_nif_type, path, &config);
-    resource_builder.get()->data->LoadExtension<duckdb::ParquetExtension>();
     return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
 
   } catch (std::exception& ex) {
@@ -368,50 +433,6 @@ appender_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return nif::make_atom(env, "ok");
 }
 
-static ERL_NIF_TERM
-number_of_threads(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1)
-    return enif_make_badarg(env);
-
-  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
-  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
-    return enif_make_badarg(env);
-
-  return nif::make_ok_tuple(env, enif_make_uint64(env, dbres->data->NumberOfThreads()));
-}
-
-static ERL_NIF_TERM
-source_id(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1)
-    return enif_make_badarg(env);
-
-  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
-  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
-    return enif_make_badarg(env);
-
-  ERL_NIF_TERM result;
-  unsigned char* data = enif_make_new_binary(env, std::strlen(dbres->data->SourceID()), &result);
-  std::strncpy(reinterpret_cast<char *>(data), dbres->data->SourceID(), std::strlen(dbres->data->SourceID()));
-
-  return nif::make_ok_tuple(env, result);
-}
-
-static ERL_NIF_TERM
-library_version(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1)
-    return enif_make_badarg(env);
-
-  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
-  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
-    return enif_make_badarg(env);
-
-  ERL_NIF_TERM result;
-  unsigned char* data = enif_make_new_binary(env, std::strlen(dbres->data->LibraryVersion()), &result);
-  std::strncpy(reinterpret_cast<char*>(data), dbres->data->LibraryVersion(), std::strlen(dbres->data->LibraryVersion()));
-
-  return nif::make_ok_tuple(env, result);
-}
-
 /*
  * Resources destructors
  */
@@ -525,11 +546,15 @@ on_upgrade(ErlNifEnv* env, void** priv, void** old_priv_data, ERL_NIF_TERM load_
 }
 
 static ErlNifFunc nif_funcs[] = {
+  {"source_id", 0, source_id, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"library_version", 0, library_version, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"storage_format_version", 0, storage_format_version, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"library_version", 1, library_version_of_storage, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"platform", 0, platform, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"number_of_threads", 1, number_of_threads, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"extension_is_loaded", 2, extension_is_loaded, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"open", 2, open, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"connection", 1, connection, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"number_of_threads", 1, number_of_threads, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"source_id", 1, source_id, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"library_version", 1, library_version, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"query", 2, query, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"query", 3, query, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"prepare_statement", 2, prepare_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},

@@ -7,7 +7,6 @@ HEADERS_DIRS = $(sort $(dir $(shell find $(SRC_DIR)/* | grep .h)))
 CXXFLAGS += -I"$(ERTS_INCLUDE_DIR)"
 CXXFLAGS += $(foreach header, $(HEADERS_DIRS), -I"$(header)")
 CXXFLAGS += -DNDEBUG=1
-CXXFLAGS += -DBUILD_PARQUET_EXTENSION=1
 
 KERNEL_NAME := $(shell uname -s)
 

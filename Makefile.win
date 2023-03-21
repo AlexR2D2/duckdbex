@@ -8,12 +8,11 @@
 
 NMAKE = nmake -$(MAKEFLAGS)
 
-SRC = c_src\duckdb\duckdb.cpp  \
-  c_src\duckdb\parquet-amalgamation.cpp  \
-  c_src\config.cpp  \
-  c_src\nif.cpp  \
-  c_src\term_to_value.cpp  \
-  c_src\term.cpp  \
+SRC = c_src\duckdb\duckdb.cpp \
+  c_src\config.cpp \
+  c_src\nif.cpp \
+  c_src\term_to_value.cpp \
+  c_src\term.cpp \
   c_src\value_to_term.cpp
 
 CPPFLAGS = -O2 $(CPPFLAGS)
@@ -24,7 +23,6 @@ CPPFLAGS = -EHsc $(CPPFLAGS)
 CPPFLAGS = -Ic_src -Ic_src\duckdb $(CPPFLAGS)
 
 CPPFLAGS = -DNDEBUG=1 $(CPPFLAGS)
-CPPFLAGS = -DBUILD_PARQUET_EXTENSION=1 $(CPPFLAGS)
 
 # Set Erlang-specific compile flags
 !IFNDEF ERL_CFLAGS

@@ -125,4 +125,34 @@ defmodule DuckdbexTest do
     assert -340282366920938463426481119284349108225 =
       Duckdbex.hugeint_to_integer({-0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF})
   end
+
+  test "library_version/0" do
+    assert Duckdbex.library_version() =~ "v"
+  end
+
+  test "storage_format_version/0" do
+    assert is_number(Duckdbex.storage_format_version())
+  end
+
+  test "library_version/1" do
+    assert "v0.6.0 or v0.6.1" == Duckdbex.library_version(39)
+  end
+
+  test "source_id/0" do
+    assert is_binary(Duckdbex.source_id())
+  end
+
+  test "platform/0" do
+    assert is_binary(Duckdbex.platform())
+  end
+
+  test "extension_is_loaded/1" do
+    assert {:ok, db} = Duckdbex.open()
+    refute Duckdbex.extension_is_loaded(db, "parquet")
+  end
+
+  test "number_of_threads/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert is_integer(Duckdbex.number_of_threads(db))
+  end
 end

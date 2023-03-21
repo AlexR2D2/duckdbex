@@ -278,6 +278,102 @@ defmodule Duckdbex do
     do: Duckdbex.NIF.appender_close(appender)
 
   @doc """
+  Returns the version of the linked DuckDB, with a version postfix for dev versions
+
+  Usually used for developing C extensions that must return this for a compatibility check.
+
+  ## Examples
+  ```
+  iex> Duckdbex.library_version()
+  iex> "v0.7.0"
+  ```
+  """
+  @spec library_version() :: binary()
+  def library_version(),
+    do: Duckdbex.NIF.library_version()
+
+  @doc """
+  Returns the version number of the database storage format
+
+  ## Examples
+  ```
+  iex> Duckdbex.storage_format_version()
+  iex> 43
+  ```
+  """
+  @spec storage_format_version() :: integer()
+  def storage_format_version(),
+    do: Duckdbex.NIF.storage_format_version()
+
+  @doc """
+  Returns the version of the DuckDB library, for storage format version
+
+  ## Examples
+  ```
+  iex> Duckdbex.library_version(39)
+  iex> "v0.6.0 or v0.6.1"
+  ```
+  """
+  @spec library_version(integer()) :: binary()
+  def library_version(storage_format_version) when is_integer(storage_format_version),
+    do: Duckdbex.NIF.library_version(storage_format_version)
+
+  @doc """
+  Returns the commit hash of the linked DuckDB library
+
+  ## Examples
+  ```
+  iex> Duckdbex.source_id()
+  iex> "b00b93f0b1"
+  ```
+  """
+  @spec source_id() :: binary()
+  def source_id(),
+    do: Duckdbex.NIF.source_id()
+
+  @doc """
+  Returns the Platform of the linked DuckDB library
+
+  ## Examples
+  ```
+  iex> Duckdbex.platform()
+  iex> "osx_amd64"
+  ```
+  """
+  @spec platform() :: binary()
+  def platform(),
+    do: Duckdbex.NIF.platform()
+
+  @doc """
+  Returns whether extension is loaded
+
+  ## Examples
+  ```
+  iex> {:ok, db} = Duckdbex.open()
+  iex> Duckdbex.extension_is_loaded(db, "parquet")
+  iex> false
+  ```
+  """
+  @spec extension_is_loaded(db(), binary()) :: boolean()
+  def extension_is_loaded(db, extension_name),
+    do: Duckdbex.NIF.extension_is_loaded(db, extension_name)
+
+  @doc """
+  Returns the count of DuckDB threads
+
+  This is DuckDB own native threads (not a dirty scheduler Erlang threads)
+  ## Examples
+  ```
+  iex> {:ok, db} = Duckdbex.open()
+  iex> Duckdbex.number_of_threads(db)
+  iex> 8
+  ```
+  """
+  @spec number_of_threads(db()) :: integer()
+  def number_of_threads(db),
+    do: Duckdbex.NIF.number_of_threads(db)
+
+  @doc """
   Convert an erlang/elixir integer to a DuckDB hugeint.
 
   For more information on DuckDB numeric types, see [DuckDB Numeric Data Types](https://duckdb.org/docs/sql/data_types/numeric) For more information on DuckDB numeric types.

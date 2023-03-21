@@ -296,7 +296,7 @@ bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& si
   } else if(enif_inspect_binary(env, term, &bin)) {
     // parsing: "2022-10-20 23:59:59.999123"
     duckdb::timestamp_t result;
-    if (duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result)) {
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result)) {
       sink = move(duckdb::Value::TIMESTAMP(result));
       return true;
     }

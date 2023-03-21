@@ -53,6 +53,10 @@ namespace {
     return set_boolean(env, term, sink.options.use_direct_io);
   }
 
+  bool set_load_extensions(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    return set_boolean(env, term, sink.options.load_extensions);
+  }
+
   bool set_maximum_memory(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     if (nif::is_atom(env, term, "nil"))
       return true;
@@ -143,6 +147,10 @@ namespace {
 
   bool set_object_cache_enable(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     return set_boolean(env, term, sink.options.object_cache_enable);
+  }
+
+  bool set_http_metadata_cache_enable(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    return set_boolean(env, term, sink.options.http_metadata_cache_enable);
   }
 
   bool set_force_checkpoint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -245,6 +253,23 @@ namespace {
     return set_boolean(env, term, sink.options.preserve_insertion_order);
   }
 
+  bool set_extension_directory(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    ErlNifBinary bin;
+    if (!enif_inspect_binary(env, term, &bin))
+      return false;
+
+    sink.options.extension_directory = std::string((const char*)bin.data, bin.size);
+
+    return true;
+  }
+
+  bool set_allow_unsigned_extensions(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    return set_boolean(env, term, sink.options.allow_unsigned_extensions);
+  }
+
   bool set_immediate_transaction_mode(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     return set_boolean(env, term, sink.options.immediate_transaction_mode);
   }
@@ -271,6 +296,9 @@ namespace {
 
     if (nif::is_atom(env, name, "use_direct_io"))
       return set_use_direct_io(env, value, sink);
+
+    if (nif::is_atom(env, name, "load_extensions"))
+      return set_load_extensions(env, value, sink);
 
     if (nif::is_atom(env, name, "maximum_memory"))
       return set_maximum_memory(env, value, sink);
@@ -299,6 +327,9 @@ namespace {
     if (nif::is_atom(env, name, "object_cache_enable"))
       return set_object_cache_enable(env, value, sink);
 
+    if (nif::is_atom(env, name, "http_metadata_cache_enable"))
+      return set_http_metadata_cache_enable(env, value, sink);
+
     if (nif::is_atom(env, name, "force_checkpoint"))
       return set_force_checkpoint(env, value, sink);
 
@@ -313,6 +344,12 @@ namespace {
 
     if (nif::is_atom(env, name, "preserve_insertion_order"))
       return set_preserve_insertion_order(env, value, sink);
+
+    if (nif::is_atom(env, name, "extension_directory"))
+      return set_extension_directory(env, value, sink);
+
+    if (nif::is_atom(env, name, "allow_unsigned_extensions"))
+      return set_allow_unsigned_extensions(env, value, sink);
 
     if (nif::is_atom(env, name, "immediate_transaction_mode"))
       return set_immediate_transaction_mode(env, value, sink);

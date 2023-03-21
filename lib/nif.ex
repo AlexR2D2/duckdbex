@@ -19,15 +19,6 @@ defmodule Duckdbex.NIF do
   @spec connection(db()) :: {:ok, connection()} | {:error, reason()}
   def connection(_database), do: :erlang.nif_error(:not_loaded)
 
-  @spec number_of_threads(db()) :: {:ok, integer()} | {:error, reason()}
-  def number_of_threads(_database), do: :erlang.nif_error(:not_loaded)
-
-  @spec source_id(db()) :: {:ok, binary()} | {:error, reason()}
-  def source_id(_database), do: :erlang.nif_error(:not_loaded)
-
-  @spec library_version(db()) :: {:ok, binary()} | {:error, reason()}
-  def library_version(_database), do: :erlang.nif_error(:not_loaded)
-
   @spec query(connection(), binary()) :: {:ok, query_result()} | {:error, reason()}
   def query(_connection, _string_sql), do: :erlang.nif_error(:not_loaded)
 
@@ -63,4 +54,25 @@ defmodule Duckdbex.NIF do
 
   @spec appender_flush(appender()) :: :ok | {:error, reason()}
   def appender_close(_appender), do: :erlang.nif_error(:not_loaded)
+
+  @spec library_version() :: binary()
+  def library_version(), do: :erlang.nif_error(:not_loaded)
+
+  @spec storage_format_version() :: integer()
+  def storage_format_version(), do: :erlang.nif_error(:not_loaded)
+
+  @spec library_version(integer()) :: binary()
+  def library_version(_storage_format_version), do: :erlang.nif_error(:not_loaded)
+
+  @spec source_id() :: binary()
+  def source_id(), do: :erlang.nif_error(:not_loaded)
+
+  @spec platform() :: binary()
+  def platform(), do: :erlang.nif_error(:not_loaded)
+
+  @spec number_of_threads(db()) :: integer()
+  def number_of_threads(_database), do: :erlang.nif_error(:not_loaded)
+
+  @spec extension_is_loaded(db(), binary()) :: boolean()
+  def extension_is_loaded(_database, _extension_name), do: :erlang.nif_error(:not_loaded)
 end
