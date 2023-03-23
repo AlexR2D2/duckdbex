@@ -340,4 +340,64 @@ The ENUM type represents a dictionary data structure with all possible unique va
 [["Pagliacci", "sad"]] = Duckdbex.fetch_all(r)
 ```
 
+## Extensions
+
+DuckDB allows to load and use extensions. By default extensions are downloaded from the remote source. These extensions are verified and signed. Also you can use you own unsigned extensions.
+
+### Remote installation
+
+Download and install verified signed extension from remote source
+
+```elixir
+# download extension binary
+{:ok, _} = Duckdbex.query(conn, "INSTALL 'parquet';")
+
+# load extension into the app
+{:ok, _} = Duckdbex.query(conn, "LOAD 'parquet';")
+
+# now you can use the extension
+{_, r} = Duckdbex.query(conn, "SELECT * FROM 'test.parquet';")
+```
+
+### Local installation (unsigned extension)
+
+Almost the same as above, but you must configure DuckDB to allow unsigned extension
+
+```elixir
+# configure DuckDB to allow  unsigned extension
+conf = %Duckdbex.Config{allow_unsigned_extensions: true}
+{:ok, db} = Duckdbex.open(conf)
+{:ok, conn} = Duckdbex.open(db)
+
+# install unsigned extension from local source
+{:ok, _} = Duckdbex.query(conn, "INSTALL '/home/extensions/my_custom.duckdb_extension';")
+{:ok, _} = Duckdbex.query(conn, "LOAD '/home/extensions/my_custom.duckdb_extension';")
+```
+
+### Custom build DuckDB extensions
+
+If extension what downloaded from the remote source doesn't load because of mismatch of compiler/syslibs and etc., you can build DuckDB extensions by youself and use it as unsigned extensions. You need cmake installed.
+
+```shell
+$ git clone https://github.com/duckdb/duckdb.git
+duckdb$ cd duckdb
+duckdb$ BUILD_JSON=1 make
+duckdb$ cp build/release/extension/json/json.duckdb_extension /home/duckdb_unsigned_extensions
+```
+Now we can use this extension
+
+```elixir
+conf = %Duckdbex.Config{allow_unsigned_extensions: true}
+{:ok, db} = Duckdbex.open(conf)
+{:ok, conn} = Duckdbex.open(db)
+
+# load extension into the app
+{:ok, _} = Duckdbex.query(conn, "INSTALL '/home/duckdb_unsigned_extensions/json.duckdb_extension';")
+{:ok, _} = Duckdbex.query(conn, "LOAD '/home/duckdb_unsigned_extensions/json.duckdb_extension';")
+
+# use the extension
+{:ok, _} = Duckdbex.query(conn, "SELECT * FROM read_json_objects('some_data.json');")
+...
+```
+
 Documentation generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
