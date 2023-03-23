@@ -224,6 +224,12 @@ see more examples [here](https://duckdb.org/docs/data/csv)
 [Parquet](https://parquet.apache.org) is an open source, column-oriented data file format designed for efficient data storage and retrieval. It provides efficient data compression and encoding schemes with enhanced performance to handle complex data in bulk. DuckDB has a built-in Parquet reader. Like CSV reader it works directly with the files escaping ERTS.
 
 ```elixir
+# download parquet extension (the .so/.dll extension will be downloaded from the remote source)
+Duckdbex.query conn, "INSTALL 'parquet';"
+
+# load parquet extension into the app
+Duckdbex.query conn, "LOAD 'parquet';"
+
 # read a single parquet file
 Duckdbex.query conn, "SELECT * FROM 'test.parquet';"
 
