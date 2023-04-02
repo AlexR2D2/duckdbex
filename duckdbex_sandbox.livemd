@@ -195,3 +195,21 @@ Duckdbex.query(
 
 File.read!("test_2.csv")
 ```
+
+## Extensions
+
+DuckDB has a number of extensions available for use. Not all of them are included by default in every distribution, but DuckDB has a mechanism that allows for remote installation.
+
+<!-- livebook:{"break_markdown":true} -->
+
+So, let's try the parquet extension. At first we must install it:
+
+```elixir
+{:ok, _} = Duckdbex.query(conn, "INSTALL 'parquet';")
+```
+
+Extension will be downloaded to the local host. Next, we must load it into our app:
+
+```elixir
+{:ok, _} = Duckdbex.query(conn, "LOAD 'parquet';")
+```

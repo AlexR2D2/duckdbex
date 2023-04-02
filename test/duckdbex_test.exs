@@ -155,4 +155,21 @@ defmodule DuckdbexTest do
     assert {:ok, db} = Duckdbex.open()
     assert is_integer(Duckdbex.number_of_threads(db))
   end
+
+  test "when integer parameter is implicitly converted to double" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+
+    assert {:ok, r} = Duckdbex.query(conn, "SELECT 1 WHERE 3434.2323/1000 < $1;", [10])
+
+    assert [[1]] = Duckdbex.fetch_all(r)
+  end
+
+  test "when double parameter is implicitly converted to integer" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+
+    assert {:error, "invalid type of parameter #0"} =
+      Duckdbex.query(conn, "SELECT 1 WHERE 10 <= $1;", [10.0])
+  end
 end

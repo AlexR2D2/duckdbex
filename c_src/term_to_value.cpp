@@ -22,6 +22,11 @@ bool nif::term_to_float(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) 
     sink = move(duckdb::Value::FLOAT(a_double));
     return true;
   }
+  ErlNifSInt64 an_int64;
+  if (enif_get_int64(env, term, &an_int64)) {
+    sink = move(duckdb::Value::DOUBLE(an_int64));
+    return true;
+  }
   return true;
 }
 
@@ -29,6 +34,11 @@ bool nif::term_to_double(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink)
   double a_double;
   if(enif_get_double(env, term, &a_double)) {
     sink = move(duckdb::Value::DOUBLE(a_double));
+    return true;
+  }
+  ErlNifSInt64 an_int64;
+  if (enif_get_int64(env, term, &an_int64)) {
+    sink = move(duckdb::Value::DOUBLE(an_int64));
     return true;
   }
   return true;
