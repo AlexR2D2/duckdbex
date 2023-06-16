@@ -12,7 +12,7 @@ class ErlangResourceBuilder {
   public:
     typedef erlang_resource<Data> Resource;
 
-    ErlangResourceBuilder(ErlNifResourceType* resource_type, std::unique_ptr<Data> data)
+    ErlangResourceBuilder(ErlNifResourceType* resource_type, duckdb::unique_ptr<Data> data)
       : resource(static_cast<Resource*>(enif_alloc_resource(resource_type, sizeof(Resource)))) {
       if (resource) {
         memset(resource, 0, sizeof(Resource));
@@ -27,15 +27,17 @@ class ErlangResourceBuilder {
       : resource(static_cast<Resource*>(enif_alloc_resource(resource_type, sizeof(Resource)))) {
       if (resource) {
         memset(resource, 0, sizeof(Resource));
-        resource->data = duckdb::make_unique<Data>(std::forward<Args>(args)...);
+        resource->data = duckdb::make_uniq<Data>(std::forward<Args>(args)...);
       } else {
         throw std::runtime_error("out of memory");
       }
     }
 
     ~ErlangResourceBuilder() {
-      if (resource)
+      if (resource) {
+        resource->data = nullptr;
         enif_release_resource(resource);
+      }
     }
 
     Resource* get() {

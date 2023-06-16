@@ -34,8 +34,8 @@ defmodule Duckdbex.Config do
     # The order type used when none is specified
     default_order_type: :asc,
 
-    # Null ordering used when none is specified (default: NULLS FIRST)
-    default_null_order: :nulls_firs,
+    # Null ordering used when none is specified (default: NULLS LAST)
+    default_null_order: :nulls_last,
 
     # Enable COPY and related commands
     enable_external_access: true,
@@ -99,7 +99,7 @@ defmodule Duckdbex.Config do
 
   `:default_order_type`: The order type used when none is specified. Maybe `:asc`, `:desc`. Deafult: `:asc`.
 
-  `:default_null_order`: Null ordering used when none is specified. Maybe `:nulls_firs`, `:nulls_last`. Default: `:nulls_firs`.
+  `:default_null_order`: Null ordering used when none is specified. Maybe `:nulls_first`, `:nulls_last`. Default: `:nulls_last`.
 
   `:enable_external_access`: Enable COPY and related commands. Default: `true`.
 
@@ -136,7 +136,7 @@ defmodule Duckdbex.Config do
     temporary_directory: binary() | nil,
     collation: binary() | nil,
     default_order_type: :asc | :desc,
-    default_null_order: :nulls_firs | :nulls_last,
+    default_null_order: :nulls_last | :nulls_first,
     enable_external_access: boolean(),
     object_cache_enable: boolean(),
     http_metadata_cache_enable: boolean(),

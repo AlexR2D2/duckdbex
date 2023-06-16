@@ -128,13 +128,13 @@ namespace {
   }
 
   bool set_default_null_order(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "nulls_firs")) {
-      sink.options.default_null_order = duckdb::OrderByNullType::NULLS_FIRST;
+    if (nif::is_atom(env, term, "nulls_first")) {
+      sink.options.default_null_order = duckdb::DefaultOrderByNullType::NULLS_FIRST;
       return true;
     }
 
     if (nif::is_atom(env, term, "nulls_last")) {
-      sink.options.default_null_order = duckdb::OrderByNullType::NULLS_LAST;
+      sink.options.default_null_order = duckdb::DefaultOrderByNullType::NULLS_LAST;
       return true;
     }
 
@@ -279,7 +279,7 @@ namespace {
       return true;
 
     if (nif::is_atom(env, term, "erlang")) {
-      sink.allocator = duckdb::make_unique<duckdb::Allocator>(nif::eddb_allocate, nif::eddb_free, nif::eddb_reallocate, nullptr);
+      sink.allocator = duckdb::make_uniq<duckdb::Allocator>(nif::eddb_allocate, nif::eddb_free, nif::eddb_reallocate, nullptr);
       sink.default_allocator = duckdb::make_shared<duckdb::Allocator>(nif::eddb_allocate, nif::eddb_free, nif::eddb_reallocate, nullptr);
       return true;
     }

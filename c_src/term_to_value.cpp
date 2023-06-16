@@ -487,7 +487,7 @@ bool nif::term_to_list(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalT
     return true;
   }
 
-  std::vector<duckdb::Value> values;
+  duckdb::vector<duckdb::Value> values;
 
   ERL_NIF_TERM list = term;
   for (size_t i = 0; i < list_length; i++) {
@@ -521,7 +521,7 @@ bool nif::term_to_map(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalTy
   auto &key_type = duckdb::MapType::KeyType(map_type);
   auto &value_type = duckdb::MapType::ValueType(map_type);
 
-  std::vector<duckdb::Value> map_values(map_size);
+  duckdb::vector<duckdb::Value> map_values(map_size);
 
   duckdb::idx_t idx = 0;
   nif::ErlangMapIterator map_iterator(env, term);

@@ -273,7 +273,7 @@ defmodule Duckdbex do
   iex> [[1, "one"], [2, "two"]] = Duckdbex.fetch_all(res)
   ```
   """
-  @spec appender_flush(appender()) :: :ok | {:error, reason()}
+  @spec appender_close(appender()) :: :ok | {:error, reason()}
   def appender_close(appender) when is_reference(appender),
     do: Duckdbex.NIF.appender_close(appender)
 

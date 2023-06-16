@@ -141,9 +141,9 @@ query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!statement->success)
     return nif::make_error_tuple(env, statement->error.Message());
 
-  std::vector<duckdb::Value> query_params;
+  duckdb::vector<duckdb::Value> query_params;
 
-  std::vector<duckdb::LogicalType> params_types = statement->GetExpectedParameterTypes();
+  duckdb::vector<duckdb::LogicalType> params_types = statement->GetExpectedParameterTypes();
 
   if (params_types.size()) {
     if (argc != 3)
@@ -164,7 +164,7 @@ query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     }
   }
 
-  std::unique_ptr<duckdb::QueryResult> result = statement->Execute(query_params, false);
+  duckdb::unique_ptr<duckdb::QueryResult> result = statement->Execute(query_params, false);
 
   if (result->HasError())
     return nif::make_error_tuple(env, result->GetErrorObject().Message());
@@ -203,8 +203,8 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if(!enif_get_resource(env, argv[0], prepared_statement_nif_type, (void**)&stmtres))
     return enif_make_badarg(env);
 
-  std::vector<duckdb::Value> query_params;
-  std::vector<duckdb::LogicalType> params_types = stmtres->data->GetExpectedParameterTypes();
+  duckdb::vector<duckdb::Value> query_params;
+  duckdb::vector<duckdb::LogicalType> params_types = stmtres->data->GetExpectedParameterTypes();
 
   if (params_types.size()) {
     if (argc != 2)
@@ -225,7 +225,7 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     }
   }
 
-  std::unique_ptr<duckdb::QueryResult> result = stmtres->data->Execute(query_params);
+  duckdb::unique_ptr<duckdb::QueryResult> result = stmtres->data->Execute(query_params);
 
   if (result->HasError())
     return nif::make_error_tuple(env, result->GetErrorObject().Message());
@@ -340,7 +340,7 @@ appender_add_row(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!enif_is_list(env, argv[1]))
     return enif_make_badarg(env);
 
-  std::vector<duckdb::LogicalType> types = apres->data->GetTypes();
+  duckdb::vector<duckdb::LogicalType> types = apres->data->GetTypes();
 
   unsigned row_size = 0;
   if(!enif_get_list_length(env, argv[1], &row_size) || row_size != types.size())
@@ -377,7 +377,7 @@ appender_add_rows(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!enif_is_list(env, argv[1]))
     return enif_make_badarg(env);
 
-  std::vector<duckdb::LogicalType> types = apres->data->GetTypes();
+  duckdb::vector<duckdb::LogicalType> types = apres->data->GetTypes();
 
   ERL_NIF_TERM item, row, rows;
   rows = argv[1];
