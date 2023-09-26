@@ -16,6 +16,26 @@ namespace {
   }
 }
 
+bool nif::term_to_null(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  unsigned atom_len = 0;
+  if (!enif_get_atom_length(env, term, &atom_len, ERL_NIF_LATIN1))
+    return false;
+
+  if(atom_len != 3)
+    return false;
+
+  std::vector<char> atom(4);
+  if(!enif_get_atom(env, term, &atom[0], 4, ERL_NIF_LATIN1))
+    return false;
+
+  if (!std::strcmp(&atom[0], "nil")) {
+    sink = move(duckdb::Value(duckdb::LogicalType::SQLNULL));
+    return true;
+  }
+
+  return false;
+}
+
 bool nif::term_to_float(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   double a_double;
   if(enif_get_double(env, term, &a_double)) {
@@ -571,7 +591,13 @@ bool nif::term_to_struct(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logica
 }
 
 bool nif::term_to_value(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& value_type, duckdb::Value& sink) {
+  if(term_to_null(env, term, sink))
+    return true;
+
   switch(value_type.id()) {
+    case duckdb::LogicalTypeId::SQLNULL:
+      return term_to_null(env, term, sink);
+
     case duckdb::LogicalTypeId::BIGINT:
       return term_to_bigint(env, term, sink);
 

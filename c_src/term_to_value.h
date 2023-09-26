@@ -7,6 +7,7 @@ namespace duckdb {
 }
 
 namespace nif {
+  bool term_to_null(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_float(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_double(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_integer(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
