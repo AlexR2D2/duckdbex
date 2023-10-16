@@ -304,7 +304,7 @@ defmodule Duckdbex.Nif.AppenderTest do
     end
 
     test "append BLOB as charlist", %{conn: conn} do
-      test_appending_type(conn, "BLOB", ['data'], [["data"]])
+      test_appending_type(conn, "BLOB", [~c"data"], [["data"]])
     end
 
     test "append BLOB as bitstring", %{conn: conn} do

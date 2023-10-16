@@ -8,7 +8,7 @@ defmodule Duckdbex.Config do
     access_mode: :automatic,
 
     # Checkpoint when WAL reaches this size (default: 16MB)
-    checkpoint_wal_size: 16777216,
+    checkpoint_wal_size: 16_777_216,
 
     # Whether or not to use Direct IO, bypassing operating system buffers
     use_direct_io: false,
@@ -126,29 +126,38 @@ defmodule Duckdbex.Config do
   `:memory_allocator`: The memory allocator used by the database system. Maybe `:duckdb` - native DuckDB allocator or `:erlang` - erlang 'void *enif_alloc(size_t size)' allocator. Default: `:duckdb`.
   """
   @type t :: %__MODULE__{
-    access_mode: :automatic | :read_only | :read_write,
-    checkpoint_wal_size: pos_integer(),
-    use_direct_io: boolean(),
-    load_extensions: boolean(),
-    maximum_memory: pos_integer(),
-    maximum_threads: pos_integer(),
-    use_temporary_directory: boolean(),
-    temporary_directory: binary() | nil,
-    collation: binary() | nil,
-    default_order_type: :asc | :desc,
-    default_null_order: :nulls_last | :nulls_first,
-    enable_external_access: boolean(),
-    object_cache_enable: boolean(),
-    http_metadata_cache_enable: boolean(),
-    force_checkpoint: boolean(),
-    checkpoint_on_shutdown: boolean(),
-    force_compression: :auto | :uncompressed | :constant | :rle |
-                       :dictionary | :pfor_delta | :bitpacking | :fsst | :chimp | :patas,
-    force_bitpacking_mode: :auto | :constant | :constant_delta | :delta_for | :for,
-    preserve_insertion_order: boolean(),
-    extension_directory: binary() | nil,
-    allow_unsigned_extensions: boolean(),
-    immediate_transaction_mode: boolean(),
-    memory_allocator: :duckdb | :erlang
-  }
+          access_mode: :automatic | :read_only | :read_write,
+          checkpoint_wal_size: pos_integer(),
+          use_direct_io: boolean(),
+          load_extensions: boolean(),
+          maximum_memory: pos_integer(),
+          maximum_threads: pos_integer(),
+          use_temporary_directory: boolean(),
+          temporary_directory: binary() | nil,
+          collation: binary() | nil,
+          default_order_type: :asc | :desc,
+          default_null_order: :nulls_last | :nulls_first,
+          enable_external_access: boolean(),
+          object_cache_enable: boolean(),
+          http_metadata_cache_enable: boolean(),
+          force_checkpoint: boolean(),
+          checkpoint_on_shutdown: boolean(),
+          force_compression:
+            :auto
+            | :uncompressed
+            | :constant
+            | :rle
+            | :dictionary
+            | :pfor_delta
+            | :bitpacking
+            | :fsst
+            | :chimp
+            | :patas,
+          force_bitpacking_mode: :auto | :constant | :constant_delta | :delta_for | :for,
+          preserve_insertion_order: boolean(),
+          extension_directory: binary() | nil,
+          allow_unsigned_extensions: boolean(),
+          immediate_transaction_mode: boolean(),
+          memory_allocator: :duckdb | :erlang
+        }
 end

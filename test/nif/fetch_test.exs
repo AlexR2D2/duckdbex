@@ -10,13 +10,15 @@ defmodule Duckdbex.Nif.FetchTest do
   end
 
   test "fetch_chunk", %{conn: conn} do
-    {:ok, _} = Duckdbex.NIF.query(conn, """
-      CREATE TABLE chunk_test(bigint BIGINT, boolean BOOLEAN, varchar VARCHAR);
-    """)
+    {:ok, _} =
+      Duckdbex.NIF.query(conn, """
+        CREATE TABLE chunk_test(bigint BIGINT, boolean BOOLEAN, varchar VARCHAR);
+      """)
 
-    {:ok, _} = Duckdbex.NIF.query(conn, """
-      INSERT INTO chunk_test VALUES (1, true, 'one'), (2, true, 'two');
-    """)
+    {:ok, _} =
+      Duckdbex.NIF.query(conn, """
+        INSERT INTO chunk_test VALUES (1, true, 'one'), (2, true, 'two');
+      """)
 
     {:ok, result_ref} = Duckdbex.NIF.query(conn, "SELECT * FROM chunk_test")
 
@@ -26,13 +28,15 @@ defmodule Duckdbex.Nif.FetchTest do
   end
 
   test "fetch_all", %{conn: conn} do
-    {:ok, _} = Duckdbex.NIF.query(conn, """
-      CREATE TABLE chunk_test(bigint BIGINT, boolean BOOLEAN, varchar VARCHAR);
-    """)
+    {:ok, _} =
+      Duckdbex.NIF.query(conn, """
+        CREATE TABLE chunk_test(bigint BIGINT, boolean BOOLEAN, varchar VARCHAR);
+      """)
 
-    {:ok, _} = Duckdbex.NIF.query(conn, """
-      INSERT INTO chunk_test VALUES (1, true, 'one'), (2, true, 'two');
-    """)
+    {:ok, _} =
+      Duckdbex.NIF.query(conn, """
+        INSERT INTO chunk_test VALUES (1, true, 'one'), (2, true, 'two');
+      """)
 
     {:ok, result_ref} = Duckdbex.NIF.query(conn, "SELECT * FROM chunk_test")
 

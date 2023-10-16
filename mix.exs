@@ -1,8 +1,8 @@
 defmodule Duckdbex.MixProject do
   use Mix.Project
 
-  @version "0.2.4"
-  @duckdb_version "0.8.1"
+  @version "0.2.5"
+  @duckdb_version "0.9.1"
 
   def project do
     [
@@ -14,7 +14,7 @@ defmodule Duckdbex.MixProject do
       package: package(),
       description: description(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      compilers: [:elixir_make] ++ Mix.compilers,
+      compilers: [:elixir_make] ++ Mix.compilers(),
       make_targets: ["all"],
       make_clean: ["clean"],
       # elixir_make specific config
@@ -40,7 +40,7 @@ defmodule Duckdbex.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :public_key]
     ]
   end
 
@@ -48,7 +48,7 @@ defmodule Duckdbex.MixProject do
     [
       {:elixir_make, "~> 0.7", runtime: false},
       {:cc_precompiler, "~> 0.1", runtime: false},
-      {:ex_doc, "~> 0.24", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.24", only: :dev, runtime: false}
     ]
   end
 
@@ -99,5 +99,4 @@ defmodule Duckdbex.MixProject do
   end
 
   def duckdb_version, do: @duckdb_version
-
 end

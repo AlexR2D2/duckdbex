@@ -143,7 +143,7 @@ query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   duckdb::vector<duckdb::Value> query_params;
 
-  duckdb::vector<duckdb::LogicalType> params_types = statement->GetExpectedParameterTypes();
+  duckdb::case_insensitive_map_t<duckdb::LogicalType> params_types = statement->GetExpectedParameterTypes();
 
   if (params_types.size()) {
     if (argc != 3)
@@ -157,8 +157,9 @@ query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     int arg_idx = 0;
     while(enif_get_list_cell(env, items, &item, &items)) {
       duckdb::Value value;
-      if (!nif::term_to_value(env, item, params_types[arg_idx], value))
-        return nif::make_error_tuple(env, "invalid type of parameter #" + std::to_string(arg_idx));
+      auto arg_idx_str = std::to_string(arg_idx + 1);
+      if (!nif::term_to_value(env, item, params_types[arg_idx_str], value))
+        return nif::make_error_tuple(env, "invalid type of parameter #" + arg_idx_str);
       query_params.push_back(move(value));
       arg_idx++;
     }
@@ -204,7 +205,7 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
 
   duckdb::vector<duckdb::Value> query_params;
-  duckdb::vector<duckdb::LogicalType> params_types = stmtres->data->GetExpectedParameterTypes();
+  duckdb::case_insensitive_map_t<duckdb::LogicalType> params_types = stmtres->data->GetExpectedParameterTypes();
 
   if (params_types.size()) {
     if (argc != 2)
@@ -218,8 +219,9 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     int arg_idx = 0;
     while(enif_get_list_cell(env, items, &item, &items)) {
       duckdb::Value value;
-      if (!nif::term_to_value(env, item, params_types[arg_idx], value))
-        return nif::make_error_tuple(env, "invalid type of parameter #" + std::to_string(arg_idx));
+      auto arg_idx_str = std::to_string(arg_idx + 1);
+      if (!nif::term_to_value(env, item, params_types[arg_idx_str], value))
+        return nif::make_error_tuple(env, "invalid type of parameter #" + arg_idx_str);
       query_params.push_back(move(value));
       arg_idx++;
     }

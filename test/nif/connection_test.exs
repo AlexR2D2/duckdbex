@@ -3,6 +3,6 @@ defmodule Duckdbex.Nif.ConnectionTest do
 
   test "connection" do
     {:ok, db} = Duckdbex.NIF.open(":memory:", nil)
-    assert match? {:ok, _}, Duckdbex.NIF.connection(db)
+    assert match?({:ok, _}, Duckdbex.NIF.connection(db))
   end
 end

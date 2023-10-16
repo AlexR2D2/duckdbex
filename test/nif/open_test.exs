@@ -11,7 +11,7 @@ defmodule Duckdbex.Nif.OpenTest do
   end
 
   test "directory of DB file not found" do
-    assert {:error, <<"IO Error: Cannot open file", _rest::binary>> } =
-      Duckdbex.NIF.open("/root/user/asf#fdscgwgj4/db.duckdb", nil)
+    assert {:error, <<"IO Error: Cannot open file", _rest::binary>>} =
+             Duckdbex.NIF.open("/root/user/asf#fdscgwgj4/db.duckdb", nil)
   end
 end

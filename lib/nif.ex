@@ -13,7 +13,7 @@ defmodule Duckdbex.NIF do
   def init(),
     do: :ok = :erlang.load_nif(Path.join(:code.priv_dir(:duckdbex), "duckdb_nif"), 0)
 
-  @spec open(binary(), Duckdbex.Config.t) :: {:ok, db()} | {:error, reason()}
+  @spec open(binary(), Duckdbex.Config.t()) :: {:ok, db()} | {:error, reason()}
   def open(_path, _config), do: :erlang.nif_error(:not_loaded)
 
   @spec connection(db()) :: {:ok, connection()} | {:error, reason()}

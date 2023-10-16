@@ -9,7 +9,7 @@ defmodule Duckdbex.Nif.ConfigTest do
 
   test "invalid config type" do
     assert_raise(ArgumentError, fn ->
-      NIF.open(":memory:", [invalid: "config"])
+      NIF.open(":memory:", invalid: "config")
     end)
   end
 

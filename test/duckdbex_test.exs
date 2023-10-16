@@ -58,7 +58,10 @@ defmodule DuckdbexTest do
   test "appender_add_row/2" do
     assert {:ok, db} = Duckdbex.open()
     assert {:ok, conn} = Duckdbex.connection(db)
-    assert {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
+    assert {:ok, _res} =
+             Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
     assert {:ok, appender} = Duckdbex.appender(conn, "table_1")
     assert :ok = Duckdbex.appender_add_row(appender, [1, 2])
   end
@@ -66,7 +69,10 @@ defmodule DuckdbexTest do
   test "appender_add_rows/2" do
     assert {:ok, db} = Duckdbex.open()
     assert {:ok, conn} = Duckdbex.connection(db)
-    assert {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
+    assert {:ok, _res} =
+             Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
     assert {:ok, appender} = Duckdbex.appender(conn, "table_1")
     assert :ok = Duckdbex.appender_add_rows(appender, [[1, 2], [3, 4]])
   end
@@ -74,7 +80,10 @@ defmodule DuckdbexTest do
   test "appender_flush/2" do
     assert {:ok, db} = Duckdbex.open()
     assert {:ok, conn} = Duckdbex.connection(db)
-    assert {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
+    assert {:ok, _res} =
+             Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
     assert {:ok, appender} = Duckdbex.appender(conn, "table_1")
     assert :ok = Duckdbex.appender_add_rows(appender, [[1, 2], [3, 4]])
     assert :ok = Duckdbex.appender_flush(appender)
@@ -83,7 +92,10 @@ defmodule DuckdbexTest do
   test "appender_close/2" do
     assert {:ok, db} = Duckdbex.open()
     assert {:ok, conn} = Duckdbex.connection(db)
-    assert {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
+    assert {:ok, _res} =
+             Duckdbex.query(conn, "CREATE TABLE table_1(the_n1 INTEGER, the_n2 INTEGER)")
+
     assert {:ok, appender} = Duckdbex.appender(conn, "table_1")
     assert :ok = Duckdbex.appender_add_rows(appender, [[1, 2], [3, 4]])
     assert :ok = Duckdbex.appender_close(appender)
@@ -91,39 +103,39 @@ defmodule DuckdbexTest do
 
   test "integer_to_hugeint/1" do
     assert {0, 0} =
-      Duckdbex.integer_to_hugeint(-0)
+             Duckdbex.integer_to_hugeint(-0)
 
     assert {0, 1} =
-      Duckdbex.integer_to_hugeint(1)
+             Duckdbex.integer_to_hugeint(1)
 
-    assert {0, 18446744073709551615} =
-      Duckdbex.integer_to_hugeint(0xFFFFFFFFFFFFFFFF)
+    assert {0, 18_446_744_073_709_551_615} =
+             Duckdbex.integer_to_hugeint(0xFFFFFFFFFFFFFFFF)
 
     assert {-1, 1} =
-      Duckdbex.integer_to_hugeint(-0x0FFFFFFFFFFFFFFFF)
+             Duckdbex.integer_to_hugeint(-0x0FFFFFFFFFFFFFFFF)
 
     assert {-16, 16} =
-      Duckdbex.integer_to_hugeint(-0xFFFFFFFFFFFFFFFF0)
+             Duckdbex.integer_to_hugeint(-0xFFFFFFFFFFFFFFFF0)
 
-    assert {18446744073709551615, 18446744073709551615} =
-      Duckdbex.integer_to_hugeint(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+    assert {18_446_744_073_709_551_615, 18_446_744_073_709_551_615} =
+             Duckdbex.integer_to_hugeint(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
   end
 
   test "hugeint_to_integer/1" do
-    assert 0 = Duckdbex.hugeint_to_integer({0,0})
+    assert 0 = Duckdbex.hugeint_to_integer({0, 0})
 
-    assert 1 = Duckdbex.hugeint_to_integer({0,1})
+    assert 1 = Duckdbex.hugeint_to_integer({0, 1})
 
-    assert 18446744073709551616 = Duckdbex.hugeint_to_integer({1,0})
+    assert 18_446_744_073_709_551_616 = Duckdbex.hugeint_to_integer({1, 0})
 
-    assert 18446744073709551615 =
-      Duckdbex.hugeint_to_integer({0,0xFFFFFFFFFFFFFFFF})
+    assert 18_446_744_073_709_551_615 =
+             Duckdbex.hugeint_to_integer({0, 0xFFFFFFFFFFFFFFFF})
 
-    assert 340282366920938463444927863358058659840 =
-      Duckdbex.hugeint_to_integer({0xFFFFFFFFFFFFFFFF,0})
+    assert 340_282_366_920_938_463_444_927_863_358_058_659_840 =
+             Duckdbex.hugeint_to_integer({0xFFFFFFFFFFFFFFFF, 0})
 
-    assert -340282366920938463426481119284349108225 =
-      Duckdbex.hugeint_to_integer({-0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF})
+    assert -340_282_366_920_938_463_426_481_119_284_349_108_225 =
+             Duckdbex.hugeint_to_integer({-0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF})
   end
 
   test "library_version/0" do
@@ -169,7 +181,7 @@ defmodule DuckdbexTest do
     assert {:ok, db} = Duckdbex.open()
     assert {:ok, conn} = Duckdbex.connection(db)
 
-    assert {:error, "invalid type of parameter #0"} =
-      Duckdbex.query(conn, "SELECT 1 WHERE 10 <= $1;", [10.0])
+    assert {:error, "invalid type of parameter #1"} =
+             Duckdbex.query(conn, "SELECT 1 WHERE 10 <= $1;", [10.0])
   end
 end
