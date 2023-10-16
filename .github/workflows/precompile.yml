@@ -13,6 +13,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       MIX_ENV: "prod"
+      OTP_VERSION: ${{ matrix.otp }}
+      ELIXIR_VERSION: ${{ matrix.elixir }}
+      ImageOS: ${{ matrix.os }}
 
     name: Precompile for Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }}, OS ${{ matrix.os }}
     strategy:
@@ -24,10 +27,6 @@ jobs:
         exclude:
           - os: "windows-2019"
             otp: "23"
-    env:
-      OTP_VERSION: ${{ matrix.otp }}
-      ELIXIR_VERSION: ${{ matrix.elixir }}
-      ImageOS: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
