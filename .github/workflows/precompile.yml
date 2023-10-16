@@ -18,12 +18,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-18.04", "ubuntu-20.04", "windows-2019", "macos-11"]
+        os: ["ubuntu18", "ubuntu20", "windows-2019", "macos-11"]
         elixir: ["1.14"]
         otp: ["25", "23"]
         exclude:
           - os: "windows-2019"
             otp: "23"
+    env:
+      OTP_VERSION: ${{ matrix.otp }}
+      ELIXIR_VERSION: ${{ matrix.elixir }}
+      ImageOS: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
