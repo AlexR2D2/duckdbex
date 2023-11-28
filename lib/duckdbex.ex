@@ -140,6 +140,20 @@ defmodule Duckdbex do
     do: Duckdbex.NIF.execute_statement(statement, args)
 
   @doc """
+  Returns columns names from the query result.
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1 as 'my_name';")
+    iex> ["my_name"] = Duckdbex.columns(res)
+  """
+  @spec columns(query_result()) :: list() | {:error, reason()}
+  def columns(query_result) when is_reference(query_result),
+    do: Duckdbex.NIF.columns(query_result)
+
+  @doc """
   Fetches a data chunk from the query result.
 
   Returns empty list if there are no more results to fetch.
@@ -151,7 +165,7 @@ defmodule Duckdbex do
     iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1;")
     iex> [[1]] = Duckdbex.fetch_chunk(res)
   """
-  @spec fetch_chunk(query_result()) :: :ok | {:error, reason()}
+  @spec fetch_chunk(query_result()) :: list() | {:error, reason()}
   def fetch_chunk(query_result) when is_reference(query_result),
     do: Duckdbex.NIF.fetch_chunk(query_result)
 
@@ -167,7 +181,7 @@ defmodule Duckdbex do
     iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1;")
     iex> [[1]] = Duckdbex.fetch_all(res)
   """
-  @spec fetch_all(query_result()) :: :ok | {:error, reason()}
+  @spec fetch_all(query_result()) :: list() | {:error, reason()}
   def fetch_all(query_result) when is_reference(query_result),
     do: Duckdbex.NIF.fetch_all(query_result)
 

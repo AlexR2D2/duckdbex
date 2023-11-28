@@ -240,6 +240,32 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 static ERL_NIF_TERM
+columns(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  erlang_resource<duckdb::QueryResult>* result = nullptr;
+  if(!enif_get_resource(env, argv[0], query_result_nif_type, (void**)&result))
+    return enif_make_badarg(env);
+
+  if (result->data->HasError()) {
+    auto error = result->data->GetError();
+    return nif::make_error_tuple(env, error);
+  }
+
+  if (duckdb::idx_t columns_count = result->data->ColumnCount()) {
+    std::vector<ERL_NIF_TERM> columns(columns_count);
+    for (duckdb::idx_t col = 0; col < columns_count; col++) {
+      duckdb::string column_name = result->data->ColumnName(col);
+      columns[col] = nif::make_binary_term(env, column_name);
+    }
+    return enif_make_list_from_array(env, &columns[0], columns.size());
+  } else {
+    return enif_make_list(env, 0);
+  }
+}
+
+static ERL_NIF_TERM
 fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
@@ -247,6 +273,11 @@ fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   erlang_resource<duckdb::QueryResult>* result = nullptr;
   if(!enif_get_resource(env, argv[0], query_result_nif_type, (void**)&result))
     return enif_make_badarg(env);
+
+  if (result->data->HasError()) {
+    auto error = result->data->GetError();
+    return nif::make_error_tuple(env, error);
+  }
 
   std::vector<ERL_NIF_TERM> rows;
 
@@ -283,6 +314,11 @@ fetch_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   erlang_resource<duckdb::QueryResult>* result = nullptr;
   if(!enif_get_resource(env, argv[0], query_result_nif_type, (void**)&result))
     return enif_make_badarg(env);
+
+  if (result->data->HasError()) {
+    auto error = result->data->GetError();
+    return nif::make_error_tuple(env, error);
+  }
 
   std::vector<ERL_NIF_TERM> rows;
 
@@ -562,6 +598,7 @@ static ErlNifFunc nif_funcs[] = {
   {"prepare_statement", 2, prepare_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 1, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 2, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"columns", 1, columns, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_chunk", 1, fetch_chunk, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_all", 1, fetch_all, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender", 2, appender, ERL_NIF_DIRTY_JOB_IO_BOUND},

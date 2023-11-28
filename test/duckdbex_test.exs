@@ -32,6 +32,13 @@ defmodule DuckdbexTest do
     assert {:ok, _res} = Duckdbex.query(conn, "SELECT 1 WHERE 1 = $1;", [1])
   end
 
+  test "columns/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert {:ok, result} = Duckdbex.query(conn, "SELECT 1 as 'one_column_name', 2 WHERE 1 = $1;", [1])
+    assert ["one_column_name", "2"] = Duckdbex.columns(result)
+  end
+
   test "fetch_chunk/1" do
     assert {:ok, db} = Duckdbex.open()
     assert {:ok, conn} = Duckdbex.connection(db)
