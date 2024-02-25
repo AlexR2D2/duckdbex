@@ -394,8 +394,8 @@ defmodule Duckdbex.Nif.QueryTest do
     assert {:ok, r} = NIF.query(conn, "select map(['1', '5'], [1, 2]);")
     assert [[%{"1" => 1, "5" => 2}]] = NIF.fetch_all(r)
 
-    assert {:ok, r} = NIF.query(conn, "select map([1, 2, 3], [1, 'a', 2.4::DECIMAL(3, 2)]);")
-    assert [[%{1 => "1", 2 => "a", 3 => "2.40"}]] = NIF.fetch_all(r)
+    assert {:error, "Conversion Error: Could not convert string \"a\" to DECIMAL(12,2)"} =
+      NIF.query(conn, "select map([1, 2, 3], [1, 'a', 2.4::DECIMAL(3, 2)]);")
 
     assert {:ok, r} =
              NIF.query(conn, "select map([['a', 'b'], ['c', 'd']], [[1.1, 2.2], [3.3, 4.4]]);")

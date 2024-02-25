@@ -282,7 +282,7 @@ fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<ERL_NIF_TERM> rows;
 
   duckdb::unique_ptr<duckdb::DataChunk> chunk;
-  duckdb::PreservedError error;
+  duckdb::ErrorData error;
   if (result->data->TryFetch(chunk, error) && chunk) {
     duckdb::idx_t rows_count = chunk->size();
     duckdb::idx_t columns_count = chunk->ColumnCount();
@@ -323,7 +323,7 @@ fetch_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   std::vector<ERL_NIF_TERM> rows;
 
   duckdb::unique_ptr<duckdb::DataChunk> chunk;
-  duckdb::PreservedError error;
+  duckdb::ErrorData error;
   while (result->data->TryFetch(chunk, error) && chunk) {
     duckdb::idx_t rows_count = chunk->size();
     duckdb::idx_t columns_count = chunk->ColumnCount();
