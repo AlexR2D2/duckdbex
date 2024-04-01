@@ -394,8 +394,8 @@ defmodule Duckdbex.Nif.QueryTest do
     assert {:ok, r} = NIF.query(conn, "select map(['1', '5'], [1, 2]);")
     assert [[%{"1" => 1, "5" => 2}]] = NIF.fetch_all(r)
 
-    assert {:error, "Conversion Error: Could not convert string \"a\" to DECIMAL(12,2)"} =
-      NIF.query(conn, "select map([1, 2, 3], [1, 'a', 2.4::DECIMAL(3, 2)]);")
+    assert {:error, "Conversion Error:" <> _details} =
+      NIF.query(conn, "SELECT map([1, 2, 3], [1, 'a', 2.4::DECIMAL(3, 2)]);")
 
     assert {:ok, r} =
              NIF.query(conn, "select map([['a', 'b'], ['c', 'd']], [[1.1, 2.2], [3.3, 4.4]]);")
@@ -413,7 +413,7 @@ defmodule Duckdbex.Nif.QueryTest do
     # assert {:error, "Invalid Input Error: Map keys have to be unique"} =
     #  NIF.query(conn, "select map([1, 1, 1], ['a', 'b', 'c']);")
 
-    assert {:error, "Invalid Input Error: Map keys can not be NULL"} =
+    assert {:error, "Invalid Input Error:" <> _details} =
              NIF.query(conn, "select map([NULL, 5], ['a', 'e']);")
 
     assert {:ok, _} = NIF.query(conn, "CREATE TABLE map_table (map_col MAP(INT, DOUBLE));")

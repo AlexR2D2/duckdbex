@@ -10,8 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "20b1486d11"
-#define DUCKDB_VERSION "v0.10.0"
+#define DUCKDB_SOURCE_ID "4a89d97db8"
+#define DUCKDB_VERSION "v0.10.1"
+#define DUCKDB_MAJOR_VERSION 0
+#define DUCKDB_MINOR_VERSION 10
+#define DUCKDB_PATCH_VERSION "1"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -753,6 +756,8 @@ class TypeMismatchException : public Exception {
 public:
 	DUCKDB_API TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
+	DUCKDB_API TypeMismatchException(optional_idx error_location, const LogicalType &type_1, const LogicalType &type_2,
+	                                 const string &msg);
 	DUCKDB_API
 	TypeMismatchException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
@@ -1271,6 +1276,13 @@ bool RefersToSameObject(const reference<T> &A, const reference<T> &B) {
 template<class T>
 bool RefersToSameObject(const T &A, const T &B) {
 	return &A == &B;
+}
+
+template<class T, class SRC>
+void DynamicCastCheck(SRC *source) {
+#ifndef __APPLE__
+	D_ASSERT(dynamic_cast<T *>(source));
+#endif
 }
 
 } // namespace duckdb
@@ -2054,7 +2066,7 @@ public:
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
-	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
+	DUCKDB_API static LogicalType DECIMAL(uint8_t width, uint8_t scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
@@ -2362,10 +2374,10 @@ struct NumericLimits {
 	static constexpr T Maximum() {
 		return std::numeric_limits<T>::max();
 	}
-	DUCKDB_API static constexpr bool IsSigned() {
+	static constexpr bool IsSigned() {
 		return std::is_signed<T>::value;
 	}
-	DUCKDB_API static constexpr idx_t Digits();
+	static constexpr idx_t Digits();
 };
 
 template <>
@@ -2864,14 +2876,19 @@ public:
 	DUCKDB_API static timestamp_t GetCurrentTimestamp();
 
 	//! Convert the epoch (in sec) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t ms);
+	DUCKDB_API static timestamp_t FromEpochSecondsPossiblyInfinite(int64_t s);
+	DUCKDB_API static timestamp_t FromEpochSeconds(int64_t s);
 	//! Convert the epoch (in ms) to a timestamp
+	DUCKDB_API static timestamp_t FromEpochMsPossiblyInfinite(int64_t ms);
 	DUCKDB_API static timestamp_t FromEpochMs(int64_t ms);
 	//! Convert the epoch (in microseconds) to a timestamp
 	DUCKDB_API static timestamp_t FromEpochMicroSeconds(int64_t micros);
 	//! Convert the epoch (in nanoseconds) to a timestamp
-	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t micros);
+	DUCKDB_API static timestamp_t FromEpochNanoSecondsPossiblyInfinite(int64_t nanos);
+	DUCKDB_API static timestamp_t FromEpochNanoSeconds(int64_t nanos);
 
+	//! Try convert a timestamp to epoch (in nanoseconds)
+	DUCKDB_API static bool TryGetEpochNanoSeconds(timestamp_t timestamp, int64_t &result);
 	//! Convert the epoch (in seconds) to a timestamp
 	DUCKDB_API static int64_t GetEpochSeconds(timestamp_t timestamp);
 	//! Convert the epoch (in ms) to a timestamp
@@ -2960,6 +2977,132 @@ struct hash<duckdb::timestamp_tz_t> {
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/numeric_utils.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+#include <type_traits>
+
+
+
+
+namespace duckdb {
+
+template <class T>
+struct MakeSigned {
+	using type = typename std::make_signed<T>::type;
+};
+
+template <>
+struct MakeSigned<hugeint_t> {
+	using type = hugeint_t;
+};
+
+template <>
+struct MakeSigned<uhugeint_t> {
+	using type = hugeint_t;
+};
+
+template <class T>
+struct MakeUnsigned {
+	using type = typename std::make_unsigned<T>::type;
+};
+
+template <>
+struct MakeUnsigned<hugeint_t> {
+	using type = uhugeint_t;
+};
+
+template <>
+struct MakeUnsigned<uhugeint_t> {
+	using type = uhugeint_t;
+};
+
+template <class T>
+struct IsIntegral {
+	static constexpr bool value = std::is_integral<T>::value;
+};
+
+template <>
+struct IsIntegral<hugeint_t> {
+	static constexpr bool value = true;
+};
+
+template <>
+struct IsIntegral<uhugeint_t> {
+	static constexpr bool value = true;
+};
+
+template <class TO, class FROM>
+static void ThrowNumericCastError(FROM in, TO minval, TO maxval) {
+	throw InternalException("Information loss on integer cast: value %d outside of target range [%d, %d]", in, minval,
+	                        maxval);
+}
+
+template <class TO, class FROM>
+TO NumericCast(FROM val) {
+	// some dance around signed-unsigned integer comparison below
+	auto minval = NumericLimits<TO>::Minimum();
+	auto maxval = NumericLimits<TO>::Maximum();
+	auto unsigned_in = static_cast<typename MakeUnsigned<FROM>::type>(val);
+	auto unsigned_min = static_cast<typename MakeUnsigned<TO>::type>(minval);
+	auto unsigned_max = static_cast<typename MakeUnsigned<TO>::type>(maxval);
+	auto signed_in = static_cast<typename MakeSigned<FROM>::type>(val);
+	auto signed_min = static_cast<typename MakeSigned<TO>::type>(minval);
+	auto signed_max = static_cast<typename MakeSigned<TO>::type>(maxval);
+
+	if (std::is_unsigned<FROM>() && std::is_unsigned<TO>() &&
+	    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
+		ThrowNumericCastError(val, minval, maxval);
+	}
+
+	if (std::is_signed<FROM>() && std::is_signed<TO>() && (signed_in < signed_min || signed_in > signed_max)) {
+		ThrowNumericCastError(val, minval, maxval);
+	}
+
+	if (std::is_signed<FROM>() != std::is_signed<TO>() && (signed_in < signed_min || unsigned_in > unsigned_max)) {
+		ThrowNumericCastError(val, minval, maxval);
+	}
+
+	return static_cast<TO>(val);
+}
+
+template <class TO>
+TO NumericCast(double val) {
+	return static_cast<TO>(val);
+}
+
+template <class TO>
+TO NumericCast(float val) {
+	return static_cast<TO>(val);
+}
+
+template <class TO, class FROM>
+TO UnsafeNumericCast(FROM in) {
+#ifdef DEBUG
+	return NumericCast<TO, FROM>(in);
+#endif
+	return static_cast<TO>(in);
+}
+
+template <class TO>
+TO UnsafeNumericCast(double val) {
+	return NumericCast<TO>(val);
+}
+
+template <class TO>
+TO UnsafeNumericCast(float val) {
+	return NumericCast<TO>(val);
+}
+
+} // namespace duckdb
+
 
 #include <cstring>
 
@@ -3007,10 +3150,14 @@ public:
 			value.pointer.ptr = (char *)data; // NOLINT
 		}
 	}
-	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
+
+	string_t(const char *data)
+	    : string_t(data,
+	               UnsafeNumericCast<uint32_t>(strlen(data))) { // NOLINT: Allow implicit conversion from `const char*`
 	}
 	string_t(const string &value)
-	    : string_t(value.c_str(), value.size()) { // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(value.c_str(),
+	               UnsafeNumericCast<uint32_t>(value.size())) { // NOLINT: Allow implicit conversion from `const char*`
 	}
 
 	bool IsInlined() const {
@@ -3079,6 +3226,8 @@ public:
 	}
 
 	void Verify() const;
+	void VerifyUTF8() const;
+	void VerifyCharacters() const;
 	void VerifyNull() const;
 
 	struct StringComparisonOperators {
@@ -3114,8 +3263,8 @@ public:
 		}
 		// compare up to shared length. if still the same, compare lengths
 		static bool GreaterThan(const string_t &left, const string_t &right) {
-			const uint32_t left_length = left.GetSize();
-			const uint32_t right_length = right.GetSize();
+			const uint32_t left_length = UnsafeNumericCast<uint32_t>(left.GetSize());
+			const uint32_t right_length = UnsafeNumericCast<uint32_t>(right.GetSize());
 			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
 #ifndef DUCKDB_DEBUG_NO_INLINE
@@ -3742,6 +3891,8 @@ public:
 	DUCKDB_API explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
 	DUCKDB_API Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
+	//! Create a BOOLEAN value
+	explicit DUCKDB_API Value(bool val);
 	//! Create a BIGINT value
 	DUCKDB_API Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
@@ -3891,6 +4042,9 @@ public:
 	//! Creates a bitstring by casting a specified string to a bitstring
 	DUCKDB_API static Value BIT(const_data_ptr_t data, idx_t len);
 	DUCKDB_API static Value BIT(const string &data);
+
+	//! Creates an aggregate state
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len);
 
 	template <class T>
 	T GetValue() const;
@@ -4259,6 +4413,8 @@ DUCKDB_API date_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API dtime_t Value::GetValueUnsafe() const;
 template <>
+DUCKDB_API dtime_tz_t Value::GetValueUnsafe() const;
+template <>
 DUCKDB_API timestamp_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API interval_t Value::GetValueUnsafe() const;
@@ -4359,7 +4515,7 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -4520,6 +4676,28 @@ enum class OnEntryNotFound : uint8_t { THROW_EXCEPTION = 0, RETURN_NULL = 1 };
 
 } // namespace duckdb
 
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/enums/catalog_lookup_behavior.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+namespace duckdb {
+
+//! Enum used for indicating lookup behavior of specific catalog types
+// STANDARD means the catalog lookups are performed in a regular manner (i.e. according to the users' search path)
+// LOWER_PRIORITY means the catalog lookups are de-prioritized and we do lookups in other catalogs first
+// NEVER_LOOKUP means we never do lookups for this specific type in this catalog
+enum class CatalogLookupBehavior : uint8_t { STANDARD = 0, LOWER_PRIORITY = 1, NEVER_LOOKUP = 2 };
+
+} // namespace duckdb
 
 #include <functional>
 
@@ -4695,6 +4873,10 @@ public:
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &name,
 	                                                      OnEntryNotFound if_not_found,
 	                                                      QueryErrorContext error_context = QueryErrorContext());
+	//! Overloadable method for giving warnings on ambiguous naming id.tab due to a database and schema with name id
+	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &name) {
+		return !!GetSchema(context, name, OnEntryNotFound::RETURN_NULL);
+	}
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &name,
 	                                         QueryErrorContext error_context = QueryErrorContext());
 	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry>
@@ -4777,6 +4959,11 @@ public:
 	virtual bool InMemory() = 0;
 	virtual string GetDBPath() = 0;
 
+	//! Whether or not this catalog should search a specific type with the standard priority
+	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
+		return CatalogLookupBehavior::STANDARD;
+	}
+
 public:
 	template <class T>
 	static optional_ptr<T> GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
@@ -4852,7 +5039,7 @@ private:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 
@@ -5107,7 +5294,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -5137,6 +5324,8 @@ public:
 	static constexpr uint8_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
 	//! Open file in append mode
 	static constexpr uint8_t FILE_FLAGS_APPEND = 1 << 5;
+	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
+	static constexpr uint8_t FILE_FLAGS_PRIVATE = 1 << 6;
 };
 
 class FileSystem {
@@ -5413,6 +5602,7 @@ string VectorTypeToString(VectorType type);
 
 
 
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -5513,7 +5703,7 @@ public:
 	}
 
 	inline void set_index(idx_t idx, idx_t loc) {
-		sel_vector[idx] = loc;
+		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
 	inline void swap(idx_t i, idx_t j) {
 		sel_t tmp = sel_vector[i];
@@ -6052,6 +6242,8 @@ public:
 
 
 
+
+
 namespace duckdb {
 class Allocator;
 class AttachedDatabase;
@@ -6070,7 +6262,7 @@ struct PrivateAllocatorData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -6136,16 +6328,10 @@ public:
 	AllocatedData Allocate(idx_t size) {
 		return AllocatedData(*this, AllocateData(size), size);
 	}
-	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-		return data_ptr_cast(malloc(size));
-	}
-	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-		free(pointer);
-	}
+	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size);
+	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-	                                    idx_t size) {
-		return data_ptr_cast(realloc(pointer, size));
-	}
+	                                    idx_t size);
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
 	static Allocator &Get(AttachedDatabase &db);
@@ -6158,6 +6344,7 @@ public:
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 	static void ThreadFlush(idx_t threshold);
+	static void FlushAll();
 
 private:
 	allocate_function_ptr_t allocate_function;
@@ -6239,7 +6426,10 @@ public:
 	DUCKDB_API ArenaChunk *GetTail();
 
 	DUCKDB_API bool IsEmpty() const;
+	//! Get the total *used* size (not cached)
 	DUCKDB_API idx_t SizeInBytes() const;
+	//! Get the currently allocated size in bytes (cached, read from "allocated_size")
+	DUCKDB_API idx_t AllocationSize() const;
 
 	//! Returns an "Allocator" wrapper for this arena allocator
 	Allocator &GetAllocator() {
@@ -6254,6 +6444,8 @@ private:
 	ArenaChunk *tail;
 	//! An allocator wrapper using this arena allocator
 	Allocator arena_allocator;
+	//! The total allocated size
+	idx_t allocated_size = 0;
 };
 
 } // namespace duckdb
@@ -6287,6 +6479,8 @@ public:
 
 	//! Size of strings
 	DUCKDB_API idx_t SizeInBytes() const;
+	//! Total allocation size (cached)
+	DUCKDB_API idx_t AllocationSize() const;
 
 private:
 	ArenaAllocator allocator;
@@ -6589,7 +6783,7 @@ protected:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -6772,6 +6966,14 @@ private:
 namespace duckdb {
 
 struct UnifiedVectorFormat {
+	DUCKDB_API UnifiedVectorFormat();
+	// disable copy constructors
+	UnifiedVectorFormat(const UnifiedVectorFormat &other) = delete;
+	UnifiedVectorFormat &operator=(const UnifiedVectorFormat &) = delete;
+	//! enable move constructors
+	DUCKDB_API UnifiedVectorFormat(UnifiedVectorFormat &&other) noexcept;
+	DUCKDB_API UnifiedVectorFormat &operator=(UnifiedVectorFormat &&) noexcept;
+
 	const SelectionVector *sel;
 	data_ptr_t data;
 	ValidityMask validity;
@@ -6957,6 +7159,11 @@ public:
 	// Setters
 	DUCKDB_API void SetVectorType(VectorType vector_type);
 
+	// Transform vector to an equivalent dictionary vector
+	static void DebugTransformToDictionary(Vector &vector, idx_t count);
+	// Transform vector to an equivalent nested vector
+	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
+
 private:
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValue(const Vector &v, idx_t index);
@@ -7047,6 +7254,16 @@ struct DictionaryVector {
 };
 
 struct FlatVector {
+	static void VerifyFlatVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException("Operation requires a flat vector but a non-flat vector was encountered");
+		}
+#endif
+	}
+
 	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
@@ -7068,15 +7285,15 @@ struct FlatVector {
 		return FlatVector::GetData<T>(vector)[idx];
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return vector.validity;
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		VerifyFlatVector(vector);
 		return vector.validity;
 	}
-	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+	static inline void SetValidity(Vector &vector, const ValidityMask &new_validity) {
+		VerifyFlatVector(vector);
 		vector.validity.Initialize(new_validity);
 	}
 	DUCKDB_API static void SetNull(Vector &vector, idx_t idx, bool is_null);
@@ -7189,7 +7406,15 @@ struct FSSTVector {
 	DUCKDB_API static idx_t GetCount(Vector &vector);
 };
 
-enum class MapInvalidReason : uint8_t { VALID, NULL_KEY_LIST, NULL_KEY, DUPLICATE_KEY };
+enum class MapInvalidReason : uint8_t {
+	VALID,
+	NULL_KEY_LIST,
+	NULL_KEY,
+	DUPLICATE_KEY,
+	NULL_VALUE_LIST,
+	NOT_ALIGNED,
+	INVALID_PARAMS
+};
 
 struct MapVector {
 	DUCKDB_API static const Vector &GetKeys(const Vector &vector);
@@ -7198,6 +7423,7 @@ struct MapVector {
 	DUCKDB_API static Vector &GetValues(Vector &vector);
 	DUCKDB_API static MapInvalidReason
 	CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	DUCKDB_API static void EvalMapInvalidReason(MapInvalidReason reason);
 	DUCKDB_API static void MapConversionVerify(Vector &vector, idx_t count);
 };
 
@@ -7246,8 +7472,9 @@ struct UnionVector {
 	DUCKDB_API static const Vector &GetTags(const Vector &v);
 	DUCKDB_API static Vector &GetTags(Vector &v);
 
-	//! Get the tag at the specific index of the union vector
-	DUCKDB_API static union_tag_t GetTag(const Vector &vector, idx_t index);
+	//! Try to get the tag at the specific flat index of the union vector. Returns false if the tag is NULL.
+	//! This will handle and map the index properly for constant and dictionary vectors internally.
+	DUCKDB_API static bool TryGetTag(const Vector &vector, idx_t index, union_tag_t &tag);
 
 	//! Get the member vector of a union vector by index
 	DUCKDB_API static const Vector &GetMember(const Vector &vector, idx_t member_index);
@@ -7937,11 +8164,12 @@ struct VectorOperations {
 	//! NULLs. If any elements cannot be converted, returns false and fills in the error_message. If no error message is
 	//! provided, an exception is thrown instead.
 	DUCKDB_API static bool TryCast(CastFunctionSet &set, GetCastFunctionInput &input, Vector &source, Vector &result,
-	                               idx_t count, string *error_message, bool strict = false);
+	                               idx_t count, string *error_message, bool strict = false,
+	                               const bool nullify_parent = false);
 	DUCKDB_API static bool DefaultTryCast(Vector &source, Vector &result, idx_t count, string *error_message,
 	                                      bool strict = false);
 	DUCKDB_API static bool TryCast(ClientContext &context, Vector &source, Vector &result, idx_t count,
-	                               string *error_message, bool strict = false);
+	                               string *error_message, bool strict = false, const bool nullify_parent = false);
 	//! Cast the data from the source type to the target type. Throws an exception if the cast fails.
 	DUCKDB_API static void Cast(ClientContext &context, Vector &source, Vector &result, idx_t count,
 	                            bool strict = false);
@@ -9498,6 +9726,10 @@ public:
 	template <typename... Args>
 	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
 	}
+	template <typename... Args>
+	explicit ParserException(optional_idx error_location, const string &msg, Args... params)
+	    : ParserException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_location)) {
+	}
 
 	static ParserException SyntaxError(const string &query, const string &error_message, optional_idx error_location);
 };
@@ -9896,7 +10128,7 @@ struct FunctionData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -10047,7 +10279,7 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -11050,7 +11282,7 @@ struct FunctionLocalState {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -12190,6 +12422,7 @@ protected:
 		expression_class = other.expression_class;
 		alias = other.alias;
 		return_type = other.return_type;
+		query_location = other.query_location;
 	}
 };
 
@@ -12248,6 +12481,63 @@ public:
 	static BoundOrderByNode Deserialize(Deserializer &deserializer);
 };
 
+enum class LimitNodeType : uint8_t {
+	UNSET = 0,
+	CONSTANT_VALUE = 1,
+	CONSTANT_PERCENTAGE = 2,
+	EXPRESSION_VALUE = 3,
+	EXPRESSION_PERCENTAGE = 4
+};
+
+struct BoundLimitNode {
+public:
+	BoundLimitNode();
+	BoundLimitNode(LimitNodeType type, idx_t constant_integer, double constant_percentage,
+	               unique_ptr<Expression> expression);
+
+public:
+	static BoundLimitNode ConstantValue(int64_t value);
+	static BoundLimitNode ConstantPercentage(double percentage);
+	static BoundLimitNode ExpressionValue(unique_ptr<Expression> expression);
+	static BoundLimitNode ExpressionPercentage(unique_ptr<Expression> expression);
+
+	LimitNodeType Type() const {
+		return type;
+	}
+
+	//! Returns the constant value, only valid if Type() == CONSTANT_VALUE
+	idx_t GetConstantValue() const;
+	//! Returns the constant percentage, only valid if Type() == CONSTANT_PERCENTAGE
+	double GetConstantPercentage() const;
+	//! Returns the constant percentage, only valid if Type() == EXPRESSION_VALUE
+	const Expression &GetValueExpression() const;
+	//! Returns the constant percentage, only valid if Type() == EXPRESSION_PERCENTAGE
+	const Expression &GetPercentageExpression() const;
+
+	//! Returns a pointer to the expression - should only be used for limit-agnostic optimizations.
+	//! Prefer using the methods above in other scenarios.
+	unique_ptr<Expression> &GetExpression() {
+		return expression;
+	}
+
+	void Serialize(Serializer &serializer) const;
+	static BoundLimitNode Deserialize(Deserializer &deserializer);
+
+private:
+	LimitNodeType type = LimitNodeType::UNSET;
+	//! Integer value, if value is a constant non-percentage
+	idx_t constant_integer = 0;
+	//! Percentage value, if value is a constant percentage
+	double constant_percentage = -1;
+	//! Expression in case node is not constant
+	unique_ptr<Expression> expression;
+
+private:
+	explicit BoundLimitNode(int64_t constant_value);
+	explicit BoundLimitNode(double percentage_value);
+	explicit BoundLimitNode(unique_ptr<Expression> expression, bool is_percentage);
+};
+
 class BoundLimitModifier : public BoundResultModifier {
 public:
 	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_MODIFIER;
@@ -12256,13 +12546,9 @@ public:
 	BoundLimitModifier();
 
 	//! LIMIT
-	int64_t limit_val = NumericLimits<int64_t>::Maximum();
+	BoundLimitNode limit_val;
 	//! OFFSET
-	int64_t offset_val = 0;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> limit;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> offset;
+	BoundLimitNode offset_val;
 };
 
 class BoundOrderModifier : public BoundResultModifier {
@@ -12300,23 +12586,6 @@ public:
 	DistinctType distinct_type;
 	//! list of distinct on targets
 	vector<unique_ptr<Expression>> target_distincts;
-};
-
-class BoundLimitPercentModifier : public BoundResultModifier {
-public:
-	static constexpr const ResultModifierType TYPE = ResultModifierType::LIMIT_PERCENT_MODIFIER;
-
-public:
-	BoundLimitPercentModifier();
-
-	//! LIMIT %
-	double limit_percent = 100.0;
-	//! OFFSET
-	int64_t offset_val = 0;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> limit;
-	//! Expression in case limit is not constant
-	unique_ptr<Expression> offset;
 };
 
 } // namespace duckdb
@@ -13234,6 +13503,8 @@ public:
 
 	//! The size (in bytes) of this ColumnDataCollection
 	idx_t SizeInBytes() const;
+	//! The allocation size (in bytes) of this ColumnDataCollection - this property is cached
+	idx_t AllocationSize() const;
 
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;
@@ -13474,6 +13745,8 @@ struct StatementProperties {
 	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
 	}
 
+	//! The set of databases this statement will read from
+	unordered_set<string> read_databases;
 	//! The set of databases this statement will modify
 	unordered_set<string> modified_databases;
 	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
@@ -13979,7 +14252,6 @@ enum class PhysicalOperatorType : uint8_t {
 	PROJECTION,
 	COPY_TO_FILE,
 	BATCH_COPY_TO_FILE,
-	FIXED_BATCH_COPY_TO_FILE,
 	RESERVOIR_SAMPLE,
 	STREAMING_SAMPLE,
 	STREAMING_WINDOW,
@@ -14061,6 +14333,7 @@ enum class PhysicalOperatorType : uint8_t {
 	RESULT_COLLECTOR,
 	RESET,
 	EXTENSION,
+	VERIFY_VECTOR,
 
 	// -----------------------------
 	// Secret
@@ -14585,7 +14858,6 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_COPY_TO_FILE = 10,
 	LOGICAL_DISTINCT = 11,
 	LOGICAL_SAMPLE = 12,
-	LOGICAL_LIMIT_PERCENT = 13,
 	LOGICAL_PIVOT = 14,
 	LOGICAL_COPY_DATABASE = 15,
 
@@ -15416,7 +15688,8 @@ public:
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 
-	void AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
+	void AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+	                                  const RelationStats &stats, LogicalOperatorType op_type);
 	vector<unique_ptr<SingleJoinRelation>> GetRelations();
 
 	const vector<RelationStats> GetRelationStats();
@@ -15582,7 +15855,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -15599,7 +15872,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -15620,13 +15893,17 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+	virtual idx_t MaxThreads(idx_t source_max_threads) {
+		return source_max_threads;
 	}
 };
 
@@ -15640,7 +15917,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -15661,7 +15938,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -15678,7 +15955,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -16990,7 +17267,7 @@ struct TableFunctionInfo {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -17014,7 +17291,7 @@ public:
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -17029,7 +17306,7 @@ struct LocalTableFunctionState {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -17314,26 +17591,6 @@ public:
 	}
 };
 
-//! Execute a task within an executor, including exception handling
-//! This should be used within queries
-class ExecutorTask : public Task {
-public:
-	ExecutorTask(Executor &executor);
-	ExecutorTask(ClientContext &context);
-	virtual ~ExecutorTask();
-
-public:
-	void Deschedule() override;
-	void Reschedule() override;
-
-public:
-	Executor &executor;
-
-public:
-	virtual TaskExecutionResult ExecuteTask(TaskExecutionMode mode) = 0;
-	TaskExecutionResult Execute(TaskExecutionMode mode) override;
-};
-
 } // namespace duckdb
 
 
@@ -17416,12 +17673,140 @@ private:
 	vector<unique_ptr<atomic<bool>>> markers;
 	//! The threshold after which to flush the allocator after completing a task
 	atomic<idx_t> allocator_flush_threshold;
-	//! Requested thread count
-	atomic<int32_t> thread_count;
+	//! Requested thread count (set by the 'threads' setting)
+	atomic<int32_t> requested_thread_count;
+	//! The amount of threads currently running
+	atomic<int32_t> current_thread_count;
 };
 
 } // namespace duckdb
 
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/parallel/executor_task.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/parallel/event.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+
+namespace duckdb {
+class Executor;
+class Task;
+
+class Event : public std::enable_shared_from_this<Event> {
+public:
+	explicit Event(Executor &executor);
+	virtual ~Event() = default;
+
+public:
+	virtual void Schedule() = 0;
+	//! Called right after the event is finished
+	virtual void FinishEvent() {
+	}
+	//! Called after the event is entirely finished
+	virtual void FinalizeFinish() {
+	}
+
+	void FinishTask();
+	void Finish();
+
+	void AddDependency(Event &event);
+	bool HasDependencies() const {
+		return total_dependencies != 0;
+	}
+	const vector<reference<Event>> &GetParentsVerification() const;
+
+	void CompleteDependency();
+
+	void SetTasks(vector<shared_ptr<Task>> tasks);
+
+	void InsertEvent(shared_ptr<Event> replacement_event);
+
+	bool IsFinished() const {
+		return finished;
+	}
+
+	virtual void PrintPipeline() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+protected:
+	Executor &executor;
+	//! The current threads working on the event
+	atomic<idx_t> finished_tasks;
+	//! The maximum amount of threads that can work on the event
+	atomic<idx_t> total_tasks;
+
+	//! The amount of completed dependencies
+	//! The event can only be started after the dependencies have finished executing
+	atomic<idx_t> finished_dependencies;
+	//! The total amount of dependencies
+	idx_t total_dependencies;
+
+	//! The events that depend on this event to run
+	vector<weak_ptr<Event>> parents;
+	//! Raw pointers to the parents (used for verification only)
+	vector<reference<Event>> parents_raw;
+
+	//! Whether or not the event is finished executing
+	atomic<bool> finished;
+};
+
+} // namespace duckdb
+
+
+namespace duckdb {
+
+//! Execute a task within an executor, including exception handling
+//! This should be used within queries
+class ExecutorTask : public Task {
+public:
+	ExecutorTask(Executor &executor, shared_ptr<Event> event);
+	ExecutorTask(ClientContext &context, shared_ptr<Event> event);
+	virtual ~ExecutorTask();
+
+public:
+	void Deschedule() override;
+	void Reschedule() override;
+
+public:
+	Executor &executor;
+	shared_ptr<Event> event;
+
+public:
+	virtual TaskExecutionResult ExecuteTask(TaskExecutionMode mode) = 0;
+	TaskExecutionResult Execute(TaskExecutionMode mode) override;
+};
+
+} // namespace duckdb
 
 
 namespace duckdb {
@@ -17439,7 +17824,6 @@ public:
 	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p);
 
 	Pipeline &pipeline;
-	shared_ptr<Event> event;
 	unique_ptr<PipelineExecutor> pipeline_executor;
 
 public:
@@ -17650,6 +18034,13 @@ public:
 	//! Returns true if all pipelines have been completed
 	bool ExecutionIsFinished();
 
+	void RegisterTask() {
+		executor_tasks++;
+	}
+	void UnregisterTask() {
+		executor_tasks--;
+	}
+
 private:
 	bool ResultCollectorIsBlocked();
 	void InitializeInternal(PhysicalOperator &physical_plan);
@@ -17708,6 +18099,9 @@ private:
 
 	//! Task that have been descheduled
 	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
+
+	//! Currently alive executor tasks
+	atomic<idx_t> executor_tasks;
 };
 } // namespace duckdb
 
@@ -18272,7 +18666,8 @@ enum class ParseInfoType : uint8_t {
 	SHOW_SELECT_INFO,
 	TRANSACTION_INFO,
 	VACUUM_INFO,
-	COMMENT_ON_INFO
+	COMMENT_ON_INFO,
+	COMMENT_ON_COLUMN_INFO
 };
 
 struct ParseInfo {
@@ -18286,7 +18681,7 @@ struct ParseInfo {
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 
@@ -18376,6 +18771,8 @@ enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
 
+enum class CatalogLookupBehavior : uint8_t;
+
 enum class CatalogType : uint8_t;
 
 enum class CheckpointAbort : uint8_t;
@@ -18458,6 +18855,8 @@ enum class JoinType : uint8_t;
 
 enum class KeywordCategory : uint8_t;
 
+enum class LimitNodeType : uint8_t;
+
 enum class LoadType : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
@@ -18516,6 +18915,8 @@ enum class PragmaType : uint8_t;
 
 enum class PreparedParamType : uint8_t;
 
+enum class PreparedStatementMode : uint8_t;
+
 enum class ProfilerPrintFormat : uint8_t;
 
 enum class QuantileSerializationType : uint8_t;
@@ -18545,6 +18946,8 @@ enum class SetOperationType : uint8_t;
 enum class SetScope : uint8_t;
 
 enum class SetType : uint8_t;
+
+enum class SettingScope : uint8_t;
 
 enum class ShowType : uint8_t;
 
@@ -18674,6 +19077,9 @@ template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template<>
+const char* EnumUtil::ToChars<CatalogLookupBehavior>(CatalogLookupBehavior value);
+
+template<>
 const char* EnumUtil::ToChars<CatalogType>(CatalogType value);
 
 template<>
@@ -18797,6 +19203,9 @@ template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
 
 template<>
+const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
+
+template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
@@ -18884,6 +19293,9 @@ template<>
 const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value);
 
 template<>
+const char* EnumUtil::ToChars<PreparedStatementMode>(PreparedStatementMode value);
+
+template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
 
 template<>
@@ -18927,6 +19339,9 @@ const char* EnumUtil::ToChars<SetScope>(SetScope value);
 
 template<>
 const char* EnumUtil::ToChars<SetType>(SetType value);
+
+template<>
+const char* EnumUtil::ToChars<SettingScope>(SettingScope value);
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
@@ -19089,6 +19504,9 @@ template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
 
 template<>
+CatalogLookupBehavior EnumUtil::FromString<CatalogLookupBehavior>(const char *value);
+
+template<>
 CatalogType EnumUtil::FromString<CatalogType>(const char *value);
 
 template<>
@@ -19212,6 +19630,9 @@ template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
 
 template<>
+LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
+
+template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
@@ -19299,6 +19720,9 @@ template<>
 PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value);
 
 template<>
+PreparedStatementMode EnumUtil::FromString<PreparedStatementMode>(const char *value);
+
+template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);
 
 template<>
@@ -19342,6 +19766,9 @@ SetScope EnumUtil::FromString<SetScope>(const char *value);
 
 template<>
 SetType EnumUtil::FromString<SetType>(const char *value);
+
+template<>
+SettingScope EnumUtil::FromString<SettingScope>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);
@@ -19606,7 +20033,8 @@ enum class AlterType : uint8_t {
 	CHANGE_OWNERSHIP = 4,
 	ALTER_SCALAR_FUNCTION = 5,
 	ALTER_TABLE_FUNCTION = 6,
-	SET_COMMENT = 7
+	SET_COMMENT = 7,
+	SET_COLUMN_COMMENT = 8
 };
 
 struct AlterEntryData {
@@ -19941,30 +20369,6 @@ public:
 
 private:
 	ChangeColumnTypeInfo();
-};
-
-//===--------------------------------------------------------------------===//
-// SetColumnCommentInfo
-//===--------------------------------------------------------------------===//
-struct SetColumnCommentInfo : public AlterTableInfo {
-	SetColumnCommentInfo(AlterEntryData data, string column_name, Value comment_value);
-	~SetColumnCommentInfo() override;
-
-	//! The column name to alter
-	string column_name;
-	//! The target type of the column
-	Value comment;
-
-public:
-	unique_ptr<AlterInfo> Copy() const override;
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
-
-	string GetColumnName() const override {
-		return column_name;
-	};
-
-	explicit SetColumnCommentInfo();
 };
 
 //===--------------------------------------------------------------------===//
@@ -20319,7 +20723,7 @@ public:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -20631,7 +21035,7 @@ using std::deque;
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// src/include/duckdb/parallel/interrupt.hpp
+// duckdb/parallel/interrupt.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21101,74 +21505,77 @@ extern "C" {
 //===--------------------------------------------------------------------===//
 // Enums
 //===--------------------------------------------------------------------===//
-
+// WARNING: the numbers of these enums should not be changed, as changing the numbers breaks ABI compatibility
+// Always add enums at the END of the enum
 //! An enum over DuckDB's internal types.
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
 	// bool
-	DUCKDB_TYPE_BOOLEAN,
+	DUCKDB_TYPE_BOOLEAN = 1,
 	// int8_t
-	DUCKDB_TYPE_TINYINT,
+	DUCKDB_TYPE_TINYINT = 2,
 	// int16_t
-	DUCKDB_TYPE_SMALLINT,
+	DUCKDB_TYPE_SMALLINT = 3,
 	// int32_t
-	DUCKDB_TYPE_INTEGER,
+	DUCKDB_TYPE_INTEGER = 4,
 	// int64_t
-	DUCKDB_TYPE_BIGINT,
+	DUCKDB_TYPE_BIGINT = 5,
 	// uint8_t
-	DUCKDB_TYPE_UTINYINT,
+	DUCKDB_TYPE_UTINYINT = 6,
 	// uint16_t
-	DUCKDB_TYPE_USMALLINT,
+	DUCKDB_TYPE_USMALLINT = 7,
 	// uint32_t
-	DUCKDB_TYPE_UINTEGER,
+	DUCKDB_TYPE_UINTEGER = 8,
 	// uint64_t
-	DUCKDB_TYPE_UBIGINT,
+	DUCKDB_TYPE_UBIGINT = 9,
 	// float
-	DUCKDB_TYPE_FLOAT,
+	DUCKDB_TYPE_FLOAT = 10,
 	// double
-	DUCKDB_TYPE_DOUBLE,
+	DUCKDB_TYPE_DOUBLE = 11,
 	// duckdb_timestamp, in microseconds
-	DUCKDB_TYPE_TIMESTAMP,
+	DUCKDB_TYPE_TIMESTAMP = 12,
 	// duckdb_date
-	DUCKDB_TYPE_DATE,
+	DUCKDB_TYPE_DATE = 13,
 	// duckdb_time
-	DUCKDB_TYPE_TIME,
+	DUCKDB_TYPE_TIME = 14,
 	// duckdb_interval
-	DUCKDB_TYPE_INTERVAL,
+	DUCKDB_TYPE_INTERVAL = 15,
 	// duckdb_hugeint
-	DUCKDB_TYPE_HUGEINT,
+	DUCKDB_TYPE_HUGEINT = 16,
 	// duckdb_uhugeint
-	DUCKDB_TYPE_UHUGEINT,
+	DUCKDB_TYPE_UHUGEINT = 32,
 	// const char*
-	DUCKDB_TYPE_VARCHAR,
+	DUCKDB_TYPE_VARCHAR = 17,
 	// duckdb_blob
-	DUCKDB_TYPE_BLOB,
+	DUCKDB_TYPE_BLOB = 18,
 	// decimal
-	DUCKDB_TYPE_DECIMAL,
+	DUCKDB_TYPE_DECIMAL = 19,
 	// duckdb_timestamp, in seconds
-	DUCKDB_TYPE_TIMESTAMP_S,
+	DUCKDB_TYPE_TIMESTAMP_S = 20,
 	// duckdb_timestamp, in milliseconds
-	DUCKDB_TYPE_TIMESTAMP_MS,
+	DUCKDB_TYPE_TIMESTAMP_MS = 21,
 	// duckdb_timestamp, in nanoseconds
-	DUCKDB_TYPE_TIMESTAMP_NS,
+	DUCKDB_TYPE_TIMESTAMP_NS = 22,
 	// enum type, only useful as logical type
-	DUCKDB_TYPE_ENUM,
+	DUCKDB_TYPE_ENUM = 23,
 	// list type, only useful as logical type
-	DUCKDB_TYPE_LIST,
+	DUCKDB_TYPE_LIST = 24,
 	// struct type, only useful as logical type
-	DUCKDB_TYPE_STRUCT,
+	DUCKDB_TYPE_STRUCT = 25,
 	// map type, only useful as logical type
-	DUCKDB_TYPE_MAP,
+	DUCKDB_TYPE_MAP = 26,
+	// duckdb_array, only useful as logical type
+	DUCKDB_TYPE_ARRAY = 33,
 	// duckdb_hugeint
-	DUCKDB_TYPE_UUID,
+	DUCKDB_TYPE_UUID = 27,
 	// union type, only useful as logical type
-	DUCKDB_TYPE_UNION,
+	DUCKDB_TYPE_UNION = 28,
 	// duckdb_bit
-	DUCKDB_TYPE_BIT,
+	DUCKDB_TYPE_BIT = 29,
 	// duckdb_time_tz
-	DUCKDB_TYPE_TIME_TZ,
+	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp
-	DUCKDB_TYPE_TIMESTAMP_TZ,
+	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -21181,41 +21588,41 @@ typedef enum {
 } duckdb_pending_state;
 //! An enum over DuckDB's different result types.
 typedef enum {
-	DUCKDB_RESULT_TYPE_INVALID,
-	DUCKDB_RESULT_TYPE_CHANGED_ROWS,
-	DUCKDB_RESULT_TYPE_NOTHING,
-	DUCKDB_RESULT_TYPE_QUERY_RESULT,
+	DUCKDB_RESULT_TYPE_INVALID = 0,
+	DUCKDB_RESULT_TYPE_CHANGED_ROWS = 1,
+	DUCKDB_RESULT_TYPE_NOTHING = 2,
+	DUCKDB_RESULT_TYPE_QUERY_RESULT = 3,
 } duckdb_result_type;
 //! An enum over DuckDB's different statement types.
 typedef enum {
-	DUCKDB_STATEMENT_TYPE_INVALID,
-	DUCKDB_STATEMENT_TYPE_SELECT,
-	DUCKDB_STATEMENT_TYPE_INSERT,
-	DUCKDB_STATEMENT_TYPE_UPDATE,
-	DUCKDB_STATEMENT_TYPE_EXPLAIN,
-	DUCKDB_STATEMENT_TYPE_DELETE,
-	DUCKDB_STATEMENT_TYPE_PREPARE,
-	DUCKDB_STATEMENT_TYPE_CREATE,
-	DUCKDB_STATEMENT_TYPE_EXECUTE,
-	DUCKDB_STATEMENT_TYPE_ALTER,
-	DUCKDB_STATEMENT_TYPE_TRANSACTION,
-	DUCKDB_STATEMENT_TYPE_COPY,
-	DUCKDB_STATEMENT_TYPE_ANALYZE,
-	DUCKDB_STATEMENT_TYPE_VARIABLE_SET,
-	DUCKDB_STATEMENT_TYPE_CREATE_FUNC,
-	DUCKDB_STATEMENT_TYPE_DROP,
-	DUCKDB_STATEMENT_TYPE_EXPORT,
-	DUCKDB_STATEMENT_TYPE_PRAGMA,
-	DUCKDB_STATEMENT_TYPE_VACUUM,
-	DUCKDB_STATEMENT_TYPE_CALL,
-	DUCKDB_STATEMENT_TYPE_SET,
-	DUCKDB_STATEMENT_TYPE_LOAD,
-	DUCKDB_STATEMENT_TYPE_RELATION,
-	DUCKDB_STATEMENT_TYPE_EXTENSION,
-	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN,
-	DUCKDB_STATEMENT_TYPE_ATTACH,
-	DUCKDB_STATEMENT_TYPE_DETACH,
-	DUCKDB_STATEMENT_TYPE_MULTI,
+	DUCKDB_STATEMENT_TYPE_INVALID = 0,
+	DUCKDB_STATEMENT_TYPE_SELECT = 1,
+	DUCKDB_STATEMENT_TYPE_INSERT = 2,
+	DUCKDB_STATEMENT_TYPE_UPDATE = 3,
+	DUCKDB_STATEMENT_TYPE_EXPLAIN = 4,
+	DUCKDB_STATEMENT_TYPE_DELETE = 5,
+	DUCKDB_STATEMENT_TYPE_PREPARE = 6,
+	DUCKDB_STATEMENT_TYPE_CREATE = 7,
+	DUCKDB_STATEMENT_TYPE_EXECUTE = 8,
+	DUCKDB_STATEMENT_TYPE_ALTER = 9,
+	DUCKDB_STATEMENT_TYPE_TRANSACTION = 10,
+	DUCKDB_STATEMENT_TYPE_COPY = 11,
+	DUCKDB_STATEMENT_TYPE_ANALYZE = 12,
+	DUCKDB_STATEMENT_TYPE_VARIABLE_SET = 13,
+	DUCKDB_STATEMENT_TYPE_CREATE_FUNC = 14,
+	DUCKDB_STATEMENT_TYPE_DROP = 15,
+	DUCKDB_STATEMENT_TYPE_EXPORT = 16,
+	DUCKDB_STATEMENT_TYPE_PRAGMA = 17,
+	DUCKDB_STATEMENT_TYPE_VACUUM = 18,
+	DUCKDB_STATEMENT_TYPE_CALL = 19,
+	DUCKDB_STATEMENT_TYPE_SET = 20,
+	DUCKDB_STATEMENT_TYPE_LOAD = 21,
+	DUCKDB_STATEMENT_TYPE_RELATION = 22,
+	DUCKDB_STATEMENT_TYPE_EXTENSION = 23,
+	DUCKDB_STATEMENT_TYPE_LOGICAL_PLAN = 24,
+	DUCKDB_STATEMENT_TYPE_ATTACH = 25,
+	DUCKDB_STATEMENT_TYPE_DETACH = 26,
+	DUCKDB_STATEMENT_TYPE_MULTI = 27,
 } duckdb_statement_type;
 
 //===--------------------------------------------------------------------===//
@@ -21264,7 +21671,7 @@ typedef struct {
 	uint64_t bits;
 } duckdb_time_tz;
 typedef struct {
-	duckdb_time time;
+	duckdb_time_struct time;
 	int32_t offset;
 } duckdb_time_tz_struct;
 
@@ -22663,6 +23070,16 @@ Creates a list value from a type and an array of values of length `value_count`
 DUCKDB_API duckdb_value duckdb_create_list_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
 
 /*!
+Creates a array value from a type and an array of values of length `value_count`
+
+* type: The type of the array
+* values: The values for the array
+* value_count: The number of values in the array
+* returns: The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_create_array_value(duckdb_logical_type type, duckdb_value *values, idx_t value_count);
+
+/*!
 Obtains a string representation of the given value.
 The result must be destroyed with `duckdb_free`.
 
@@ -22711,6 +23128,16 @@ The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 * returns: The logical type.
 */
 DUCKDB_API duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type);
+
+/*!
+Creates a array type from its child type.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* type: The child type of array type to create.
+* array_size: The number of elements in the array.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_array_type(duckdb_logical_type type, idx_t array_size);
 
 /*!
 Creates a map type from its key type and value type.
@@ -22833,6 +23260,24 @@ The result must be freed with `duckdb_destroy_logical_type`.
 * returns: The child type of the list type. Must be destroyed with `duckdb_destroy_logical_type`.
 */
 DUCKDB_API duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type);
+
+/*!
+Retrieves the child type of the given array type.
+
+The result must be freed with `duckdb_destroy_logical_type`.
+
+* type: The logical type object
+* returns: The child type of the array type. Must be destroyed with `duckdb_destroy_logical_type`.
+*/
+DUCKDB_API duckdb_logical_type duckdb_array_type_child_type(duckdb_logical_type type);
+
+/*!
+Retrieves the array size of the given array type.
+
+* type: The logical type object
+* returns: The fixed number of elements the values of this array type can store.
+*/
+DUCKDB_API idx_t duckdb_array_type_array_size(duckdb_logical_type type);
 
 /*!
 Retrieves the key type of the given map type.
@@ -23052,7 +23497,7 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
 
 * vector: The vector to alter
 * index: The row position in the vector to assign the string to
@@ -23108,6 +23553,17 @@ The resulting vector is valid as long as the parent vector is valid.
 * returns: The child vector
 */
 DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index);
+
+/*!
+Retrieves the child vector of a array vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+The resulting vector has the size of the parent vector multiplied by the array size.
+
+* vector: The vector
+* returns: The child vector
+*/
+DUCKDB_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
@@ -24194,6 +24650,8 @@ struct ClientConfig {
 	idx_t perfect_ht_threshold = 12;
 	//! The maximum number of rows to accumulate before sorting ordered aggregates.
 	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
+	//! The number of rows to accumulate before flushing during a partitioned write
+	idx_t partitioned_write_flush_threshold = idx_t(1) << idx_t(19);
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
@@ -24233,6 +24691,27 @@ public:
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/enums/prepared_statement_mode.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+namespace duckdb {
+
+enum class PreparedStatementMode : uint8_t {
+	PREPARE_ONLY,
+	PREPARE_AND_EXECUTE,
+};
+
+} // namespace duckdb
+
 
 //===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -24246,9 +24725,15 @@ public:
 
 
 
+
 namespace duckdb {
 class ClientContext;
+class ErrorData;
 class MetaTransaction;
+class PreparedStatementData;
+class SQLStatement;
+
+enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
 
 //! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
 //! e.g. caches that need to live as long as a ClientContext or Query.
@@ -24268,6 +24753,677 @@ public:
 	}
 	virtual void TransactionRollback(MetaTransaction &transaction, ClientContext &context) {
 	}
+	virtual bool CanRequestRebind() {
+		return false;
+	}
+	virtual RebindQueryInfo OnPlanningError(ClientContext &context, SQLStatement &statement, ErrorData &error) {
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+	virtual RebindQueryInfo OnFinalizePrepare(ClientContext &context, PreparedStatementData &prepared_statement,
+	                                          PreparedStatementMode mode) {
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementData &prepared_statement,
+	                                          RebindQueryInfo current_rebind) {
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+};
+
+} // namespace duckdb
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/main/settings.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+namespace duckdb {
+class ClientContext;
+class DatabaseInstance;
+struct DBConfig;
+
+const string GetDefaultUserAgent();
+
+enum class SettingScope : uint8_t { GLOBAL, LOCAL, INVALID };
+
+struct SettingLookupResult {
+public:
+	SettingLookupResult() : scope(SettingScope::INVALID) {
+	}
+	SettingLookupResult(SettingScope scope) : scope(scope) {
+		D_ASSERT(scope != SettingScope::INVALID);
+	}
+
+public:
+	operator bool() {
+		return scope != SettingScope::INVALID;
+	}
+
+public:
+	SettingScope GetScope() {
+		D_ASSERT(scope != SettingScope::INVALID);
+		return scope;
+	}
+
+private:
+	SettingScope scope = SettingScope::INVALID;
+};
+
+struct AccessModeSetting {
+	static constexpr const char *Name = "access_mode";
+	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AllowPersistentSecrets {
+	static constexpr const char *Name = "allow_persistent_secrets";
+	static constexpr const char *Description =
+	    "Allow the creation of persistent secrets, that are stored and loaded on restarts";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct CheckpointThresholdSetting {
+	static constexpr const char *Name = "checkpoint_threshold";
+	static constexpr const char *Description =
+	    "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugCheckpointAbort {
+	static constexpr const char *Name = "debug_checkpoint_abort";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugForceExternal {
+	static constexpr const char *Name = "debug_force_external";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugForceNoCrossProduct {
+	static constexpr const char *Name = "debug_force_no_cross_product";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct OrderedAggregateThreshold {
+	static constexpr const char *Name = "ordered_aggregate_threshold"; // NOLINT
+	static constexpr const char *Description =                         // NOLINT
+	    "The number of rows to accumulate before sorting, used for tuning";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT; // NOLINT
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugAsOfIEJoin {
+	static constexpr const char *Name = "debug_asof_iejoin";                                                 // NOLINT
+	static constexpr const char *Description = "DEBUG SETTING: force use of IEJoin to implement AsOf joins"; // NOLINT
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                                 // NOLINT
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PreferRangeJoins {
+	static constexpr const char *Name = "prefer_range_joins";                                    // NOLINT
+	static constexpr const char *Description = "Force use of range joins with mixed predicates"; // NOLINT
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                     // NOLINT
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugWindowMode {
+	static constexpr const char *Name = "debug_window_mode";
+	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DefaultCollationSetting {
+	static constexpr const char *Name = "default_collation";
+	static constexpr const char *Description = "The collation setting used when none is specified";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DefaultOrderSetting {
+	static constexpr const char *Name = "default_order";
+	static constexpr const char *Description = "The order type used when none is specified (ASC or DESC)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DefaultNullOrderSetting {
+	static constexpr const char *Name = "default_null_order";
+	static constexpr const char *Description = "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DefaultSecretStorage {
+	static constexpr const char *Name = "default_secret_storage";
+	static constexpr const char *Description = "Allows switching the default storage for secrets";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DisabledFileSystemsSetting {
+	static constexpr const char *Name = "disabled_filesystems";
+	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DisabledOptimizersSetting {
+	static constexpr const char *Name = "disabled_optimizers";
+	static constexpr const char *Description = "DEBUG SETTING: disable a specific set of optimizers (comma separated)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableExternalAccessSetting {
+	static constexpr const char *Name = "enable_external_access";
+	static constexpr const char *Description =
+	    "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV "
+	    "readers, pandas replacement scans, etc)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableFSSTVectors {
+	static constexpr const char *Name = "enable_fsst_vectors";
+	static constexpr const char *Description =
+	    "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AllowUnsignedExtensionsSetting {
+	static constexpr const char *Name = "allow_unsigned_extensions";
+	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AllowUnredactedSecretsSetting {
+	static constexpr const char *Name = "allow_unredacted_secrets";
+	static constexpr const char *Description = "Allow printing unredacted secrets";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct CustomExtensionRepository {
+	static constexpr const char *Name = "custom_extension_repository";
+	static constexpr const char *Description = "Overrides the custom endpoint for remote extension installation";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AutoloadExtensionRepository {
+	static constexpr const char *Name = "autoinstall_extension_repository";
+	static constexpr const char *Description =
+	    "Overrides the custom endpoint for extension installation on autoloading";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AutoinstallKnownExtensions {
+	static constexpr const char *Name = "autoinstall_known_extensions";
+	static constexpr const char *Description =
+	    "Whether known extensions are allowed to be automatically installed when a query depends on them";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AutoloadKnownExtensions {
+	static constexpr const char *Name = "autoload_known_extensions";
+	static constexpr const char *Description =
+	    "Whether known extensions are allowed to be automatically loaded when a query depends on them";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableObjectCacheSetting {
+	static constexpr const char *Name = "enable_object_cache";
+	static constexpr const char *Description = "Whether or not object cache is used to cache e.g. Parquet metadata";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableHTTPMetadataCacheSetting {
+	static constexpr const char *Name = "enable_http_metadata_cache";
+	static constexpr const char *Description = "Whether or not the global http metadata is used to cache HTTP metadata";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableProfilingSetting {
+	static constexpr const char *Name = "enable_profiling";
+	static constexpr const char *Description =
+	    "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableProgressBarSetting {
+	static constexpr const char *Name = "enable_progress_bar";
+	static constexpr const char *Description =
+	    "Enables the progress bar, printing progress to the terminal for long queries";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableProgressBarPrintSetting {
+	static constexpr const char *Name = "enable_progress_bar_print";
+	static constexpr const char *Description =
+	    "Controls the printing of the progress bar, when 'enable_progress_bar' is true";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ErrorsAsJsonSetting {
+	static constexpr const char *Name = "errors_as_json";
+	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ExplainOutputSetting {
+	static constexpr const char *Name = "explain_output";
+	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ExportLargeBufferArrow {
+	static constexpr const char *Name = "arrow_large_buffer_size";
+	static constexpr const char *Description =
+	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ExtensionDirectorySetting {
+	static constexpr const char *Name = "extension_directory";
+	static constexpr const char *Description = "Set the directory to store extensions in";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ExternalThreadsSetting {
+	static constexpr const char *Name = "external_threads";
+	static constexpr const char *Description = "The number of external threads that work on DuckDB tasks.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct FileSearchPathSetting {
+	static constexpr const char *Name = "file_search_path";
+	static constexpr const char *Description = "A comma separated list of directories to search for input files";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ForceCompressionSetting {
+	static constexpr const char *Name = "force_compression";
+	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ForceBitpackingModeSetting {
+	static constexpr const char *Name = "force_bitpacking_mode";
+	static constexpr const char *Description = "DEBUG SETTING: forces a specific bitpacking mode";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct HomeDirectorySetting {
+	static constexpr const char *Name = "home_directory";
+	static constexpr const char *Description = "Sets the home directory used by the system";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct IntegerDivisionSetting {
+	static constexpr const char *Name = "integer_division";
+	static constexpr const char *Description =
+	    "Whether or not the / operator defaults to integer division, or to floating point division";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct LogQueryPathSetting {
+	static constexpr const char *Name = "log_query_path";
+	static constexpr const char *Description =
+	    "Specifies the path to which queries should be logged (default: empty string, queries are not logged)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct LockConfigurationSetting {
+	static constexpr const char *Name = "lock_configuration";
+	static constexpr const char *Description = "Whether or not the configuration can be altered";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ImmediateTransactionModeSetting {
+	static constexpr const char *Name = "immediate_transaction_mode";
+	static constexpr const char *Description =
+	    "Whether transactions should be started lazily when needed, or immediately when BEGIN TRANSACTION is called";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct MaximumExpressionDepthSetting {
+	static constexpr const char *Name = "max_expression_depth";
+	static constexpr const char *Description =
+	    "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep "
+	    "expressions might lead to stack overflow errors.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct MaximumMemorySetting {
+	static constexpr const char *Name = "max_memory";
+	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct OldImplicitCasting {
+	static constexpr const char *Name = "old_implicit_casting";
+	static constexpr const char *Description = "Allow implicit casting to/from VARCHAR";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PartitionedWriteFlushThreshold {
+	static constexpr const char *Name = "partitioned_write_flush_threshold";
+	static constexpr const char *Description =
+	    "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PasswordSetting {
+	static constexpr const char *Name = "password";
+	static constexpr const char *Description = "The password to use. Ignored for legacy compatibility.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PerfectHashThresholdSetting {
+	static constexpr const char *Name = "perfect_ht_threshold";
+	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table (default: 12)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PivotFilterThreshold {
+	static constexpr const char *Name = "pivot_filter_threshold";
+	static constexpr const char *Description =
+	    "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PivotLimitSetting {
+	static constexpr const char *Name = "pivot_limit";
+	static constexpr const char *Description =
+	    "The maximum number of pivot columns in a pivot statement (default: 100000)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PreserveIdentifierCase {
+	static constexpr const char *Name = "preserve_identifier_case";
+	static constexpr const char *Description =
+	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PreserveInsertionOrder {
+	static constexpr const char *Name = "preserve_insertion_order";
+	static constexpr const char *Description =
+	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
+	    "that do not contain ORDER BY clauses.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ProfileOutputSetting {
+	static constexpr const char *Name = "profile_output";
+	static constexpr const char *Description =
+	    "The file to which profile output should be saved, or empty to print to the terminal";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ProfilingModeSetting {
+	static constexpr const char *Name = "profiling_mode";
+	static constexpr const char *Description = "The profiling mode (STANDARD or DETAILED)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ProgressBarTimeSetting {
+	static constexpr const char *Name = "progress_bar_time";
+	static constexpr const char *Description =
+	    "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct SchemaSetting {
+	static constexpr const char *Name = "schema";
+	static constexpr const char *Description =
+	    "Sets the default search schema. Equivalent to setting search_path to a single value.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct SearchPathSetting {
+	static constexpr const char *Name = "search_path";
+	static constexpr const char *Description =
+	    "Sets the default catalog search path as a comma-separated list of values";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct SecretDirectorySetting {
+	static constexpr const char *Name = "secret_directory";
+	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct TempDirectorySetting {
+	static constexpr const char *Name = "temp_directory";
+	static constexpr const char *Description = "Set the directory to which to write temp files";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ThreadsSetting {
+	static constexpr const char *Name = "threads";
+	static constexpr const char *Description = "The number of total threads used by the system.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct UsernameSetting {
+	static constexpr const char *Name = "username";
+	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct FlushAllocatorSetting {
+	static constexpr const char *Name = "allocator_flush_threshold";
+	static constexpr const char *Description =
+	    "Peak allocation threshold at which to flush the allocator after completing a task.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DuckDBApiSetting {
+	static constexpr const char *Name = "duckdb_api";
+	static constexpr const char *Description = "DuckDB API surface";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct CustomUserAgentSetting {
+	static constexpr const char *Name = "custom_user_agent";
+	static constexpr const char *Description = "Metadata from DuckDB callers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
 };
 
 } // namespace duckdb
@@ -24411,7 +25567,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result);
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -24460,14 +25616,19 @@ private:
 	                                                                   unique_ptr<SQLStatement> statement,
 	                                                                   shared_ptr<PreparedStatementData> &prepared,
 	                                                                   const PendingQueryParameters &parameters);
-	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock,
+	unique_ptr<PendingQueryResult> PendingPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                        shared_ptr<PreparedStatementData> statement_p,
 	                                                        const PendingQueryParameters &parameters);
+	unique_ptr<PendingQueryResult> PendingPreparedStatementInternal(ClientContextLock &lock,
+	                                                                shared_ptr<PreparedStatementData> statement_p,
+	                                                                const PendingQueryParameters &parameters);
+	void CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr);
+	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr,
+	                        PreparedStatementMode mode = PreparedStatementMode::PREPARE_ONLY);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
@@ -24497,8 +25658,15 @@ private:
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
 	                                                    bool allow_stream_result);
 
+	void RebindPreparedStatement(ClientContextLock &lock, const string &query,
+	                             shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters);
+
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
+
+	shared_ptr<PreparedStatementData>
+	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	                                optional_ptr<case_insensitive_map_t<Value>> values);
 
 private:
 	//! Lock on using the ClientContext in parallel
@@ -24855,7 +26023,7 @@ protected:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -25260,7 +26428,7 @@ struct BindCastInfo {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -25278,7 +26446,7 @@ struct BoundCastData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -25291,13 +26459,17 @@ struct BoundCastData {
 struct CastParameters {
 	CastParameters() {
 	}
+	CastParameters(bool strict, string *error_message) : CastParameters(nullptr, strict, error_message, nullptr) {
+	}
 	CastParameters(BoundCastData *cast_data, bool strict, string *error_message,
-	               optional_ptr<FunctionLocalState> local_state)
-	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state) {
+	               optional_ptr<FunctionLocalState> local_state, bool nullify_parent_p = false)
+	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state),
+	      nullify_parent(nullify_parent_p) {
 	}
 	CastParameters(CastParameters &parent, optional_ptr<BoundCastData> cast_data,
 	               optional_ptr<FunctionLocalState> local_state)
-	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message), local_state(local_state) {
+	    : cast_data(cast_data), strict(parent.strict), error_message(parent.error_message), local_state(local_state),
+	      query_location(parent.query_location) {
 	}
 
 	//! The bound cast data (if any)
@@ -25308,6 +26480,10 @@ struct CastParameters {
 	string *error_message = nullptr;
 	//! Local state
 	optional_ptr<FunctionLocalState> local_state;
+	//! Query location (if any)
+	optional_idx query_location;
+	//! In the case of a nested type, when facing a cast error, if we nullify the parent
+	bool nullify_parent = false;
 };
 
 struct CastLocalStateParameters {
@@ -25349,6 +26525,7 @@ struct BindCastInput {
 	CastFunctionSet &function_set;
 	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
+	optional_idx query_location;
 
 public:
 	DUCKDB_API BoundCastInfo GetCastFunction(const LogicalType &source, const LogicalType &target);
@@ -25616,56 +26793,6 @@ public:
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_limit_percent.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-namespace duckdb {
-
-//! LogicalLimitPercent represents a LIMIT PERCENT clause
-class LogicalLimitPercent : public LogicalOperator {
-public:
-	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_LIMIT_PERCENT;
-
-public:
-	LogicalLimitPercent(double limit_percent, int64_t offset_val, unique_ptr<Expression> limit,
-	                    unique_ptr<Expression> offset)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT_PERCENT), limit_percent(limit_percent),
-	      offset_val(offset_val), limit(std::move(limit)), offset(std::move(offset)) {
-	}
-
-	//! Limit percent and offset values in case they are constants, used in optimizations.
-	double limit_percent;
-	int64_t offset_val;
-	//! The maximum amount of elements to emit
-	unique_ptr<Expression> limit;
-	//! The offset from the start to begin emitting elements
-	unique_ptr<Expression> offset;
-
-public:
-	vector<ColumnBinding> GetColumnBindings() override {
-		return children[0]->GetColumnBindings();
-	}
-
-	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
-	idx_t EstimateCardinality(ClientContext &context) override;
-
-protected:
-	void ResolveTypes() override {
-		types = children[0]->types;
-	}
-};
-} // namespace duckdb
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
 // duckdb/planner/joinside.hpp
 //
 //
@@ -25853,7 +26980,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalFilter &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimit &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimitPercent &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOrder &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalTopN &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPositionalJoin &op);
@@ -26335,6 +27461,9 @@ struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
+struct BoundLimitNode;
+struct PivotColumnEntry;
+struct UnpivotEntry;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
 
@@ -26489,10 +27618,12 @@ private:
 	unordered_set<string> table_names;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
+	//! Unnamed subquery index
+	idx_t unnamed_subquery_index = 1;
 
 private:
 	//! Get the root binder (binder with no parent)
-	Binder *GetRootBinder();
+	Binder &GetRootBinder();
 	//! Determine the depth of the binder
 	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
@@ -26500,9 +27631,8 @@ private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
-	unique_ptr<Expression> BindDelimiter(ClientContext &context, OrderBinder &order_binder,
-	                                     unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
-	                                     Value &delimiter_value);
+	BoundLimitNode BindLimitValue(OrderBinder &order_binder, unique_ptr<ParsedExpression> limit_val, bool is_percentage,
+	                              bool is_offset);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -26557,6 +27687,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
+	unique_ptr<BoundTableRef> BindJoin(Binder &parent, TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
 	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref, optional_ptr<CommonTableExpressionInfo> cte = nullptr);
@@ -26571,6 +27702,8 @@ private:
 	                                   vector<unique_ptr<ParsedExpression>> all_columns,
 	                                   unique_ptr<ParsedExpression> &where_clause);
 	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
+	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
+	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
@@ -27137,6 +28270,7 @@ public:
 } // namespace duckdb
 
 
+
 namespace duckdb {
 class BufferManager;
 class DatabaseManager;
@@ -27175,9 +28309,9 @@ public:
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
-	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
+	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
-	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
 	                                                    const string &type, AccessMode access_mode);
@@ -29782,6 +30916,7 @@ struct ArrowConverter {
 
 
 namespace duckdb {
+struct CastParameters;
 
 //! The Blob class is a static class that holds helper functions for the Blob type.
 class Blob {
@@ -29805,13 +30940,15 @@ public:
 	DUCKDB_API static string ToString(string_t blob);
 
 	//! Returns the blob size of a string -> blob conversion
-	DUCKDB_API static bool TryGetBlobSize(string_t str, idx_t &result_size, string *error_message);
+	DUCKDB_API static bool TryGetBlobSize(string_t str, idx_t &result_size, CastParameters &parameters);
 	DUCKDB_API static idx_t GetBlobSize(string_t str);
+	DUCKDB_API static idx_t GetBlobSize(string_t str, CastParameters &parameters);
 	//! Convert a string to a blob. This function should ONLY be called after calling GetBlobSize, since it does NOT
 	//! perform data validation.
 	DUCKDB_API static void ToBlob(string_t str, data_ptr_t output);
 	//! Convert a string object to a blob
 	DUCKDB_API static string ToBlob(string_t str);
+	DUCKDB_API static string ToBlob(string_t str, CastParameters &parameters);
 
 	// base 64 conversion functions
 	//! Returns the string size of a blob -> base64 conversion
@@ -30124,6 +31261,9 @@ public:
 	//! Convert a hugeint object to a uuid style string
 	static void ToString(hugeint_t input, char *buf);
 
+	//! Convert a uhugeint_t object to a uuid value
+	static hugeint_t FromUHugeint(uhugeint_t input);
+
 	//! Convert a hugeint object to a uuid style string
 	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
 	static hugeint_t GenerateRandomUUID();
@@ -30171,7 +31311,7 @@ public:
 	DUCKDB_API static dtime_t FromCString(const char *buf, idx_t len, bool strict = false);
 	DUCKDB_API static bool TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict = false);
 	DUCKDB_API static bool TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result,
-	                                        bool strict = false);
+	                                        bool &has_offset, bool strict = false);
 	// No hour limit
 	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
 	                                          bool strict = false);
@@ -30708,7 +31848,7 @@ struct LocalFunctionData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -30724,7 +31864,7 @@ struct GlobalFunctionData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
@@ -30740,7 +31880,7 @@ struct PreparedBatchData {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>

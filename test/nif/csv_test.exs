@@ -10,8 +10,16 @@ defmodule Duckdbex.Nif.CSVTest do
     Map.put(ctx, :conn, conn)
   end
 
-  test "read csv", %{conn: conn} do
+  test "read csv auto infer options", %{conn: conn} do
     assert {:ok, res} = Duckdbex.NIF.query(conn, "SELECT * FROM 'test/support/data.csv';")
+    assert [["1", "2", "3"], ["a", "b", "c"]] = Duckdbex.NIF.fetch_all(res)
+  end
+
+  test "read csv using user defined options", %{conn: conn} do
+    assert {:ok, res} = Duckdbex.NIF.query(conn, "SELECT * FROM read_csv('test/support/data.csv', header = false);")
+    assert [["c1", "c2", "c3"], ["1", "2", "3"], ["a", "b", "c"]] = Duckdbex.NIF.fetch_all(res)
+
+    assert {:ok, res} = Duckdbex.NIF.query(conn, "SELECT * FROM read_csv('test/support/data.csv', header = true);")
     assert [["1", "2", "3"], ["a", "b", "c"]] = Duckdbex.NIF.fetch_all(res)
   end
 
