@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "4a89d97db8"
-#define DUCKDB_VERSION "v0.10.1"
+#define DUCKDB_SOURCE_ID "1601d94f94"
+#define DUCKDB_VERSION "v0.10.2"
 #define DUCKDB_MAJOR_VERSION 0
 #define DUCKDB_MINOR_VERSION 10
-#define DUCKDB_PATCH_VERSION "1"
+#define DUCKDB_PATCH_VERSION "2"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -203,27 +203,27 @@ typedef idx_t column_t;
 typedef idx_t storage_t;
 
 template <class SRC>
-data_ptr_t data_ptr_cast(SRC *src) {
+data_ptr_t data_ptr_cast(SRC *src) { // NOLINT: naming
 	return reinterpret_cast<data_ptr_t>(src);
 }
 
 template <class SRC>
-const_data_ptr_t const_data_ptr_cast(const SRC *src) {
+const_data_ptr_t const_data_ptr_cast(const SRC *src) { // NOLINT: naming
 	return reinterpret_cast<const_data_ptr_t>(src);
 }
 
 template <class SRC>
-char *char_ptr_cast(SRC *src) {
+char *char_ptr_cast(SRC *src) { // NOLINT: naming
 	return reinterpret_cast<char *>(src);
 }
 
 template <class SRC>
-const char *const_char_ptr_cast(const SRC *src) {
+const char *const_char_ptr_cast(const SRC *src) { // NOLINT: naming
 	return reinterpret_cast<const char *>(src);
 }
 
 template <class SRC>
-const unsigned char *const_uchar_ptr_cast(const SRC *src) {
+const unsigned char *const_uchar_ptr_cast(const SRC *src) { // NOLINT: naming
 	return reinterpret_cast<const unsigned char *>(src);
 }
 
@@ -238,9 +238,9 @@ uintptr_t CastPointerToValue(SRC *src) {
 namespace duckdb {
 
 // Forward declaration to allow conversion between hugeint and uhugeint
-struct uhugeint_t;
+struct uhugeint_t; // NOLINT: use numeric casing
 
-struct hugeint_t {
+struct hugeint_t { // NOLINT: use numeric casing
 public:
 	uint64_t lower;
 	int64_t upper;
@@ -320,7 +320,7 @@ namespace duckdb {
 // Escaping " and quoting the value with "
 class SQLIdentifier {
 public:
-	SQLIdentifier(const string &raw_string) : raw_string(raw_string) {
+	explicit SQLIdentifier(const string &raw_string) : raw_string(raw_string) {
 	}
 
 public:
@@ -331,7 +331,7 @@ public:
 // Escaping ' and quoting the value with '
 class SQLString {
 public:
-	SQLString(const string &raw_string) : raw_string(raw_string) {
+	explicit SQLString(const string &raw_string) : raw_string(raw_string) {
 	}
 
 public:
@@ -442,10 +442,10 @@ class ParsedExpression;
 class QueryErrorContext;
 class TableRef;
 struct hugeint_t;
-class optional_idx;
+class optional_idx; // NOLINT: matching std style
 
-inline void assert_restrict_function(const void *left_start, const void *left_end, const void *right_start,
-                                     const void *right_end, const char *fname, int linenr) {
+inline void AssertRestrictFunction(const void *left_start, const void *left_end, const void *right_start,
+                                   const void *right_end, const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {
@@ -456,13 +456,13 @@ inline void assert_restrict_function(const void *left_start, const void *left_en
 }
 
 #define ASSERT_RESTRICT(left_start, left_end, right_start, right_end)                                                  \
-	assert_restrict_function(left_start, left_end, right_start, right_end, __FILE__, __LINE__)
+	AssertRestrictFunction(left_start, left_end, right_start, right_end, __FILE__, __LINE__)
 
 //===--------------------------------------------------------------------===//
 // Exception Types
 //===--------------------------------------------------------------------===//
 
-enum class ExceptionType {
+enum class ExceptionType : uint8_t {
 	INVALID = 0,          // invalid type
 	OUT_OF_RANGE = 1,     // value out of range error
 	CONVERSION = 2,       // conversion/casting error
@@ -517,11 +517,12 @@ public:
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
 	DUCKDB_API static ExceptionType StringToExceptionType(const string &type);
 
-	template <typename... Args>
-	static string ConstructMessage(const string &msg, Args... params) {
-		const std::size_t num_args = sizeof...(Args);
-		if (num_args == 0)
+	template <typename... ARGS>
+	static string ConstructMessage(const string &msg, ARGS... params) {
+		const std::size_t num_args = sizeof...(ARGS);
+		if (num_args == 0) {
 			return msg;
+		}
 		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -543,9 +544,9 @@ public:
 
 	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
 
-	template <class T, typename... Args>
+	template <class T, typename... ARGS>
 	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
-	                                        Args... params) {
+	                                        ARGS... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -553,7 +554,7 @@ public:
 	DUCKDB_API static bool UncaughtException();
 
 	DUCKDB_API static string GetStackTrace(int max_depth = 120);
-	static string FormatStackTrace(string message = "") {
+	static string FormatStackTrace(const string &message = "") {
 		return (message + "\n" + GetStackTrace());
 	}
 
@@ -567,8 +568,8 @@ class ConnectionException : public Exception {
 public:
 	DUCKDB_API explicit ConnectionException(const string &msg);
 
-	template <typename... Args>
-	explicit ConnectionException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit ConnectionException(const string &msg, ARGS... params)
 	    : ConnectionException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -577,8 +578,8 @@ class PermissionException : public Exception {
 public:
 	DUCKDB_API explicit PermissionException(const string &msg);
 
-	template <typename... Args>
-	explicit PermissionException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit PermissionException(const string &msg, ARGS... params)
 	    : PermissionException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -587,22 +588,22 @@ class OutOfRangeException : public Exception {
 public:
 	DUCKDB_API explicit OutOfRangeException(const string &msg);
 
-	template <typename... Args>
-	explicit OutOfRangeException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit OutOfRangeException(const string &msg, ARGS... params)
 	    : OutOfRangeException(ConstructMessage(msg, params...)) {
 	}
-	DUCKDB_API OutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
-	DUCKDB_API OutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
-	DUCKDB_API OutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
-	DUCKDB_API OutOfRangeException(const PhysicalType varType, const idx_t length);
+	DUCKDB_API OutOfRangeException(const int64_t value, const PhysicalType orig_type, const PhysicalType new_type);
+	DUCKDB_API OutOfRangeException(const hugeint_t value, const PhysicalType orig_type, const PhysicalType new_type);
+	DUCKDB_API OutOfRangeException(const double value, const PhysicalType orig_type, const PhysicalType new_type);
+	DUCKDB_API OutOfRangeException(const PhysicalType var_type, const idx_t length);
 };
 
 class OutOfMemoryException : public Exception {
 public:
 	DUCKDB_API explicit OutOfMemoryException(const string &msg);
 
-	template <typename... Args>
-	explicit OutOfMemoryException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit OutOfMemoryException(const string &msg, ARGS... params)
 	    : OutOfMemoryException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -611,8 +612,8 @@ class SyntaxException : public Exception {
 public:
 	DUCKDB_API explicit SyntaxException(const string &msg);
 
-	template <typename... Args>
-	explicit SyntaxException(const string &msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
+	template <typename... ARGS>
+	explicit SyntaxException(const string &msg, ARGS... params) : SyntaxException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -620,8 +621,8 @@ class ConstraintException : public Exception {
 public:
 	DUCKDB_API explicit ConstraintException(const string &msg);
 
-	template <typename... Args>
-	explicit ConstraintException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit ConstraintException(const string &msg, ARGS... params)
 	    : ConstraintException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -630,8 +631,8 @@ class DependencyException : public Exception {
 public:
 	DUCKDB_API explicit DependencyException(const string &msg);
 
-	template <typename... Args>
-	explicit DependencyException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit DependencyException(const string &msg, ARGS... params)
 	    : DependencyException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -643,12 +644,12 @@ public:
 	explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
 	}
 
-	template <typename... Args>
-	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
+	template <typename... ARGS>
+	explicit IOException(const string &msg, ARGS... params) : IOException(ConstructMessage(msg, params...)) {
 	}
 
-	template <typename... Args>
-	explicit IOException(const string &msg, const unordered_map<string, string> &extra_info, Args... params)
+	template <typename... ARGS>
+	explicit IOException(const string &msg, const unordered_map<string, string> &extra_info, ARGS... params)
 	    : IOException(ConstructMessage(msg, params...), extra_info) {
 	}
 };
@@ -657,8 +658,8 @@ class MissingExtensionException : public Exception {
 public:
 	DUCKDB_API explicit MissingExtensionException(const string &msg);
 
-	template <typename... Args>
-	explicit MissingExtensionException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit MissingExtensionException(const string &msg, ARGS... params)
 	    : MissingExtensionException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -667,8 +668,8 @@ class NotImplementedException : public Exception {
 public:
 	DUCKDB_API explicit NotImplementedException(const string &msg);
 
-	template <typename... Args>
-	explicit NotImplementedException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit NotImplementedException(const string &msg, ARGS... params)
 	    : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -682,8 +683,8 @@ class SerializationException : public Exception {
 public:
 	DUCKDB_API explicit SerializationException(const string &msg);
 
-	template <typename... Args>
-	explicit SerializationException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit SerializationException(const string &msg, ARGS... params)
 	    : SerializationException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -692,8 +693,8 @@ class SequenceException : public Exception {
 public:
 	DUCKDB_API explicit SequenceException(const string &msg);
 
-	template <typename... Args>
-	explicit SequenceException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit SequenceException(const string &msg, ARGS... params)
 	    : SequenceException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -707,14 +708,14 @@ class FatalException : public Exception {
 public:
 	explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
 	}
-	template <typename... Args>
-	explicit FatalException(const string &msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
+	template <typename... ARGS>
+	explicit FatalException(const string &msg, ARGS... params) : FatalException(ConstructMessage(msg, params...)) {
 	}
 
 protected:
 	DUCKDB_API explicit FatalException(ExceptionType type, const string &msg);
-	template <typename... Args>
-	explicit FatalException(ExceptionType type, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit FatalException(ExceptionType type, const string &msg, ARGS... params)
 	    : FatalException(type, ConstructMessage(msg, params...)) {
 	}
 };
@@ -723,8 +724,8 @@ class InternalException : public Exception {
 public:
 	DUCKDB_API explicit InternalException(const string &msg);
 
-	template <typename... Args>
-	explicit InternalException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit InternalException(const string &msg, ARGS... params)
 	    : InternalException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -734,12 +735,12 @@ public:
 	DUCKDB_API explicit InvalidInputException(const string &msg);
 	DUCKDB_API explicit InvalidInputException(const string &msg, const unordered_map<string, string> &extra_info);
 
-	template <typename... Args>
-	explicit InvalidInputException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit InvalidInputException(const string &msg, ARGS... params)
 	    : InvalidInputException(ConstructMessage(msg, params...)) {
 	}
-	template <typename... Args>
-	explicit InvalidInputException(Expression &expr, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit InvalidInputException(Expression &expr, const string &msg, ARGS... params)
 	    : InvalidInputException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
 };
@@ -748,8 +749,7 @@ class InvalidTypeException : public Exception {
 public:
 	DUCKDB_API InvalidTypeException(PhysicalType type, const string &msg);
 	DUCKDB_API InvalidTypeException(const LogicalType &type, const string &msg);
-	DUCKDB_API
-	InvalidTypeException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
+	DUCKDB_API explicit InvalidTypeException(const string &msg);
 };
 
 class TypeMismatchException : public Exception {
@@ -758,16 +758,15 @@ public:
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
 	DUCKDB_API TypeMismatchException(optional_idx error_location, const LogicalType &type_1, const LogicalType &type_2,
 	                                 const string &msg);
-	DUCKDB_API
-	TypeMismatchException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
+	DUCKDB_API explicit TypeMismatchException(const string &msg);
 };
 
 class ParameterNotAllowedException : public Exception {
 public:
 	DUCKDB_API explicit ParameterNotAllowedException(const string &msg);
 
-	template <typename... Args>
-	explicit ParameterNotAllowedException(const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit ParameterNotAllowedException(const string &msg, ARGS... params)
 	    : ParameterNotAllowedException(ConstructMessage(msg, params...)) {
 	}
 };
@@ -805,13 +804,13 @@ public:
 
 namespace duckdb {
 
-template <bool ENABLED>
+template <bool IS_ENABLED>
 struct MemorySafety {
 #ifdef DEBUG
 	// In DEBUG mode safety is always on
-	static constexpr bool enabled = true;
+	static constexpr bool ENABLED = true;
 #else
-	static constexpr bool enabled = ENABLED;
+	static constexpr bool ENABLED = IS_ENABLED;
 #endif
 };
 
@@ -823,11 +822,11 @@ struct MemorySafety {
 
 namespace duckdb {
 
-template <class _Tp, class _Dp = std::default_delete<_Tp>, bool SAFE = true>
-class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
+template <class DATA_TYPE, class ALLOCATOR_TYPE = std::default_delete<DATA_TYPE>, bool SAFE = true>
+class unique_ptr : public std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE> { // NOLINT: naming
 public:
-	using original = std::unique_ptr<_Tp, _Dp>;
-	using original::original;
+	using original = std::unique_ptr<DATA_TYPE, ALLOCATOR_TYPE>;
+	using original::original; // NOLINT
 
 private:
 	static inline void AssertNotNull(const bool null) {
@@ -841,17 +840,17 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<_Tp>::type operator*() const {
+	typename std::add_lvalue_reference<DATA_TYPE>::type operator*() const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::enabled) {
+		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return *ptr;
 	}
 
-	typename original::pointer operator->() const {
+	typename original::pointer operator->() const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::enabled) {
+		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return ptr;
@@ -862,15 +861,16 @@ public:
 	[[clang::reinitializes]]
 #endif
 	inline void
-	reset(typename original::pointer ptr = typename original::pointer()) noexcept {
+	reset(typename original::pointer ptr = typename original::pointer()) noexcept { // NOLINT: hiding on purpose
 		original::reset(ptr);
 	}
 };
 
-template <class _Tp, class _Dp, bool SAFE>
-class unique_ptr<_Tp[], _Dp, SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp[]>> {
+template <class DATA_TYPE, class ALLOCATOR_TYPE, bool SAFE>
+class unique_ptr<DATA_TYPE[], ALLOCATOR_TYPE, SAFE>
+    : public std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>> {
 public:
-	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp[]>>;
+	using original = std::unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE[]>>;
 	using original::original;
 
 private:
@@ -885,9 +885,9 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
+	typename std::add_lvalue_reference<DATA_TYPE>::type operator[](size_t __i) const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::enabled) {
+		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return ptr[__i];
@@ -1097,68 +1097,62 @@ namespace duckdb {
 
 template <class... T>
 struct AlwaysFalse {
-	static constexpr bool value = false;
+	static constexpr bool VALUE = false;
 };
 
 template<typename T>
 using reference = std::reference_wrapper<T>;
 
-template<class _Tp, bool SAFE = true>
-struct __unique_if
+template<class DATA_TYPE, bool SAFE = true>
+struct TemplatedUniqueIf
 {
-    typedef unique_ptr<_Tp, std::default_delete<_Tp>, SAFE> __unique_single;
+    typedef unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, SAFE> templated_unique_single_t;
 };
 
-template<class _Tp>
-struct __unique_if<_Tp[]>
+template<class DATA_TYPE, size_t N>
+struct TemplatedUniqueIf<DATA_TYPE[N]>
 {
-    typedef unique_ptr<_Tp[]> __unique_array_unknown_bound;
+    typedef void TemplatedUniqueArrayKnownBound; // NOLINT: mimic std style
 };
 
-template<class _Tp, size_t _Np>
-struct __unique_if<_Tp[_Np]>
-{
-    typedef void __unique_array_known_bound;
-};
-
-template<class _Tp, class... _Args>
+template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<_Tp, true>::__unique_single
-make_uniq(_Args&&... __args)
+typename TemplatedUniqueIf<DATA_TYPE, true>::templated_unique_single_t
+make_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp, std::default_delete<_Tp>, true>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, true>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
 
-template<class _Tp, class... _Args>
+template<class DATA_TYPE, class... ARGS>
 inline 
-typename __unique_if<_Tp, false>::__unique_single
-make_unsafe_uniq(_Args&&... __args)
+typename TemplatedUniqueIf<DATA_TYPE, false>::templated_unique_single_t
+make_unsafe_uniq(ARGS&&... args) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp, std::default_delete<_Tp>, false>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<DATA_TYPE, std::default_delete<DATA_TYPE>, false>(new DATA_TYPE(std::forward<ARGS>(args)...));
 }
 
-template<class _Tp>
-inline unique_ptr<_Tp[], std::default_delete<_Tp>, true>
-make_uniq_array(size_t __n)
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>
+make_uniq_array(size_t n) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp[], std::default_delete<_Tp>, true>(new _Tp[__n]());
+    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, true>(new DATA_TYPE[n]());
 }
 
-template<class _Tp>
-inline unique_ptr<_Tp[], std::default_delete<_Tp>, false>
-make_unsafe_uniq_array(size_t __n)
+template<class DATA_TYPE>
+inline unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>
+make_unsafe_uniq_array(size_t n) // NOLINT: mimic std style
 {
-    return unique_ptr<_Tp[], std::default_delete<_Tp>, false>(new _Tp[__n]());
+    return unique_ptr<DATA_TYPE[], std::default_delete<DATA_TYPE>, false>(new DATA_TYPE[n]());
 }
 
-template<class _Tp, class... _Args>
-    typename __unique_if<_Tp>::__unique_array_known_bound
-    make_uniq(_Args&&...) = delete;
+template<class DATA_TYPE, class... ARGS>
+    typename TemplatedUniqueIf<DATA_TYPE>::TemplatedUniqueArrayKnownBound
+    make_uniq(ARGS&&...) = delete; // NOLINT: mimic std style
 
 
-template <typename S, typename T, typename... Args>
-unique_ptr<S> make_uniq_base(Args &&... args) {
-	return unique_ptr<S>(new T(std::forward<Args>(args)...));
+template <typename S, typename T, typename... ARGS>
+unique_ptr<S> make_uniq_base(ARGS &&... args) { // NOLINT: mimic std style
+	return unique_ptr<S>(new T(std::forward<ARGS>(args)...));
 }
 
 #ifdef DUCKDB_ENABLE_DEPRECATED_API
@@ -1169,7 +1163,7 @@ unique_ptr<S> make_unique_base(Args &&... args) {
 #endif // DUCKDB_ENABLE_DEPRECATED_API
 
 template <typename T, typename S>
-unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) {
+unique_ptr<S> unique_ptr_cast(unique_ptr<T> src) { // NOLINT: mimic std style
 	return unique_ptr<S>(static_cast<S *>(src.release()));
 }
 
@@ -1195,12 +1189,12 @@ typename std::remove_reference<T>::type&& move(T&& t) noexcept {
 }
 #endif
 
-template <class T, class... _Args>
-static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
+template <class T, class... ARGS>
+static duckdb::unique_ptr<T> make_unique(ARGS&&... __args) { // NOLINT: mimic std style
 #ifndef DUCKDB_ENABLE_DEPRECATED_API
 	static_assert(sizeof(T) == 0, "Use make_uniq instead of make_unique!");
 #endif // DUCKDB_ENABLE_DEPRECATED_API
-	return unique_ptr<T>(new T(std::forward<_Args>(__args)...));
+	return unique_ptr<T>(new T(std::forward<ARGS>(__args)...));
 }
 
 template <typename T>
@@ -1242,13 +1236,13 @@ T SignValue(T a) {
 template <typename T>
 const T Load(const_data_ptr_t ptr) {
 	T ret;
-	memcpy(&ret, ptr, sizeof(ret));
+	memcpy(&ret, ptr, sizeof(ret)); // NOLINT
 	return ret;
 }
 
 template <typename T>
 void Store(const T &val, data_ptr_t ptr) {
-	memcpy(ptr, (void *)&val, sizeof(val));
+	memcpy(ptr, (void *)&val, sizeof(val)); // NOLINT
 }
 
 //! This assigns a shared pointer, but ONLY assigns if "target" is not equal to "source"
@@ -1269,19 +1263,20 @@ using const_reference = std::reference_wrapper<const T>;
 
 //! Returns whether or not two reference wrappers refer to the same object
 template<class T>
-bool RefersToSameObject(const reference<T> &A, const reference<T> &B) {
-	return &A.get() == &B.get();
+bool RefersToSameObject(const reference<T> &a, const reference<T> &b) {
+	return &a.get() == &b.get();
 }
 
 template<class T>
-bool RefersToSameObject(const T &A, const T &B) {
-	return &A == &B;
+bool RefersToSameObject(const T &a, const T &b) {
+	return &a == &b;
 }
 
 template<class T, class SRC>
-void DynamicCastCheck(SRC *source) {
+void DynamicCastCheck(const SRC *source) {
 #ifndef __APPLE__
-	D_ASSERT(dynamic_cast<T *>(source));
+	// Actual check is on the fact that dynamic_cast and reinterpret_cast are equivalent
+	D_ASSERT(reinterpret_cast<const T *>(source) == dynamic_cast<const T *>(source));
 #endif
 }
 
@@ -1306,10 +1301,10 @@ void DynamicCastCheck(SRC *source) {
 
 namespace duckdb {
 
-template <class _Tp, bool SAFE = true>
-class vector : public std::vector<_Tp, std::allocator<_Tp>> {
+template <class DATA_TYPE, bool SAFE = true>
+class vector : public std::vector<DATA_TYPE, std::allocator<DATA_TYPE>> { // NOLINT: matching name of std
 public:
-	using original = std::vector<_Tp, std::allocator<_Tp>>;
+	using original = std::vector<DATA_TYPE, std::allocator<DATA_TYPE>>;
 	using original::original;
 	using size_type = typename original::size_type;
 	using const_reference = typename original::const_reference;
@@ -1332,59 +1327,59 @@ public:
 	[[clang::reinitializes]]
 #endif
 	inline void
-	clear() noexcept {
+	clear() noexcept { // NOLINT: hiding on purpose
 		original::clear();
 	}
 
 	// Because we create the other constructor, the implicitly created constructor
 	// gets deleted, so we have to be explicit
 	vector() = default;
-	vector(original &&other) : original(std::move(other)) {
+	vector(original &&other) : original(std::move(other)) { // NOLINT: allow implicit conversion
 	}
-	template <bool _SAFE>
-	vector(vector<_Tp, _SAFE> &&other) : original(std::move(other)) {
+	template <bool INTERNAL_SAFE>
+	vector(vector<DATA_TYPE, INTERNAL_SAFE> &&other) : original(std::move(other)) { // NOLINT: allow implicit conversion
 	}
 
-	template <bool _SAFE = false>
-	inline typename original::reference get(typename original::size_type __n) {
-		if (MemorySafety<_SAFE>::enabled) {
+	template <bool INTERNAL_SAFE = false>
+	inline typename original::reference get(typename original::size_type __n) { // NOLINT: hiding on purpose
+		if (MemorySafety<INTERNAL_SAFE>::ENABLED) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
 
-	template <bool _SAFE = false>
-	inline typename original::const_reference get(typename original::size_type __n) const {
-		if (MemorySafety<_SAFE>::enabled) {
+	template <bool INTERNAL_SAFE = false>
+	inline typename original::const_reference get(typename original::size_type __n) const { // NOLINT: hiding on purpose
+		if (MemorySafety<INTERNAL_SAFE>::ENABLED) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
 
-	typename original::reference operator[](typename original::size_type __n) {
+	typename original::reference operator[](typename original::size_type __n) { // NOLINT: hiding on purpose
 		return get<SAFE>(__n);
 	}
-	typename original::const_reference operator[](typename original::size_type __n) const {
+	typename original::const_reference operator[](typename original::size_type __n) const { // NOLINT: hiding on purpose
 		return get<SAFE>(__n);
 	}
 
-	typename original::reference front() {
+	typename original::reference front() { // NOLINT: hiding on purpose
 		return get<SAFE>(0);
 	}
 
-	typename original::const_reference front() const {
+	typename original::const_reference front() const { // NOLINT: hiding on purpose
 		return get<SAFE>(0);
 	}
 
-	typename original::reference back() {
-		if (MemorySafety<SAFE>::enabled && original::empty()) {
+	typename original::reference back() { // NOLINT: hiding on purpose
+		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
-	typename original::const_reference back() const {
-		if (MemorySafety<SAFE>::enabled && original::empty()) {
+	typename original::const_reference back() const { // NOLINT: hiding on purpose
+		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
 			throw InternalException("'back' called on an empty vector!");
 		}
 		return get<SAFE>(original::size() - 1);
@@ -1487,7 +1482,7 @@ using std::atomic;
 namespace duckdb {
 
 template <class T>
-class optional_ptr {
+class optional_ptr { // NOLINT: mimic std casing
 public:
 	optional_ptr() : ptr(nullptr) {
 	}
@@ -1502,7 +1497,7 @@ public:
 		}
 	}
 
-	operator bool() const {
+	operator bool() const { // NOLINT: allow implicit conversion to bool
 		return ptr;
 	}
 	T &operator*() {
@@ -1521,16 +1516,16 @@ public:
 		CheckValid();
 		return ptr;
 	}
-	T *get() {
+	T *get() { // NOLINT: mimic std casing
 		// CheckValid();
 		return ptr;
 	}
-	const T *get() const {
+	const T *get() const { // NOLINT: mimic std casing
 		// CheckValid();
 		return ptr;
 	}
 	// this looks dirty - but this is the default behavior of raw pointers
-	T *get_mutable() const {
+	T *get_mutable() const { // NOLINT: mimic std casing
 		// CheckValid();
 		return ptr;
 	}
@@ -1630,7 +1625,7 @@ namespace duckdb {
 
 class QueryErrorContext {
 public:
-	explicit QueryErrorContext(optional_idx query_location_ = optional_idx()) : query_location(query_location_) {
+	explicit QueryErrorContext(optional_idx query_location_p = optional_idx()) : query_location(query_location_p) {
 	}
 
 	//! The location in which the error should be thrown
@@ -1652,11 +1647,11 @@ public:
 	DUCKDB_API explicit CatalogException(const string &msg);
 	DUCKDB_API explicit CatalogException(const string &msg, const unordered_map<string, string> &extra_info);
 
-	template <typename... Args>
-	explicit CatalogException(const string &msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
+	template <typename... ARGS>
+	explicit CatalogException(const string &msg, ARGS... params) : CatalogException(ConstructMessage(msg, params...)) {
 	}
-	template <typename... Args>
-	explicit CatalogException(QueryErrorContext error_context, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit CatalogException(QueryErrorContext error_context, const string &msg, ARGS... params)
 	    : CatalogException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_context)) {
 	}
 
@@ -1708,7 +1703,7 @@ class TypeCatalogEntry;
 class Vector;
 class ClientContext;
 
-struct string_t;
+struct string_t; // NOLINT: mimic std casing
 
 template <class T>
 using child_list_t = vector<std::pair<std::string, T>>;
@@ -1716,12 +1711,12 @@ using child_list_t = vector<std::pair<std::string, T>>;
 template <class T>
 using buffer_ptr = shared_ptr<T>;
 
-template <class T, typename... Args>
-buffer_ptr<T> make_buffer(Args &&...args) {
-	return make_shared<T>(std::forward<Args>(args)...);
+template <class T, typename... ARGS>
+buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
+	return make_shared<T>(std::forward<ARGS>(args)...);
 }
 
-struct list_entry_t {
+struct list_entry_t { // NOLINT: mimic std casing
 	list_entry_t() = default;
 	list_entry_t(uint64_t offset, uint64_t length) : offset(offset), length(length) {
 	}
@@ -1918,7 +1913,7 @@ enum class LogicalTypeId : uint8_t {
 
 struct ExtraTypeInfo;
 
-struct aggregate_state_t;
+struct aggregate_state_t; // NOLINT: mimic std casing
 
 struct LogicalType {
 	DUCKDB_API LogicalType();
@@ -1929,7 +1924,7 @@ struct LogicalType {
 
 	DUCKDB_API ~LogicalType();
 
-	inline LogicalTypeId id() const {
+	inline LogicalTypeId id() const { // NOLINT: mimic std casing
 		return id_;
 	}
 	inline PhysicalType InternalType() const {
@@ -1963,6 +1958,9 @@ struct LogicalType {
 
 	// copy assignment
 	inline LogicalType &operator=(const LogicalType &other) {
+		if (this == &other) {
+			return *this;
+		}
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
 		type_info_ = other.type_info_;
@@ -2021,9 +2019,9 @@ struct LogicalType {
 	bool Contains(LogicalTypeId type_id) const;
 
 private:
-	LogicalTypeId id_;
-	PhysicalType physical_type_;
-	shared_ptr<ExtraTypeInfo> type_info_;
+	LogicalTypeId id_; // NOLINT: allow this naming for legacy reasons
+	PhysicalType physical_type_; // NOLINT: allow this naming for legacy reasons
+	shared_ptr<ExtraTypeInfo> type_info_; // NOLINT: allow this naming for legacy reasons
 
 private:
 	PhysicalType GetInternalType();
@@ -2204,6 +2202,7 @@ bool ApproxEqual(double l, double r);
 struct aggregate_state_t {
 	aggregate_state_t() {
 	}
+	// NOLINTNEXTLINE: work around bug in clang-tidy
 	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p)
 	    : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)),
 	      bound_argument_types(std::move(bound_argument_types_p)) {
@@ -2258,9 +2257,9 @@ bool LogicalType::Contains(F &&predicate) const {
 namespace duckdb {
 
 // Forward declaration to allow conversion between hugeint and uhugeint
-struct hugeint_t;
+struct hugeint_t; // NOLINT
 
-struct uhugeint_t {
+struct uhugeint_t { // NOLINT
 public:
 	uint64_t lower;
 	uint64_t upper;
@@ -2632,8 +2631,8 @@ public:
 
 	//! Join multiple items of container with given size, transformed to string
 	//! using function, into one string using the given separator
-	template <typename C, typename S, typename Func>
-	static string Join(const C &input, S count, const string &separator, Func f) {
+	template <typename C, typename S, typename FUNC>
+	static string Join(const C &input, S count, const string &separator, FUNC f) {
 		// The result
 		std::string result;
 
@@ -2672,8 +2671,8 @@ public:
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 
 	//! Format a string using printf semantics
-	template <typename... Args>
-	static string Format(const string fmt_str, Args... params) {
+	template <typename... ARGS>
+	static string Format(const string fmt_str, ARGS... params) {
 		return Exception::ConstructMessage(fmt_str, params...);
 	}
 
@@ -2757,9 +2756,9 @@ public:
 
 namespace duckdb {
 
-struct date_t;
-struct dtime_t;
-struct dtime_tz_t;
+struct date_t;     // NOLINT
+struct dtime_t;    // NOLINT
+struct dtime_tz_t; // NOLINT
 
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
 struct timestamp_t { // NOLINT
@@ -3105,6 +3104,7 @@ TO UnsafeNumericCast(float val) {
 
 
 #include <cstring>
+#include <algorithm>
 
 namespace duckdb {
 
@@ -3151,13 +3151,11 @@ public:
 		}
 	}
 
-	string_t(const char *data)
-	    : string_t(data,
-	               UnsafeNumericCast<uint32_t>(strlen(data))) { // NOLINT: Allow implicit conversion from `const char*`
+	string_t(const char *data) // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(data, UnsafeNumericCast<uint32_t>(strlen(data))) {
 	}
-	string_t(const string &value)
-	    : string_t(value.c_str(),
-	               UnsafeNumericCast<uint32_t>(value.size())) { // NOLINT: Allow implicit conversion from `const char*`
+	string_t(const string &value) // NOLINT: Allow implicit conversion from `const char*`
+	    : string_t(value.c_str(), UnsafeNumericCast<uint32_t>(value.size())) {
 	}
 
 	bool IsInlined() const {
@@ -3179,8 +3177,8 @@ public:
 		return value.inlined.inlined;
 	}
 
-	char *GetPrefixWriteable() const {
-		return (char *)value.inlined.inlined;
+	char *GetPrefixWriteable() {
+		return value.inlined.inlined;
 	}
 
 	idx_t GetSize() const {
@@ -3233,20 +3231,21 @@ public:
 	struct StringComparisonOperators {
 		static inline bool Equals(const string_t &a, const string_t &b) {
 #ifdef DUCKDB_DEBUG_NO_INLINE
-			if (a.GetSize() != b.GetSize())
+			if (a.GetSize() != b.GetSize()) {
 				return false;
+			}
 			return (memcmp(a.GetData(), b.GetData(), a.GetSize()) == 0);
 #endif
-			uint64_t A = Load<uint64_t>(const_data_ptr_cast(&a));
-			uint64_t B = Load<uint64_t>(const_data_ptr_cast(&b));
-			if (A != B) {
+			uint64_t a_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&a));
+			uint64_t b_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&b));
+			if (a_bulk_comp != b_bulk_comp) {
 				// Either length or prefix are different -> not equal
 				return false;
 			}
 			// they have the same length and same prefix!
-			A = Load<uint64_t>(const_data_ptr_cast(&a) + 8u);
-			B = Load<uint64_t>(const_data_ptr_cast(&b) + 8u);
-			if (A == B) {
+			a_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&a) + 8u);
+			b_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&b) + 8u);
+			if (a_bulk_comp == b_bulk_comp) {
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
 				return true;
 			}
@@ -3268,11 +3267,11 @@ public:
 			const uint32_t min_length = std::min<uint32_t>(left_length, right_length);
 
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			uint32_t A = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
-			uint32_t B = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
+			uint32_t a_prefix = Load<uint32_t>(const_data_ptr_cast(left.GetPrefix()));
+			uint32_t b_prefix = Load<uint32_t>(const_data_ptr_cast(right.GetPrefix()));
 
 			// Utility to move 0xa1b2c3d4 into 0xd4c3b2a1, basically inverting the order byte-a-byte
-			auto bswap = [](uint32_t v) -> uint32_t {
+			auto byte_swap = [](uint32_t v) -> uint32_t {
 				uint32_t t1 = (v >> 16u) | (v << 16u);
 				uint32_t t2 = t1 & 0x00ff00ff;
 				uint32_t t3 = t1 & 0xff00ff00;
@@ -3285,8 +3284,9 @@ public:
 			// 	if the prefix is smaller(after bswap), it will stay smaller regardless of the extra bytes
 			//	if the prefix is equal, the extra bytes are guaranteed to be /0 for the shorter one
 
-			if (A != B)
-				return bswap(A) > bswap(B);
+			if (a_prefix != b_prefix) {
+				return byte_swap(a_prefix) > byte_swap(b_prefix);
+			}
 #endif
 			auto memcmp_res = memcmp(left.GetData(), right.GetData(), min_length);
 			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
@@ -3326,7 +3326,7 @@ private:
 
 namespace duckdb {
 
-struct timestamp_t;
+struct timestamp_t; // NOLINT: primitive case
 
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t { // NOLINT
@@ -3704,10 +3704,10 @@ struct hash<duckdb::dtime_tz_t> {
 
 namespace duckdb {
 
-struct dtime_t;
-struct date_t;
-struct dtime_tz_t;
-struct timestamp_t;
+struct dtime_t;     // NOLINT: literal casing
+struct date_t;      // NOLINT: literal casing
+struct dtime_tz_t;  // NOLINT: literal casing
+struct timestamp_t; // NOLINT: literal casing
 
 class Serializer;
 class Deserializer;
@@ -4044,13 +4044,13 @@ public:
 	DUCKDB_API static Value BIT(const string &data);
 
 	//! Creates an aggregate state
-	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len);
+	DUCKDB_API static Value AGGREGATE_STATE(const LogicalType &type, const_data_ptr_t data, idx_t len); // NOLINT
 
 	template <class T>
 	T GetValue() const;
 	template <class T>
 	static Value CreateValue(T value) {
-		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		static_assert(AlwaysFalse<T>::VALUE, "No specialization exists for this type");
 		return Value(nullptr);
 	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
@@ -4497,7 +4497,9 @@ public:
 	virtual string ToSQL() const;
 
 	virtual Catalog &ParentCatalog();
+	virtual const Catalog &ParentCatalog() const;
 	virtual SchemaCatalogEntry &ParentSchema();
+	virtual const SchemaCatalogEntry &ParentSchema() const;
 
 	virtual void Verify(Catalog &catalog);
 
@@ -4520,7 +4522,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -4535,6 +4537,9 @@ public:
 
 public:
 	Catalog &ParentCatalog() override {
+		return catalog;
+	}
+	const Catalog &ParentCatalog() const override {
 		return catalog;
 	}
 
@@ -4676,6 +4681,79 @@ enum class OnEntryNotFound : uint8_t { THROW_EXCEPTION = 0, RETURN_NULL = 1 };
 
 } // namespace duckdb
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/error_data.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+namespace duckdb {
+class ParsedExpression;
+class TableRef;
+
+class ErrorData {
+public:
+	//! Not initialized, default constructor
+	DUCKDB_API ErrorData();
+	//! From std::exception
+	DUCKDB_API ErrorData(const std::exception &ex); // NOLINT: allow implicit construction from exception
+	//! From a raw string and exception type
+	DUCKDB_API explicit ErrorData(ExceptionType type, const string &raw_message);
+	//! From a raw string
+	DUCKDB_API explicit ErrorData(const string &raw_message);
+
+public:
+	//! Throw the error
+	[[noreturn]] DUCKDB_API void Throw(const string &prepended_message = "") const;
+	//! Get the internal exception type of the error
+	DUCKDB_API const ExceptionType &Type() const;
+	//! Used in clients like C-API, creates the final message and returns a reference to it
+	DUCKDB_API const string &Message();
+	DUCKDB_API const string &RawMessage() {
+		return raw_message;
+	}
+	DUCKDB_API bool operator==(const ErrorData &other) const;
+
+	inline bool HasError() const {
+		return initialized;
+	}
+	const unordered_map<string, string> &ExtraInfo() const {
+		return extra_info;
+	}
+
+	DUCKDB_API void AddErrorLocation(const string &query);
+	DUCKDB_API void ConvertErrorToJSON();
+
+	DUCKDB_API void AddQueryLocation(optional_idx query_location);
+	DUCKDB_API void AddQueryLocation(QueryErrorContext error_context);
+	DUCKDB_API void AddQueryLocation(const ParsedExpression &ref);
+	DUCKDB_API void AddQueryLocation(const TableRef &ref);
+
+private:
+	//! Whether this ErrorData contains an exception or not
+	bool initialized;
+	//! The ExceptionType of the preserved exception
+	ExceptionType type;
+	//! The message the exception was constructed with (does not contain the Exception Type)
+	string raw_message;
+	//! The final message (stored in the preserved error for compatibility reasons with C-API)
+	string final_message;
+	//! Extra exception info
+	unordered_map<string, string> extra_info;
+
+private:
+	DUCKDB_API static string SanitizeErrorMessage(string error);
+};
+
+} // namespace duckdb
+
 
 //===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -4771,6 +4849,7 @@ public:
 	DUCKDB_API static Catalog &GetCatalog(AttachedDatabase &db);
 
 	DUCKDB_API AttachedDatabase &GetAttached();
+	DUCKDB_API const AttachedDatabase &GetAttached() const;
 	DUCKDB_API DatabaseInstance &GetDatabase();
 
 	virtual bool IsDuckCatalog() {
@@ -4787,7 +4866,7 @@ public:
 	DUCKDB_API idx_t ModifyCatalog();
 
 	//! Returns the catalog name - based on how the catalog was attached
-	DUCKDB_API const string &GetName();
+	DUCKDB_API const string &GetName() const;
 	DUCKDB_API idx_t GetOid();
 	DUCKDB_API virtual string GetCatalogType() = 0;
 
@@ -4891,6 +4970,7 @@ public:
 	                                                             QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
+
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType type, const string &schema,
 	                                               const string &name, OnEntryNotFound if_not_found,
@@ -5005,6 +5085,7 @@ protected:
 	//! Reference to the database
 	AttachedDatabase &db;
 
+public:
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
 	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
@@ -5045,7 +5126,7 @@ public:
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -5230,6 +5311,142 @@ enum class FileGlobOptions : uint8_t {
 } // namespace duckdb
 
 
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/file_open_flags.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+namespace duckdb {
+
+enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
+
+class FileOpenFlags {
+public:
+	static constexpr idx_t FILE_FLAGS_READ = idx_t(1 << 0);
+	static constexpr idx_t FILE_FLAGS_WRITE = idx_t(1 << 1);
+	static constexpr idx_t FILE_FLAGS_DIRECT_IO = idx_t(1 << 2);
+	static constexpr idx_t FILE_FLAGS_FILE_CREATE = idx_t(1 << 3);
+	static constexpr idx_t FILE_FLAGS_FILE_CREATE_NEW = idx_t(1 << 4);
+	static constexpr idx_t FILE_FLAGS_APPEND = idx_t(1 << 5);
+	static constexpr idx_t FILE_FLAGS_PRIVATE = idx_t(1 << 6);
+	static constexpr idx_t FILE_FLAGS_NULL_IF_NOT_EXISTS = idx_t(1 << 7);
+	static constexpr idx_t FILE_FLAGS_PARALLEL_ACCESS = idx_t(1 << 8);
+
+public:
+	FileOpenFlags() = default;
+	constexpr FileOpenFlags(idx_t flags) : flags(flags) { // NOLINT: allow implicit conversion
+	}
+	constexpr FileOpenFlags(FileLockType lock) : lock(lock) { // NOLINT: allow implicit conversion
+	}
+	constexpr FileOpenFlags(FileCompressionType compression) // NOLINT: allow implicit conversion
+	    : compression(compression) {
+	}
+	constexpr FileOpenFlags(idx_t flags, FileLockType lock, FileCompressionType compression)
+	    : flags(flags), lock(lock), compression(compression) {
+	}
+
+	static constexpr FileLockType MergeLock(FileLockType a, FileLockType b) {
+		return a == FileLockType::NO_LOCK ? b : a;
+	}
+
+	static constexpr FileCompressionType MergeCompression(FileCompressionType a, FileCompressionType b) {
+		return a == FileCompressionType::UNCOMPRESSED ? b : a;
+	}
+
+	inline constexpr FileOpenFlags operator|(FileOpenFlags b) const {
+		return FileOpenFlags(flags | b.flags, MergeLock(lock, b.lock), MergeCompression(compression, b.compression));
+	}
+	inline FileOpenFlags &operator|=(FileOpenFlags b) {
+		flags |= b.flags;
+		lock = MergeLock(lock, b.lock);
+		compression = MergeCompression(compression, b.compression);
+		return *this;
+	}
+
+	FileLockType Lock() {
+		return lock;
+	}
+
+	FileCompressionType Compression() {
+		return compression;
+	}
+
+	void SetCompression(FileCompressionType new_compression) {
+		compression = new_compression;
+	}
+
+	void Verify();
+
+	inline bool OpenForReading() const {
+		return flags & FILE_FLAGS_READ;
+	}
+	inline bool OpenForWriting() const {
+		return flags & FILE_FLAGS_WRITE;
+	}
+	inline bool DirectIO() const {
+		return flags & FILE_FLAGS_DIRECT_IO;
+	}
+	inline bool CreateFileIfNotExists() const {
+		return flags & FILE_FLAGS_FILE_CREATE;
+	}
+	inline bool OverwriteExistingFile() const {
+		return flags & FILE_FLAGS_FILE_CREATE_NEW;
+	}
+	inline bool OpenForAppending() const {
+		return flags & FILE_FLAGS_APPEND;
+	}
+	inline bool CreatePrivateFile() const {
+		return flags & FILE_FLAGS_PRIVATE;
+	}
+	inline bool ReturnNullIfNotExists() const {
+		return flags & FILE_FLAGS_NULL_IF_NOT_EXISTS;
+	}
+	inline bool RequireParallelAccess() const {
+		return flags & FILE_FLAGS_PARALLEL_ACCESS;
+	}
+
+private:
+	idx_t flags = 0;
+	FileLockType lock = FileLockType::NO_LOCK;
+	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
+};
+
+class FileFlags {
+public:
+	//! Open file with read access
+	static constexpr FileOpenFlags FILE_FLAGS_READ = FileOpenFlags(FileOpenFlags::FILE_FLAGS_READ);
+	//! Open file with write access
+	static constexpr FileOpenFlags FILE_FLAGS_WRITE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_WRITE);
+	//! Use direct IO when reading/writing to the file
+	static constexpr FileOpenFlags FILE_FLAGS_DIRECT_IO = FileOpenFlags(FileOpenFlags::FILE_FLAGS_DIRECT_IO);
+	//! Create file if not exists, can only be used together with WRITE
+	static constexpr FileOpenFlags FILE_FLAGS_FILE_CREATE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_FILE_CREATE);
+	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
+	static constexpr FileOpenFlags FILE_FLAGS_FILE_CREATE_NEW =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	//! Open file in append mode
+	static constexpr FileOpenFlags FILE_FLAGS_APPEND = FileOpenFlags(FileOpenFlags::FILE_FLAGS_APPEND);
+	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
+	static constexpr FileOpenFlags FILE_FLAGS_PRIVATE = FileOpenFlags(FileOpenFlags::FILE_FLAGS_PRIVATE);
+	//! Return NULL if the file does not exist instead of throwing an error
+	static constexpr FileOpenFlags FILE_FLAGS_NULL_IF_NOT_EXISTS =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
+	//! Multiple threads may perform reads and writes in parallel
+	static constexpr FileOpenFlags FILE_FLAGS_PARALLEL_ACCESS =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_PARALLEL_ACCESS);
+};
+
+} // namespace duckdb
+
 #include <functional>
 
 #undef CreateDirectory
@@ -5278,6 +5495,7 @@ public:
 	DUCKDB_API void Sync();
 	DUCKDB_API void Truncate(int64_t new_size);
 	DUCKDB_API string ReadLine();
+	DUCKDB_API bool Trim(idx_t offset_bytes, idx_t length_bytes);
 
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
@@ -5299,7 +5517,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
@@ -5308,41 +5526,17 @@ public:
 	string path;
 };
 
-enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
-
-class FileFlags {
-public:
-	//! Open file with read access
-	static constexpr uint8_t FILE_FLAGS_READ = 1 << 0;
-	//! Open file with write access
-	static constexpr uint8_t FILE_FLAGS_WRITE = 1 << 1;
-	//! Use direct IO when reading/writing to the file
-	static constexpr uint8_t FILE_FLAGS_DIRECT_IO = 1 << 2;
-	//! Create file if not exists, can only be used together with WRITE
-	static constexpr uint8_t FILE_FLAGS_FILE_CREATE = 1 << 3;
-	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
-	static constexpr uint8_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
-	//! Open file in append mode
-	static constexpr uint8_t FILE_FLAGS_APPEND = 1 << 5;
-	//! Open file with restrictive permissions (600 on linux/mac) can only be used when creating, throws if file exists
-	static constexpr uint8_t FILE_FLAGS_PRIVATE = 1 << 6;
-};
-
 class FileSystem {
 public:
 	DUCKDB_API virtual ~FileSystem();
 
 public:
-	DUCKDB_API static constexpr FileLockType DEFAULT_LOCK = FileLockType::NO_LOCK;
-	DUCKDB_API static constexpr FileCompressionType DEFAULT_COMPRESSION = FileCompressionType::UNCOMPRESSED;
 	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
 
-	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
-	                                                   FileLockType lock = DEFAULT_LOCK,
-	                                                   FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                                   FileOpener *opener = nullptr);
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                                   optional_ptr<FileOpener> opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -5355,23 +5549,27 @@ public:
 	DUCKDB_API virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	DUCKDB_API virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
+	//! Excise a range of the file. The OS can drop pages from the page-cache, and the file-system is free to deallocate
+	//! this range (sparse file support). Reads to the range will succeed but will return undefined data.
+	DUCKDB_API virtual bool Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes);
 
 	//! Returns the file size of a file handle, returns -1 on error
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	DUCKDB_API virtual time_t GetLastModifiedTime(FileHandle &handle);
-	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
+	//! Returns the file type of the attached handle
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);
 
 	//! Check if a directory exists
-	DUCKDB_API virtual bool DirectoryExists(const string &directory);
+	DUCKDB_API virtual bool DirectoryExists(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Create a directory if it does not exist
-	DUCKDB_API virtual void CreateDirectory(const string &directory);
+	DUCKDB_API virtual void CreateDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
 	//! Recursively remove a directory and all files in it
-	DUCKDB_API virtual void RemoveDirectory(const string &directory);
+	DUCKDB_API virtual void RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener = nullptr);
+
 	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
 	DUCKDB_API virtual bool ListFiles(const string &directory,
 	                                  const std::function<void(const string &, bool)> &callback,
@@ -5379,13 +5577,14 @@ public:
 
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
-	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
+	DUCKDB_API virtual void MoveFile(const string &source, const string &target,
+	                                 optional_ptr<FileOpener> opener = nullptr);
 	//! Check if a file exists
-	DUCKDB_API virtual bool FileExists(const string &filename);
+	DUCKDB_API virtual bool FileExists(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Check if path is pipe
-	DUCKDB_API virtual bool IsPipe(const string &filename);
+	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
-	DUCKDB_API virtual void RemoveFile(const string &filename);
+	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Sync a file handle to disk
 	DUCKDB_API virtual void FileSync(FileHandle &handle);
 	//! Sets the working directory
@@ -5401,7 +5600,7 @@ public:
 	//! Expands a given path, including e.g. expanding the home directory of the user
 	DUCKDB_API virtual string ExpandPath(const string &path);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
-	DUCKDB_API static idx_t GetAvailableMemory();
+	DUCKDB_API static optional_idx GetAvailableMemory();
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
 	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
@@ -5447,6 +5646,8 @@ public:
 	DUCKDB_API virtual void Reset(FileHandle &handle);
 	DUCKDB_API virtual idx_t SeekPosition(FileHandle &handle);
 
+	//! If FS was manually set by the user
+	DUCKDB_API virtual bool IsManuallySet();
 	//! Whether or not we can seek into the file
 	DUCKDB_API virtual bool CanSeek();
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
@@ -5465,6 +5666,19 @@ public:
 	DUCKDB_API static bool IsRemoteFile(const string &path);
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 } // namespace duckdb
@@ -5476,11 +5690,11 @@ namespace duckdb {
 
 class BufferedFileWriter : public WriteStream {
 public:
-	static constexpr uint8_t DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	static constexpr FileOpenFlags DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
 
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS);
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, FileOpenFlags open_flags = DEFAULT_OPEN_FLAGS);
 
 	FileSystem &fs;
 	string path;
@@ -5662,7 +5876,7 @@ struct SelectionVector {
 	explicit SelectionVector(buffer_ptr<SelectionData> data) {
 		Initialize(std::move(data));
 	}
-	SelectionVector &operator=(SelectionVector &&other) {
+	SelectionVector &operator=(SelectionVector &&other) noexcept {
 		sel_vector = other.sel_vector;
 		other.sel_vector = nullptr;
 		selection_data = std::move(other.selection_data);
@@ -5702,24 +5916,24 @@ public:
 		sel_vector = other.sel_vector;
 	}
 
-	inline void set_index(idx_t idx, idx_t loc) {
+	inline void set_index(idx_t idx, idx_t loc) { // NOLINT: allow casing for legacy reasons
 		sel_vector[idx] = UnsafeNumericCast<sel_t>(loc);
 	}
-	inline void swap(idx_t i, idx_t j) {
+	inline void swap(idx_t i, idx_t j) { // NOLINT: allow casing for legacy reasons
 		sel_t tmp = sel_vector[i];
 		sel_vector[i] = sel_vector[j];
 		sel_vector[j] = tmp;
 	}
-	inline idx_t get_index(idx_t idx) const {
+	inline idx_t get_index(idx_t idx) const { // NOLINT: allow casing for legacy reasons
 		return sel_vector ? sel_vector[idx] : idx;
 	}
-	sel_t *data() {
+	sel_t *data() { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
-	const sel_t *data() const {
+	const sel_t *data() const { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
-	buffer_ptr<SelectionData> sel_data() {
+	buffer_ptr<SelectionData> sel_data() { // NOLINT: allow casing for legacy reasons
 		return selection_data;
 	}
 	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count) const;
@@ -5738,7 +5952,7 @@ private:
 
 class OptionalSelection {
 public:
-	explicit inline OptionalSelection(SelectionVector *sel_p) {
+	explicit OptionalSelection(SelectionVector *sel_p) {
 		Initialize(sel_p);
 	}
 	void Initialize(SelectionVector *sel_p) {
@@ -5749,7 +5963,7 @@ public:
 		}
 	}
 
-	inline operator SelectionVector *() {
+	inline operator SelectionVector *() { // NOLINT: allow implicit conversion to SelectionVector
 		return sel;
 	}
 
@@ -5788,10 +6002,10 @@ public:
 	bool Initialized() const {
 		return initialized;
 	}
-	void Initialize(idx_t size) {
+	void Initialize(idx_t new_size) {
 		D_ASSERT(!initialized);
-		this->size = size;
-		sel_vec.Initialize(size);
+		this->size = new_size;
+		sel_vec.Initialize(new_size);
 		internal_opt_selvec.Initialize(&sel_vec);
 		initialized = true;
 	}
@@ -6267,7 +6481,7 @@ struct PrivateAllocatorData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -6289,10 +6503,10 @@ public:
 	DUCKDB_API AllocatedData(AllocatedData &&other) noexcept;
 	DUCKDB_API AllocatedData &operator=(AllocatedData &&) noexcept;
 
-	data_ptr_t get() {
+	data_ptr_t get() { // NOLINT: matching std style
 		return pointer;
 	}
-	const_data_ptr_t get() const {
+	const_data_ptr_t get() const { // NOLINT: matching std style
 		return pointer;
 	}
 	idx_t GetSize() const {
@@ -6408,7 +6622,7 @@ class ArenaAllocator {
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 
 public:
-	DUCKDB_API ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
+	DUCKDB_API explicit ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
 	DUCKDB_API ~ArenaAllocator();
 
 	DUCKDB_API data_ptr_t Allocate(idx_t size);
@@ -6416,6 +6630,9 @@ public:
 
 	DUCKDB_API data_ptr_t AllocateAligned(idx_t size);
 	DUCKDB_API data_ptr_t ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size);
+
+	//! Increment the internal cursor (if required) so the next allocation is guaranteed to be aligned to 8 bytes
+	DUCKDB_API void AlignNext();
 
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();
@@ -6457,7 +6674,7 @@ namespace duckdb {
 //! returned pointer will remain valid until the StringHeap is destroyed
 class StringHeap {
 public:
-	DUCKDB_API StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
+	DUCKDB_API explicit StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
 
 	DUCKDB_API void Destroy();
 	DUCKDB_API void Move(StringHeap &other);
@@ -6567,10 +6784,10 @@ struct MainHeader {
 	static void CheckMagicBytes(FileHandle &handle);
 
 	string LibraryGitDesc() {
-		return string((char *)library_git_desc, 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
 	}
 	string LibraryGitHash() {
-		return string((char *)library_git_hash, 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
 	}
 
 	void Write(WriteStream &ser);
@@ -6788,7 +7005,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -7029,9 +7246,9 @@ public:
 	//! Create a vector that references the other vector
 	DUCKDB_API Vector(Vector &other);
 	//! Create a vector that slices another vector
-	DUCKDB_API explicit Vector(Vector &other, const SelectionVector &sel, idx_t count);
+	DUCKDB_API explicit Vector(const Vector &other, const SelectionVector &sel, idx_t count);
 	//! Create a vector that slices another vector between a pair of offsets
-	DUCKDB_API explicit Vector(Vector &other, idx_t offset, idx_t end);
+	DUCKDB_API explicit Vector(const Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
 	DUCKDB_API explicit Vector(const Value &value);
 	//! Create a vector of size tuple_count (non-standard)
@@ -7237,19 +7454,19 @@ struct ConstantVector {
 struct DictionaryVector {
 	static inline const SelectionVector &SelVector(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
+		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((const VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 	static inline Vector &Child(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-		return ((VectorChildBuffer &)*vector.auxiliary).data;
+		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 };
 
@@ -7336,6 +7553,10 @@ struct ListVector {
 	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
+
+private:
+	template <class T>
+	static T &GetEntryInternal(T &vector);
 };
 
 struct StringVector {
@@ -7439,6 +7660,10 @@ struct ArrayVector {
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
 	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
+
+private:
+	template <class T>
+	static T &GetEntryInternal(T &vector);
 };
 
 enum class UnionInvalidReason : uint8_t {
@@ -7498,7 +7723,7 @@ struct UnionVector {
 struct SequenceVector {
 	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment, int64_t &sequence_count) {
 		D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
-		auto data = (int64_t *)vector.buffer->GetData();
+		auto data = reinterpret_cast<int64_t *>(vector.buffer->GetData());
 		start = data[0];
 		increment = data[1];
 		sequence_count = data[2];
@@ -7652,78 +7877,6 @@ struct ArrowArrayStream {
 #endif
 
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/error_data.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-namespace duckdb {
-class ParsedExpression;
-class TableRef;
-
-class ErrorData {
-public:
-	//! Not initialized, default constructor
-	DUCKDB_API ErrorData();
-	//! From std::exception
-	DUCKDB_API ErrorData(const std::exception &ex); // NOLINT: allow implicit construction from exception
-	//! From a raw string and exception type
-	DUCKDB_API explicit ErrorData(ExceptionType type, const string &raw_message);
-	//! From a raw string
-	DUCKDB_API explicit ErrorData(const string &raw_message);
-
-public:
-	//! Throw the error
-	[[noreturn]] DUCKDB_API void Throw(const string &prepended_message = "") const;
-	//! Get the internal exception type of the error
-	DUCKDB_API const ExceptionType &Type() const;
-	//! Used in clients like C-API, creates the final message and returns a reference to it
-	DUCKDB_API const string &Message();
-	DUCKDB_API const string &RawMessage() {
-		return raw_message;
-	}
-	DUCKDB_API bool operator==(const ErrorData &other) const;
-
-	inline bool HasError() const {
-		return initialized;
-	}
-	const unordered_map<string, string> &ExtraInfo() const {
-		return extra_info;
-	}
-
-	DUCKDB_API void AddErrorLocation(const string &query);
-	DUCKDB_API void ConvertErrorToJSON();
-
-	DUCKDB_API void AddQueryLocation(optional_idx query_location);
-	DUCKDB_API void AddQueryLocation(QueryErrorContext error_context);
-	DUCKDB_API void AddQueryLocation(const ParsedExpression &ref);
-	DUCKDB_API void AddQueryLocation(const TableRef &ref);
-
-private:
-	//! Whether this ErrorData contains an exception or not
-	bool initialized;
-	//! The ExceptionType of the preserved exception
-	ExceptionType type;
-	//! The message the exception was constructed with (does not contain the Exception Type)
-	string raw_message;
-	//! The final message (stored in the preserved error for compatibility reasons with C-API)
-	string final_message;
-	//! Extra exception info
-	unordered_map<string, string> extra_info;
-
-private:
-	DUCKDB_API static string SanitizeErrorMessage(string error);
-};
-
-} // namespace duckdb
 
 
 
@@ -7782,7 +7935,8 @@ protected:
 #include <string>
 
 namespace duckdb {
-enum ArrowOffsetSize { REGULAR, LARGE };
+
+enum class ArrowOffsetSize : uint8_t { REGULAR, LARGE };
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {
@@ -7818,7 +7972,7 @@ public:
 		arrow_array.length = 0;
 		arrow_array.release = nullptr;
 	}
-	ArrowArrayWrapper(ArrowArrayWrapper &&other) : arrow_array(other.arrow_array) {
+	ArrowArrayWrapper(ArrowArrayWrapper &&other) noexcept : arrow_array(other.arrow_array) {
 		other.arrow_array.release = nullptr;
 	}
 	~ArrowArrayWrapper();
@@ -7974,7 +8128,7 @@ public:
 
 	//! Slice all Vectors from other.data[i] to data[i + 'col_offset']
 	//! Turning all Vectors into Dictionary Vectors, using 'sel'
-	DUCKDB_API void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
+	DUCKDB_API void Slice(const DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 
 	//! Slice a DataChunk from "offset" to "offset + count"
 	DUCKDB_API void Slice(idx_t offset, idx_t count);
@@ -7993,7 +8147,7 @@ public:
 	DUCKDB_API void Hash(vector<idx_t> &column_ids, Vector &result);
 
 	//! Returns a list of types of the vectors of this data chunk
-	DUCKDB_API vector<LogicalType> GetTypes();
+	DUCKDB_API vector<LogicalType> GetTypes() const;
 
 	//! Converts this DataChunk to a printable string representation
 	DUCKDB_API string ToString() const;
@@ -8092,54 +8246,72 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Select Comparisons
 	//===--------------------------------------------------------------------===//
-	static idx_t Equals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-	                    SelectionVector *false_sel);
-	static idx_t NotEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                       SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t GreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                         SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t GreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                               SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t LessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                      SelectionVector *true_sel, SelectionVector *false_sel);
-	static idx_t LessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                            SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t Equals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                    optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t NotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                       optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                       optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t GreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                         optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                         optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t GreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                               optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                               optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t LessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                      optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                      optional_ptr<ValidityMask> null_mask = nullptr);
+	static idx_t LessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                            optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                            optional_ptr<ValidityMask> null_mask = nullptr);
 
 	// true := A != B with nulls being equal
-	static idx_t DistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                          SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctFrom(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                          optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel);
 	// true := A == B with nulls being equal
-	static idx_t NotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                             SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t NotDistinctFrom(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                             optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel);
 	// true := A > B with nulls being maximal
-	static idx_t DistinctGreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                 SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctGreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                                 optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                                 optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A >= B with nulls being maximal
-	static idx_t DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                       SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctGreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                       idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                       optional_ptr<SelectionVector> false_sel,
+	                                       optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A < B with nulls being maximal
-	static idx_t DistinctLessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                              SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctLessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                              optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                              optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A <= B with nulls being maximal
-	static idx_t DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                    SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctLessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                    idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                    optional_ptr<SelectionVector> false_sel,
+	                                    optional_ptr<ValidityMask> null_mask = nullptr);
 
 	// true := A > B with nulls being minimal
-	static idx_t DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                           SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctGreaterThanNullsFirst(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                           idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                           optional_ptr<SelectionVector> false_sel,
+	                                           optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A < B with nulls being minimal
-	static idx_t DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                        SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t DistinctLessThanNullsFirst(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+	                                        idx_t count, optional_ptr<SelectionVector> true_sel,
+	                                        optional_ptr<SelectionVector> false_sel,
+	                                        optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Nested Comparisons
 	//===--------------------------------------------------------------------===//
 	// true := A != B with nulls being equal
-	static idx_t NestedNotEquals(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-	                             SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t NestedNotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                             optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                             optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A == B with nulls being equal
-	static idx_t NestedEquals(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-	                          SelectionVector *true_sel, SelectionVector *false_sel);
+	static idx_t NestedEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
+	                          optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+	                          optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Hash functions
@@ -8959,7 +9131,7 @@ template <class OP>
 struct UnaryStringOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto vector = (Vector *)dataptr;
+		auto vector = reinterpret_cast<Vector *>(dataptr);
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, *vector);
 	}
 };
@@ -9101,7 +9273,8 @@ public:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, (void *)&fun, false);
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count,
+		                                                                   reinterpret_cast<void *>(&fun), false);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
@@ -9137,95 +9310,6 @@ public:
 
 
 
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/cycle_counter.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/chrono.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-#include <chrono>
-
-namespace duckdb {
-using std::chrono::duration;
-using std::chrono::duration_cast;
-using std::chrono::high_resolution_clock;
-using std::chrono::milliseconds;
-using std::chrono::system_clock;
-using std::chrono::time_point;
-} // namespace duckdb
-
-
-namespace duckdb {
-
-//! The cycle counter can be used to measure elapsed cycles for a function, expression and ...
-//! Optimized by sampling mechanism. Once per 100 times.
-//! //Todo Can be optimized further by calling RDTSC once per sample
-class CycleCounter {
-	friend struct ExpressionInfo;
-	friend struct ExpressionRootInfo;
-	static constexpr int SAMPLING_RATE = 50;
-
-public:
-	CycleCounter() {
-	}
-	// Next_sample determines if a sample needs to be taken, if so start the profiler
-	void BeginSample() {
-		if (current_count >= next_sample) {
-			tmp = Tick();
-		}
-	}
-
-	// End the sample
-	void EndSample(int chunk_size) {
-		if (current_count >= next_sample) {
-			time += Tick() - tmp;
-		}
-		if (current_count >= next_sample) {
-			next_sample = SAMPLING_RATE;
-			++sample_count;
-			sample_tuples_count += chunk_size;
-			current_count = 0;
-		} else {
-			++current_count;
-		}
-		tuples_count += chunk_size;
-	}
-
-private:
-	uint64_t Tick() const;
-	// current number on RDT register
-	uint64_t tmp;
-	// Elapsed cycles
-	uint64_t time = 0;
-	//! Count the number of time the executor called since last sampling
-	uint64_t current_count = 0;
-	//! Show the next sample
-	uint64_t next_sample = 0;
-	//! Count the number of samples
-	uint64_t sample_count = 0;
-	//! Count the number of tuples sampled
-	uint64_t sample_tuples_count = 0;
-	//! Count the number of ALL tuples
-	uint64_t tuples_count = 0;
-};
-
-} // namespace duckdb
 
 //===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -9333,7 +9417,8 @@ using named_parameter_map_t = case_insensitive_map_t<Value>;
 
 namespace duckdb {
 
-enum ExternalDependenciesType { PYTHON_DEPENDENCY };
+enum class ExternalDependenciesType : uint8_t { PYTHON_DEPENDENCY };
+
 class ExternalDependency {
 public:
 	explicit ExternalDependency(ExternalDependenciesType type_p) : type(type_p) {};
@@ -9523,7 +9608,8 @@ enum class ExpressionType : uint8_t {
 	COLLATE = 230,
 	LAMBDA = 231,
 	POSITIONAL_REFERENCE = 232,
-	BOUND_LAMBDA_REF = 233
+	BOUND_LAMBDA_REF = 233,
+	BOUND_EXPANDED = 234
 };
 
 //===--------------------------------------------------------------------===//
@@ -9577,7 +9663,8 @@ enum class ExpressionClass : uint8_t {
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//
-	BOUND_EXPRESSION = 50
+	BOUND_EXPRESSION = 50,
+	BOUND_EXPANDED = 51
 };
 
 DUCKDB_API string ExpressionTypeToString(ExpressionType type);
@@ -9723,11 +9810,11 @@ public:
 	DUCKDB_API explicit ParserException(const string &msg);
 	DUCKDB_API explicit ParserException(const string &msg, const unordered_map<string, string> &extra_info);
 
-	template <typename... Args>
-	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
+	template <typename... ARGS>
+	explicit ParserException(const string &msg, ARGS... params) : ParserException(ConstructMessage(msg, params...)) {
 	}
-	template <typename... Args>
-	explicit ParserException(optional_idx error_location, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit ParserException(optional_idx error_location, const string &msg, ARGS... params)
 	    : ParserException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_location)) {
 	}
 
@@ -10133,13 +10220,13 @@ struct FunctionData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 	// FIXME: this function should be removed in the future
 	template <class TARGET>
 	TARGET &CastNoConst() const {
-		return const_cast<TARGET &>(reinterpret_cast<const TARGET &>(*this));
+		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
 };
 
@@ -10147,7 +10234,7 @@ struct TableFunctionData : public FunctionData {
 	// used to pass on projections to table functions that support them. NB, can contain COLUMN_IDENTIFIER_ROW_ID
 	vector<idx_t> column_ids;
 
-	DUCKDB_API virtual ~TableFunctionData();
+	DUCKDB_API ~TableFunctionData() override;
 
 	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
@@ -10265,7 +10352,6 @@ struct ExpressionState {
 	vector<unique_ptr<ExpressionState>> child_states;
 	vector<LogicalType> types;
 	DataChunk intermediate_chunk;
-	CycleCounter profiler;
 
 public:
 	void AddChild(Expression *expr);
@@ -10284,14 +10370,14 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct ExecuteFunctionState : public ExpressionState {
 	ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root);
-	~ExecuteFunctionState();
+	~ExecuteFunctionState() override;
 
 	unique_ptr<FunctionLocalState> local_state;
 
@@ -10306,7 +10392,6 @@ struct ExpressionExecutorState {
 
 	unique_ptr<ExpressionState> root_state;
 	ExpressionExecutor *executor = nullptr;
-	CycleCounter profiler;
 
 	void Verify();
 };
@@ -10902,9 +10987,9 @@ struct NumericValueUnion {
 		uint64_t ubigint;
 		hugeint_t hugeint;
 		uhugeint_t uhugeint;
-		float float_;
-		double double_;
-	} value_;
+		float float_;   // NOLINT
+		double double_; // NOLINT
+	} value_;           // NOLINT
 
 	template <class T>
 	T &GetReferenceUnsafe();
@@ -11287,14 +11372,14 @@ struct FunctionLocalState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 class Binder;
 class BoundFunctionExpression;
-class DependencyList;
+class LogicalDependencyList;
 class ScalarFunctionCatalogEntry;
 
 struct FunctionStatisticsInput {
@@ -11319,7 +11404,7 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
 //! The type to add the dependencies of this BoundFunctionExpression to the set of dependencies
-typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyList &dependencies);
+typedef void (*dependency_function_t)(BoundFunctionExpression &expr, LogicalDependencyList &dependencies);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 //! The type to bind lambda-specific parameter types
@@ -11329,7 +11414,7 @@ typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<
                                      const ScalarFunction &function);
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
 
-class ScalarFunction : public BaseScalarFunction {
+class ScalarFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
@@ -11393,7 +11478,7 @@ public:
 
 public:
 	template <class OP>
-	static scalar_function_t GetScalarUnaryFunction(LogicalType type) {
+	static scalar_function_t GetScalarUnaryFunction(const LogicalType &type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
@@ -11439,7 +11524,7 @@ public:
 	}
 
 	template <class TR, class OP>
-	static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
+	static scalar_function_t GetScalarUnaryFunctionFixedReturn(const LogicalType &type) {
 		scalar_function_t function;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
@@ -12095,6 +12180,8 @@ public:
 				op.Right(i, limit);
 				break;
 			case 0x03:
+			default:
+				D_ASSERT(overlap == 0x03);
 				// i ∈ F ∩ P
 				limit = MinValue(right->end, left->end);
 				op.Both(i, limit);
@@ -12401,7 +12488,7 @@ public:
 		if (!BaseExpression::Equals(other)) {
 			return false;
 		}
-		return return_type == ((Expression &)other).return_type;
+		return return_type == reinterpret_cast<const Expression &>(other).return_type;
 	}
 	static bool Equals(const Expression &left, const Expression &right) {
 		return left.Equals(right);
@@ -12657,7 +12744,7 @@ typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr
                                       const AggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
 
-class AggregateFunction : public BaseScalarFunction {
+class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
@@ -12879,31 +12966,33 @@ public:
 
 namespace duckdb {
 
+// NOLINTBEGIN
+
 struct UDFWrapper {
 public:
-	template <typename TR, typename... Args>
-	inline static scalar_function_t CreateScalarFunction(const string &name, TR (*udf_func)(Args...)) {
-		const std::size_t num_template_argc = sizeof...(Args);
+	template <typename TR, typename... ARGS>
+	inline static scalar_function_t CreateScalarFunction(const string &name, TR (*udf_func)(ARGS...)) {
+		const std::size_t num_template_argc = sizeof...(ARGS);
 		switch (num_template_argc) {
 		case 1:
-			return CreateUnaryFunction<TR, Args...>(name, udf_func);
+			return CreateUnaryFunction<TR, ARGS...>(name, udf_func);
 		case 2:
-			return CreateBinaryFunction<TR, Args...>(name, udf_func);
+			return CreateBinaryFunction<TR, ARGS...>(name, udf_func);
 		case 3:
-			return CreateTernaryFunction<TR, Args...>(name, udf_func);
+			return CreateTernaryFunction<TR, ARGS...>(name, udf_func);
 		default: // LCOV_EXCL_START
 			throw std::runtime_error("UDF function only supported until ternary!");
 		} // LCOV_EXCL_STOP
 	}
 
-	template <typename TR, typename... Args>
-	inline static scalar_function_t CreateScalarFunction(const string &name, vector<LogicalType> args,
-	                                                     LogicalType ret_type, TR (*udf_func)(Args...)) {
+	template <typename TR, typename... ARGS>
+	inline static scalar_function_t CreateScalarFunction(const string &name, const vector<LogicalType> &args,
+	                                                     const LogicalType &ret_type, TR (*udf_func)(ARGS...)) {
 		if (!TypesMatch<TR>(ret_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("Return type doesn't match with the first template type.");
 		} // LCOV_EXCL_STOP
 
-		const std::size_t num_template_types = sizeof...(Args);
+		const std::size_t num_template_types = sizeof...(ARGS);
 		if (num_template_types != args.size()) { // LCOV_EXCL_START
 			throw std::runtime_error(
 			    "The number of templated types should be the same quantity of the LogicalType arguments.");
@@ -12911,25 +13000,25 @@ public:
 
 		switch (num_template_types) {
 		case 1:
-			return CreateUnaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+			return CreateUnaryFunction<TR, ARGS...>(name, args, ret_type, udf_func);
 		case 2:
-			return CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+			return CreateBinaryFunction<TR, ARGS...>(name, args, ret_type, udf_func);
 		case 3:
-			return CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+			return CreateTernaryFunction<TR, ARGS...>(name, args, ret_type, udf_func);
 		default: // LCOV_EXCL_START
 			throw std::runtime_error("UDF function only supported until ternary!");
 		} // LCOV_EXCL_STOP
 	}
 
-	template <typename TR, typename... Args>
+	template <typename TR, typename... ARGS>
 	inline static void RegisterFunction(const string &name, scalar_function_t udf_function, ClientContext &context,
 	                                    LogicalType varargs = LogicalType(LogicalTypeId::INVALID)) {
 		vector<LogicalType> arguments;
-		GetArgumentTypesRecursive<Args...>(arguments);
+		GetArgumentTypesRecursive<ARGS...>(arguments);
 
 		LogicalType ret_type = GetArgumentType<TR>();
 
-		RegisterFunction(name, arguments, ret_type, udf_function, context, varargs);
+		RegisterFunction(name, arguments, ret_type, std::move(udf_function), context, std::move(varargs));
 	}
 
 	static void RegisterFunction(string name, vector<LogicalType> args, LogicalType ret_type,
@@ -12948,8 +13037,8 @@ public:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	inline static AggregateFunction CreateAggregateFunction(const string &name, LogicalType ret_type,
-	                                                        LogicalType input_type) {
+	inline static AggregateFunction CreateAggregateFunction(const string &name, const LogicalType &ret_type,
+	                                                        const LogicalType &input_type) {
 		if (!TypesMatch<TR>(ret_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("The return argument don't match!");
 		} // LCOV_EXCL_STOP
@@ -12962,33 +13051,34 @@ public:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	inline static AggregateFunction CreateAggregateFunction(const string &name, LogicalType ret_type,
-	                                                        LogicalType input_typeA, LogicalType input_typeB) {
+	inline static AggregateFunction CreateAggregateFunction(const string &name, const LogicalType &ret_type,
+	                                                        const LogicalType &input_type_a,
+	                                                        const LogicalType &input_type_b) {
 		if (!TypesMatch<TR>(ret_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("The return argument don't match!");
 		}
 
-		if (!TypesMatch<TA>(input_typeA)) {
+		if (!TypesMatch<TA>(input_type_a)) {
 			throw std::runtime_error("The first input argument don't match!");
 		}
 
-		if (!TypesMatch<TB>(input_typeB)) {
+		if (!TypesMatch<TB>(input_type_b)) {
 			throw std::runtime_error("The second input argument don't match!");
 		} // LCOV_EXCL_STOP
 
-		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
+		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_type_a, input_type_b);
 	}
 
 	//! A generic CreateAggregateFunction ---------------------------------------------------------------------------//
 	inline static AggregateFunction
-	CreateAggregateFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	CreateAggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                        aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
 	                        aggregate_combine_t combine, aggregate_finalize_t finalize,
 	                        aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
 	                        aggregate_destructor_t destructor = nullptr) {
 
-		AggregateFunction aggr_function(std::move(name), std::move(arguments), std::move(return_type), state_size,
-		                                initialize, update, combine, finalize, simple_update, bind, destructor);
+		AggregateFunction aggr_function(name, arguments, return_type, state_size, initialize, update, combine, finalize,
+		                                simple_update, bind, destructor);
 		aggr_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 		return aggr_function;
 	}
@@ -13033,21 +13123,21 @@ private:
 		return udf_function;
 	}
 
-	template <typename TR, typename... Args>
+	template <typename TR, typename... ARGS>
 	inline static scalar_function_t CreateUnaryFunction(const string &name,
-	                                                    TR (*udf_func)(Args...)) { // LCOV_EXCL_START
+	                                                    TR (*udf_func)(ARGS...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for unary function");
 	} // LCOV_EXCL_STOP
 
-	template <typename TR, typename... Args>
+	template <typename TR, typename... ARGS>
 	inline static scalar_function_t CreateBinaryFunction(const string &name,
-	                                                     TR (*udf_func)(Args...)) { // LCOV_EXCL_START
+	                                                     TR (*udf_func)(ARGS...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for binary function");
 	} // LCOV_EXCL_STOP
 
-	template <typename TR, typename... Args>
+	template <typename TR, typename... ARGS>
 	inline static scalar_function_t CreateTernaryFunction(const string &name,
-	                                                      TR (*udf_func)(Args...)) { // LCOV_EXCL_START
+	                                                      TR (*udf_func)(ARGS...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for ternary function");
 	} // LCOV_EXCL_STOP
 
@@ -13074,10 +13164,10 @@ private:
 		} // LCOV_EXCL_STOP
 	}
 
-	template <typename TA, typename TB, typename... Args>
+	template <typename TA, typename TB, typename... ARGS>
 	inline static void GetArgumentTypesRecursive(vector<LogicalType> &arguments) {
 		arguments.push_back(GetArgumentType<TA>());
-		GetArgumentTypesRecursive<TB, Args...>(arguments);
+		GetArgumentTypesRecursive<TB, ARGS...>(arguments);
 	}
 
 	template <typename TA>
@@ -13088,16 +13178,16 @@ private:
 private:
 	//-------------------------------- Argumented functions --------------------------------//
 
-	template <typename TR, typename... Args>
-	inline static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args,
-	                                                    LogicalType ret_type,
-	                                                    TR (*udf_func)(Args...)) { // LCOV_EXCL_START
+	template <typename TR, typename... ARGS>
+	inline static scalar_function_t CreateUnaryFunction(const string &name, const vector<LogicalType> &args,
+	                                                    const LogicalType &ret_type,
+	                                                    TR (*udf_func)(ARGS...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for unary function");
 	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename TA>
-	inline static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args,
-	                                                    LogicalType ret_type, TR (*udf_func)(TA)) {
+	inline static scalar_function_t CreateUnaryFunction(const string &name, const vector<LogicalType> &args,
+	                                                    const LogicalType &ret_type, TR (*udf_func)(TA)) {
 		if (args.size() != 1) { // LCOV_EXCL_START
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 1!");
 		}
@@ -13112,16 +13202,16 @@ private:
 		return udf_function;
 	}
 
-	template <typename TR, typename... Args>
-	inline static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args,
-	                                                     LogicalType ret_type,
-	                                                     TR (*udf_func)(Args...)) { // LCOV_EXCL_START
+	template <typename TR, typename... ARGS>
+	inline static scalar_function_t CreateBinaryFunction(const string &name, const vector<LogicalType> &args,
+	                                                     const LogicalType &ret_type,
+	                                                     TR (*udf_func)(ARGS...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for binary function");
 	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename TA, typename TB>
-	inline static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args,
-	                                                     LogicalType ret_type, TR (*udf_func)(TA, TB)) {
+	inline static scalar_function_t CreateBinaryFunction(const string &name, const vector<LogicalType> &args,
+	                                                     const LogicalType &ret_type, TR (*udf_func)(TA, TB)) {
 		if (args.size() != 2) { // LCOV_EXCL_START
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 2!");
 		}
@@ -13138,16 +13228,16 @@ private:
 		return udf_function;
 	}
 
-	template <typename TR, typename... Args>
-	inline static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args,
-	                                                      LogicalType ret_type,
-	                                                      TR (*udf_func)(Args...)) { // LCOV_EXCL_START
+	template <typename TR, typename... ARGS>
+	inline static scalar_function_t CreateTernaryFunction(const string &name, const vector<LogicalType> &args,
+	                                                      const LogicalType &ret_type,
+	                                                      TR (*udf_func)(ARGS...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for ternary function");
 	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename TA, typename TB, typename TC>
-	inline static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args,
-	                                                      LogicalType ret_type, TR (*udf_func)(TA, TB, TC)) {
+	inline static scalar_function_t CreateTernaryFunction(const string &name, const vector<LogicalType> &args,
+	                                                      const LogicalType &ret_type, TR (*udf_func)(TA, TB, TC)) {
 		if (args.size() != 3) { // LCOV_EXCL_START
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 3!");
 		}
@@ -13216,8 +13306,8 @@ private:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name, LogicalType ret_type,
-	                                                             LogicalType input_type) {
+	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name, const LogicalType &ret_type,
+	                                                             const LogicalType &input_type) {
 		AggregateFunction aggr_function =
 		    AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type);
 		aggr_function.name = name;
@@ -13227,20 +13317,23 @@ private:
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	inline static AggregateFunction CreateBinaryAggregateFunction(const string &name) {
 		LogicalType return_type = GetArgumentType<TR>();
-		LogicalType input_typeA = GetArgumentType<TA>();
-		LogicalType input_typeB = GetArgumentType<TB>();
-		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, return_type, input_typeA, input_typeB);
+		LogicalType input_type_a = GetArgumentType<TA>();
+		LogicalType input_type_b = GetArgumentType<TB>();
+		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, return_type, input_type_a, input_type_b);
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	inline static AggregateFunction CreateBinaryAggregateFunction(const string &name, LogicalType ret_type,
-	                                                              LogicalType input_typeA, LogicalType input_typeB) {
+	inline static AggregateFunction CreateBinaryAggregateFunction(const string &name, const LogicalType &ret_type,
+	                                                              const LogicalType &input_type_a,
+	                                                              const LogicalType &input_type_b) {
 		AggregateFunction aggr_function =
-		    AggregateFunction::BinaryAggregate<STATE, TA, TB, TR, UDF_OP>(input_typeA, input_typeB, ret_type);
+		    AggregateFunction::BinaryAggregate<STATE, TA, TB, TR, UDF_OP>(input_type_a, input_type_b, ret_type);
 		aggr_function.name = name;
 		return aggr_function;
 	}
 }; // end UDFWrapper
+
+// NOLINTEND
 
 } // namespace duckdb
 
@@ -13408,17 +13501,17 @@ private:
 	};
 
 public:
-	ColumnDataChunkIterator begin() {
+	ColumnDataChunkIterator begin() { // NOLINT: match stl API
 		return ColumnDataChunkIterator(&collection, column_ids);
 	}
-	ColumnDataChunkIterator end() {
+	ColumnDataChunkIterator end() { // NOLINT: match stl API
 		return ColumnDataChunkIterator(nullptr, vector<column_t>());
 	}
 };
 
 class ColumnDataRowIterationHelper {
 public:
-	DUCKDB_API ColumnDataRowIterationHelper(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowIterationHelper(const ColumnDataCollection &collection);
 
 private:
 	const ColumnDataCollection &collection;
@@ -13444,8 +13537,8 @@ private:
 	};
 
 public:
-	DUCKDB_API ColumnDataRowIterator begin();
-	DUCKDB_API ColumnDataRowIterator end();
+	DUCKDB_API ColumnDataRowIterator begin(); // NOLINT: match stl API
+	DUCKDB_API ColumnDataRowIterator end();   // NOLINT: match stl API
 };
 
 } // namespace duckdb
@@ -13468,7 +13561,7 @@ public:
 	//! Constructs an in-memory column data collection from an allocator
 	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
-	DUCKDB_API ColumnDataCollection(Allocator &allocator);
+	DUCKDB_API explicit ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
 	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
@@ -13623,39 +13716,39 @@ private:
 //! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
-	DUCKDB_API ColumnDataRowCollection(const ColumnDataCollection &collection);
+	DUCKDB_API explicit ColumnDataRowCollection(const ColumnDataCollection &collection);
 
 public:
 	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
 public:
 	// container API
-	bool empty() const {
+	bool empty() const { // NOLINT: match stl API
 		return rows.empty();
 	}
-	idx_t size() const {
+	idx_t size() const { // NOLINT: match stl API
 		return rows.size();
 	}
 
 	DUCKDB_API ColumnDataRow &operator[](idx_t i);
 	DUCKDB_API const ColumnDataRow &operator[](idx_t i) const;
 
-	vector<ColumnDataRow>::iterator begin() {
+	vector<ColumnDataRow>::iterator begin() { // NOLINT: match stl API
 		return rows.begin();
 	}
-	vector<ColumnDataRow>::iterator end() {
+	vector<ColumnDataRow>::iterator end() { // NOLINT: match stl API
 		return rows.end();
 	}
-	vector<ColumnDataRow>::const_iterator cbegin() const {
+	vector<ColumnDataRow>::const_iterator cbegin() const { // NOLINT: match stl API
 		return rows.cbegin();
 	}
-	vector<ColumnDataRow>::const_iterator cend() const {
+	vector<ColumnDataRow>::const_iterator cend() const { // NOLINT: match stl API
 		return rows.cend();
 	}
-	vector<ColumnDataRow>::const_iterator begin() const {
+	vector<ColumnDataRow>::const_iterator begin() const { // NOLINT: match stl API
 		return rows.begin();
 	}
-	vector<ColumnDataRow>::const_iterator end() const {
+	vector<ColumnDataRow>::const_iterator end() const { // NOLINT: match stl API
 		return rows.end();
 	}
 
@@ -13826,7 +13919,7 @@ public:
 	                       vector<LogicalType> types, vector<string> names, ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API QueryResult(QueryResultType type, ErrorData error);
-	DUCKDB_API virtual ~QueryResult() override;
+	DUCKDB_API ~QueryResult() override;
 
 	//! Properties from the client context
 	ClientProperties client_properties;
@@ -13951,10 +14044,10 @@ private:
 	};
 
 public:
-	QueryResultIterator begin() {
+	QueryResultIterator begin() { // NOLINT: match stl API
 		return QueryResultIterator(this);
 	}
-	QueryResultIterator end() {
+	QueryResultIterator end() { // NOLINT: match stl API
 		return QueryResultIterator(nullptr);
 	}
 
@@ -14511,13 +14604,13 @@ private:
 namespace duckdb {
 
 struct string_t;
-struct interval_t;
+struct interval_t; // NOLINT
 
 // efficient hash function that maximizes the avalanche effect and minimizes
 // bias
 // see: https://nullprogram.com/blog/2018/07/31/
 
-inline hash_t murmurhash64(uint64_t x) {
+inline hash_t MurmurHash64(uint64_t x) {
 	x ^= x >> 32;
 	x *= 0xd6e8feb86659fd93U;
 	x ^= x >> 32;
@@ -14526,13 +14619,13 @@ inline hash_t murmurhash64(uint64_t x) {
 	return x;
 }
 
-inline hash_t murmurhash32(uint32_t x) {
-	return murmurhash64(x);
+inline hash_t MurmurHash32(uint32_t x) {
+	return MurmurHash64(x);
 }
 
 template <class T>
 hash_t Hash(T value) {
-	return murmurhash32(value);
+	return MurmurHash32(value);
 }
 
 //! Combine two hashes by XORing them
@@ -14766,20 +14859,17 @@ public:
 namespace duckdb {
 class ConjunctionFilter : public TableFilter {
 public:
-	ConjunctionFilter(TableFilterType filter_type_p) : TableFilter(filter_type_p) {
+	explicit ConjunctionFilter(TableFilterType filter_type_p) : TableFilter(filter_type_p) {
 	}
 
-	virtual ~ConjunctionFilter() {
+	~ConjunctionFilter() override {
 	}
 
 	//! The filters of this conjunction
 	vector<unique_ptr<TableFilter>> child_filters;
 
 public:
-	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
-	virtual string ToString(const string &column_name) = 0;
-
-	virtual bool Equals(const TableFilter &other) const {
+	bool Equals(const TableFilter &other) const override {
 		return TableFilter::Equals(other);
 	}
 };
@@ -15127,6 +15217,7 @@ class LogicalMaterializedCTE;
 class LogicalSetOperation;
 class LogicalSample;
 class LogicalSimple;
+class LogicalVacuum;
 class LogicalSet;
 class LogicalReset;
 class LogicalTopN;
@@ -15227,6 +15318,8 @@ protected:
 
 namespace duckdb_hll {
 
+// NOLINTBEGIN
+
 /* Error codes */
 #define HLL_C_OK  0
 #define HLL_C_ERR -1
@@ -15254,6 +15347,8 @@ uint64_t get_size();
 
 uint64_t MurmurHash64A(const void *key, int len, unsigned int seed);
 
+// NOLINTEND
+
 } // namespace duckdb_hll
 
 namespace duckdb {
@@ -15270,7 +15365,7 @@ void AddToSingleLogInternal(UnifiedVectorFormat &vdata, idx_t count, uint64_t in
 
 
 namespace duckdb_hll {
-struct robj;
+struct robj; // NOLINT
 }
 
 namespace duckdb {
@@ -15441,6 +15536,8 @@ public:
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
+	static string ColumnBindingsToString(const vector<ColumnBinding> &bindings);
+	void PrintColumnBindings();
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
 	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
 	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
@@ -15579,7 +15676,7 @@ struct RelationsToTDom {
 	vector<FilterInfo *> filters;
 	vector<string> column_names;
 
-	RelationsToTDom(const column_binding_set_t &column_binding_set)
+	explicit RelationsToTDom(const column_binding_set_t &column_binding_set)
 	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
 	      has_tdom_hll(false) {};
 };
@@ -15633,7 +15730,7 @@ public:
 	void PrintRelationToTdomInfo();
 
 private:
-	bool SingleColumnFilter(FilterInfo &filter_info);
+	bool SingleRelationFilter(FilterInfo &filter_info);
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
 	//! given in matching equivalent sets.
@@ -15664,7 +15761,7 @@ struct SingleJoinRelation {
 	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) : op(op), parent(parent) {
 	}
 	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats)
-	    : op(op), parent(parent), stats(stats) {
+	    : op(op), parent(parent), stats(std::move(stats)) {
 	}
 };
 
@@ -15719,7 +15816,7 @@ namespace duckdb {
 struct FilterInfo;
 
 struct NeighborInfo {
-	NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {
+	explicit NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {
 	}
 
 	optional_ptr<JoinRelationSet> neighbor;
@@ -15791,7 +15888,7 @@ public:
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(JoinRelationSet &set);
+	explicit JoinNode(JoinRelationSet &set);
 
 	bool operator==(const JoinNode &other) {
 		return other.set.ToString().compare(set.ToString()) == 0;
@@ -15860,7 +15957,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -15877,7 +15974,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -15898,7 +15995,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
@@ -15922,7 +16019,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -15943,7 +16040,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -15960,7 +16057,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -16298,23 +16395,27 @@ public:
 	DUCKDB_API explicit BinderException(const string &msg, const unordered_map<string, string> &extra_info);
 	DUCKDB_API explicit BinderException(const string &msg);
 
-	template <typename... Args>
-	explicit BinderException(const string &msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
+	template <typename... ARGS>
+	explicit BinderException(const string &msg, ARGS... params) : BinderException(ConstructMessage(msg, params...)) {
 	}
-	template <typename... Args>
-	explicit BinderException(const TableRef &ref, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit BinderException(const TableRef &ref, const string &msg, ARGS... params)
 	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(ref)) {
 	}
-	template <typename... Args>
-	explicit BinderException(const ParsedExpression &expr, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit BinderException(const ParsedExpression &expr, const string &msg, ARGS... params)
 	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
 	}
-	template <typename... Args>
-	explicit BinderException(QueryErrorContext error_context, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit BinderException(const Expression &expr, const string &msg, ARGS... params)
+	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(expr)) {
+	}
+	template <typename... ARGS>
+	explicit BinderException(QueryErrorContext error_context, const string &msg, ARGS... params)
 	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_context)) {
 	}
-	template <typename... Args>
-	explicit BinderException(optional_idx error_location, const string &msg, Args... params)
+	template <typename... ARGS>
+	explicit BinderException(optional_idx error_location, const string &msg, ARGS... params)
 	    : BinderException(ConstructMessage(msg, params...), Exception::InitializeExtraInfo(error_location)) {
 	}
 
@@ -16490,7 +16591,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_EXPRESSION;
 
 public:
-	BoundExpression(unique_ptr<Expression> expr);
+	explicit BoundExpression(unique_ptr<Expression> expr);
 
 	unique_ptr<Expression> expr;
 
@@ -16778,6 +16879,7 @@ class CatalogEntry;
 class SimpleFunction;
 
 struct DummyBinding;
+struct SelectBindState;
 
 struct BoundColumnReferenceInfo {
 	string name;
@@ -17118,7 +17220,7 @@ struct UsingColumnSet {
 //! encountered during the binding process.
 class BindContext {
 public:
-	BindContext(Binder &binder);
+	explicit BindContext(Binder &binder);
 
 	//! Keep track of recursive CTE references
 	case_insensitive_map_t<std::shared_ptr<idx_t>> cte_references;
@@ -17213,7 +17315,7 @@ public:
 		return cte_bindings;
 	}
 	void SetCTEBindings(case_insensitive_map_t<std::shared_ptr<Binding>> bindings) {
-		cte_bindings = bindings;
+		cte_bindings = std::move(bindings);
 	}
 
 	//! Alias a set of column names for the specified table, using the original names if there are not enough aliases
@@ -17257,7 +17359,7 @@ private:
 namespace duckdb {
 
 class BaseStatistics;
-class DependencyList;
+class LogicalDependencyList;
 class LogicalGet;
 class TableFilterSet;
 class TableCatalogEntry;
@@ -17272,7 +17374,7 @@ struct TableFunctionInfo {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -17296,7 +17398,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -17311,7 +17413,7 @@ struct LocalTableFunctionState {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -17319,9 +17421,9 @@ struct LocalTableFunctionState {
 struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
-	                       optional_ptr<TableFunctionInfo> info)
+	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info) {
+	      input_table_names(input_table_names), info(info), binder(binder) {
 	}
 
 	vector<Value> &inputs;
@@ -17329,6 +17431,7 @@ struct TableFunctionBindInput {
 	vector<LogicalType> &input_table_types;
 	vector<string> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
+	optional_ptr<Binder> binder;
 };
 
 struct TableFunctionInitInput {
@@ -17370,7 +17473,7 @@ public:
 	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
-enum ScanType { TABLE, PARQUET };
+enum class ScanType : uint8_t { TABLE, PARQUET };
 
 struct BindInfo {
 public:
@@ -17381,11 +17484,11 @@ public:
 	ScanType type;
 	optional_ptr<TableCatalogEntry> table;
 
-	void InsertOption(const string &name, Value value) {
+	void InsertOption(const string &name, Value value) { // NOLINT: work-around bug in clang-tidy
 		if (options.find(name) != options.end()) {
 			throw InternalException("This option already exists");
 		}
-		options[name] = std::move(value);
+		options.emplace(name, std::move(value));
 	}
 	template <class T>
 	T GetOption(const string &name) {
@@ -17435,7 +17538,7 @@ typedef BindInfo (*table_function_get_bind_info_t)(const optional_ptr<FunctionDa
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
-typedef void (*table_function_dependency_t)(DependencyList &dependencies, const FunctionData *bind_data);
+typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
@@ -17447,7 +17550,7 @@ typedef void (*table_function_serialize_t)(Serializer &serializer, const optiona
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
 
-class TableFunction : public SimpleNamedParameterFunction {
+class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API
 	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
@@ -17754,7 +17857,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
@@ -17791,7 +17894,7 @@ class ExecutorTask : public Task {
 public:
 	ExecutorTask(Executor &executor, shared_ptr<Event> event);
 	ExecutorTask(ClientContext &context, shared_ptr<Event> event);
-	virtual ~ExecutorTask();
+	~ExecutorTask() override;
 
 public:
 	void Deschedule() override;
@@ -18227,8 +18330,8 @@ public:
 	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
 	//! Create a pending query result of the prepared statement with the given set of arguments
-	template <typename... Args>
-	unique_ptr<PendingQueryResult> PendingQuery(Args... args) {
+	template <typename... ARGS>
+	unique_ptr<PendingQueryResult> PendingQuery(ARGS... args) {
 		vector<Value> values;
 		return PendingQueryRecursive(values, args...);
 	}
@@ -18248,8 +18351,8 @@ public:
 	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments
-	template <typename... Args>
-	unique_ptr<QueryResult> Execute(Args... args) {
+	template <typename... ARGS>
+	unique_ptr<QueryResult> Execute(ARGS... args) {
 		vector<Value> values;
 		return ExecuteRecursive(values, args...);
 	}
@@ -18319,8 +18422,8 @@ private:
 		return PendingQuery(values);
 	}
 
-	template <typename T, typename... Args>
-	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values, T value, Args... args) {
+	template <typename T, typename... ARGS>
+	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values, T value, ARGS... args) {
 		values.push_back(Value::CreateValue<T>(value));
 		return PendingQueryRecursive(values, args...);
 	}
@@ -18329,8 +18432,8 @@ private:
 		return Execute(values);
 	}
 
-	template <typename T, typename... Args>
-	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values, T value, Args... args) {
+	template <typename T, typename... ARGS>
+	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values, T value, ARGS... args) {
 		values.push_back(Value::CreateValue<T>(value));
 		return ExecuteRecursive(values, args...);
 	}
@@ -18592,6 +18695,293 @@ public:
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/catalog/dependency_list.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/catalog/catalog_entry_map.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+
+namespace duckdb {
+class CatalogEntry;
+
+struct CatalogEntryHashFunction {
+	uint64_t operator()(const reference<CatalogEntry> &a) const {
+		std::hash<void *> hash_func;
+		return hash_func((void *)&a.get());
+	}
+};
+
+struct CatalogEntryEquality {
+	bool operator()(const reference<CatalogEntry> &a, const reference<CatalogEntry> &b) const {
+		return RefersToSameObject(a, b);
+	}
+};
+
+using catalog_entry_set_t = unordered_set<reference<CatalogEntry>, CatalogEntryHashFunction, CatalogEntryEquality>;
+
+template <typename T>
+using catalog_entry_map_t = unordered_map<reference<CatalogEntry>, T, CatalogEntryHashFunction, CatalogEntryEquality>;
+
+using catalog_entry_vector_t = vector<reference<CatalogEntry>>;
+
+} // namespace duckdb
+
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/catalog/dependency.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+
+namespace duckdb {
+class CatalogEntry;
+
+struct DependencyFlags {
+public:
+	DependencyFlags() : value(0) {
+	}
+	DependencyFlags(const DependencyFlags &other) : value(other.value) {
+	}
+	virtual ~DependencyFlags() = default;
+	DependencyFlags &operator=(const DependencyFlags &other) {
+		value = other.value;
+		return *this;
+	}
+	bool operator==(const DependencyFlags &other) const {
+		return other.value == value;
+	}
+	bool operator!=(const DependencyFlags &other) const {
+		return !(*this == other);
+	}
+
+public:
+	virtual string ToString() const = 0;
+
+protected:
+	template <uint8_t BIT>
+	bool IsSet() const {
+		static const uint8_t FLAG = (1 << BIT);
+		return (value & FLAG) == FLAG;
+	}
+	template <uint8_t BIT>
+	void Set() {
+		static const uint8_t FLAG = (1 << BIT);
+		value |= FLAG;
+	}
+	void Merge(uint8_t other) {
+		value |= other;
+	}
+	uint8_t Value() {
+		return value;
+	}
+
+private:
+	uint8_t value;
+};
+
+struct DependencySubjectFlags : public DependencyFlags {
+private:
+	static constexpr uint8_t OWNERSHIP = 0;
+
+public:
+	DependencySubjectFlags &Apply(DependencySubjectFlags other) {
+		Merge(other.Value());
+		return *this;
+	}
+
+public:
+	bool IsOwnership() const {
+		return IsSet<OWNERSHIP>();
+	}
+
+public:
+	DependencySubjectFlags &SetOwnership() {
+		Set<OWNERSHIP>();
+		return *this;
+	}
+
+public:
+	string ToString() const override {
+		string result;
+		if (IsOwnership()) {
+			result += "OWNS";
+		}
+		return result;
+	}
+};
+
+struct DependencyDependentFlags : public DependencyFlags {
+private:
+	static constexpr uint8_t BLOCKING = 0;
+	static constexpr uint8_t OWNED_BY = 1;
+
+public:
+	DependencyDependentFlags &Apply(DependencyDependentFlags other) {
+		Merge(other.Value());
+		return *this;
+	}
+
+public:
+	bool IsBlocking() const {
+		return IsSet<BLOCKING>();
+	}
+	bool IsOwnedBy() const {
+		return IsSet<OWNED_BY>();
+	}
+
+public:
+	DependencyDependentFlags &SetBlocking() {
+		Set<BLOCKING>();
+		return *this;
+	}
+	DependencyDependentFlags &SetOwnedBy() {
+		Set<OWNED_BY>();
+		return *this;
+	}
+
+public:
+	string ToString() const override {
+		string result;
+		if (IsBlocking()) {
+			result += "REGULAR";
+		} else {
+			result += "AUTOMATIC";
+		}
+		result += " | ";
+		if (IsOwnedBy()) {
+			result += "OWNED BY";
+		}
+		return result;
+	}
+};
+
+struct CatalogEntryInfo {
+public:
+	CatalogType type;
+	string schema;
+	string name;
+
+public:
+	bool operator==(const CatalogEntryInfo &other) const {
+		if (other.type != type) {
+			return false;
+		}
+		if (!StringUtil::CIEquals(other.schema, schema)) {
+			return false;
+		}
+		if (!StringUtil::CIEquals(other.name, name)) {
+			return false;
+		}
+		return true;
+	}
+};
+
+struct Dependency {
+	Dependency(CatalogEntry &entry, // NOLINT: Allow implicit conversion from `CatalogEntry`
+	           DependencyDependentFlags flags = DependencyDependentFlags().SetBlocking())
+	    : entry(entry), flags(std::move(flags)) {
+	}
+
+	//! The catalog entry this depends on
+	reference<CatalogEntry> entry;
+	//! The type of dependency
+	DependencyDependentFlags flags;
+};
+
+struct DependencyHashFunction {
+	uint64_t operator()(const Dependency &a) const {
+		std::hash<void *> hash_func;
+		return hash_func((void *)&a.entry.get());
+	}
+};
+
+struct DependencyEquality {
+	bool operator()(const Dependency &a, const Dependency &b) const {
+		return RefersToSameObject(a.entry, b.entry);
+	}
+};
+using dependency_set_t = unordered_set<Dependency, DependencyHashFunction, DependencyEquality>;
+
+} // namespace duckdb
+
+
+namespace duckdb {
+class Catalog;
+class CatalogEntry;
+struct CreateInfo;
+class SchemaCatalogEntry;
+struct CatalogTransaction;
+class LogicalDependencyList;
+
+//! A minimal representation of a CreateInfo / CatalogEntry
+//! enough to look up the entry inside SchemaCatalogEntry::GetEntry
+struct LogicalDependency {
+public:
+	CatalogEntryInfo entry;
+	string catalog;
+
+public:
+	explicit LogicalDependency(CatalogEntry &entry);
+	LogicalDependency();
+	bool operator==(const LogicalDependency &other) const;
+};
+
+struct LogicalDependencyHashFunction {
+	uint64_t operator()(const LogicalDependency &a) const;
+};
+
+struct LogicalDependencyEquality {
+	bool operator()(const LogicalDependency &a, const LogicalDependency &b) const;
+};
+
+//! The DependencyList containing LogicalDependency objects, not looked up in the catalog yet
+class LogicalDependencyList {
+	using create_info_set_t =
+	    unordered_set<LogicalDependency, LogicalDependencyHashFunction, LogicalDependencyEquality>;
+
+public:
+	DUCKDB_API void AddDependency(CatalogEntry &entry);
+	DUCKDB_API void AddDependency(const LogicalDependency &entry);
+	DUCKDB_API bool Contains(CatalogEntry &entry);
+
+public:
+	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
+	bool operator==(const LogicalDependencyList &other) const;
+	const create_info_set_t &Set() const;
+
+private:
+	create_info_set_t set;
+};
+
+} // namespace duckdb
+
 
 namespace duckdb {
 class SchemaCatalogEntry;
@@ -18610,6 +19000,9 @@ public:
 
 public:
 	SchemaCatalogEntry &ParentSchema() override {
+		return schema;
+	}
+	const SchemaCatalogEntry &ParentSchema() const override {
 		return schema;
 	}
 };
@@ -18667,7 +19060,8 @@ enum class ParseInfoType : uint8_t {
 	TRANSACTION_INFO,
 	VACUUM_INFO,
 	COMMENT_ON_INFO,
-	COMMENT_ON_COLUMN_INFO
+	COMMENT_ON_COLUMN_INFO,
+	COPY_DATABASE_INFO
 };
 
 struct ParseInfo {
@@ -18687,7 +19081,7 @@ public:
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
@@ -18757,6 +19151,8 @@ enum class AppenderType : uint8_t;
 
 enum class ArrowDateTimeType : uint8_t;
 
+enum class ArrowOffsetSize : uint8_t;
+
 enum class ArrowVariableSizeType : uint8_t;
 
 enum class BindingMode : uint8_t;
@@ -18811,6 +19207,8 @@ enum class ErrorType : uint16_t;
 
 enum class ExceptionFormatValueType : uint8_t;
 
+enum class ExceptionType : uint8_t;
+
 enum class ExplainOutputType : uint8_t;
 
 enum class ExplainType : uint8_t;
@@ -18820,6 +19218,8 @@ enum class ExpressionClass : uint8_t;
 enum class ExpressionType : uint8_t;
 
 enum class ExtensionLoadResult : uint8_t;
+
+enum class ExternalDependenciesType : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
 
@@ -18934,6 +19334,8 @@ enum class RenderMode : uint8_t;
 enum class ResultModifierType : uint8_t;
 
 enum class SampleMethod : uint8_t;
+
+enum class ScanType : uint8_t;
 
 enum class SecretDisplayType : uint8_t;
 
@@ -19056,6 +19458,9 @@ template<>
 const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
 
 template<>
+const char* EnumUtil::ToChars<ArrowOffsetSize>(ArrowOffsetSize value);
+
+template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
 
 template<>
@@ -19137,6 +19542,9 @@ template<>
 const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType value);
 
 template<>
+const char* EnumUtil::ToChars<ExceptionType>(ExceptionType value);
+
+template<>
 const char* EnumUtil::ToChars<ExplainOutputType>(ExplainOutputType value);
 
 template<>
@@ -19150,6 +19558,9 @@ const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtensionLoadResult>(ExtensionLoadResult value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalDependenciesType>(ExternalDependenciesType value);
 
 template<>
 const char* EnumUtil::ToChars<ExtraDropInfoType>(ExtraDropInfoType value);
@@ -19323,6 +19734,9 @@ template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
+const char* EnumUtil::ToChars<ScanType>(ScanType value);
+
+template<>
 const char* EnumUtil::ToChars<SecretDisplayType>(SecretDisplayType value);
 
 template<>
@@ -19483,6 +19897,9 @@ template<>
 ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
 
 template<>
+ArrowOffsetSize EnumUtil::FromString<ArrowOffsetSize>(const char *value);
+
+template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
 
 template<>
@@ -19564,6 +19981,9 @@ template<>
 ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const char *value);
 
 template<>
+ExceptionType EnumUtil::FromString<ExceptionType>(const char *value);
+
+template<>
 ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value);
 
 template<>
@@ -19577,6 +19997,9 @@ ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
 ExtensionLoadResult EnumUtil::FromString<ExtensionLoadResult>(const char *value);
+
+template<>
+ExternalDependenciesType EnumUtil::FromString<ExternalDependenciesType>(const char *value);
 
 template<>
 ExtraDropInfoType EnumUtil::FromString<ExtraDropInfoType>(const char *value);
@@ -19750,6 +20173,9 @@ template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
 
 template<>
+ScanType EnumUtil::FromString<ScanType>(const char *value);
+
+template<>
 SecretDisplayType EnumUtil::FromString<SecretDisplayType>(const char *value);
 
 template<>
@@ -19901,6 +20327,7 @@ enum class OnCreateConflict : uint8_t {
 
 
 
+
 namespace duckdb {
 struct AlterInfo;
 
@@ -19910,7 +20337,7 @@ public:
 
 public:
 	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
-	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(schema),
+	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(std::move(schema)),
 	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}
 	~CreateInfo() override {
@@ -20471,7 +20898,7 @@ public:
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &deserializer);
 
 protected:
-	AlterViewInfo(AlterViewType type);
+	explicit AlterViewInfo(AlterViewType type);
 };
 
 //===--------------------------------------------------------------------===//
@@ -20541,7 +20968,7 @@ public:
 	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
 
 public:
-	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 	unique_ptr<CreateInfo> GetInfo() const override;
 
 	SequenceData GetData() const;
@@ -20613,7 +21040,7 @@ public:
 	};
 
 public:
-	UndoBuffer(ClientContext &context);
+	explicit UndoBuffer(ClientContext &context);
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
@@ -20665,7 +21092,7 @@ class DuckTransaction;
 class Transaction;
 
 struct TransactionData {
-	TransactionData(DuckTransaction &transaction_p);
+	TransactionData(DuckTransaction &transaction_p); // NOLINT: allow implicit conversion
 	TransactionData(transaction_t transaction_id_p, transaction_t start_time_p);
 
 	optional_ptr<DuckTransaction> transaction;
@@ -20728,7 +21155,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -20777,7 +21204,7 @@ namespace duckdb {
 struct AlterInfo;
 
 class ClientContext;
-class DependencyList;
+class LogicalDependencyList;
 
 class DuckCatalog;
 class TableCatalogEntry;
@@ -20816,9 +21243,9 @@ public:
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
 	DUCKDB_API bool CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
-	                            const DependencyList &dependencies);
+	                            const LogicalDependencyList &dependencies);
 	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-	                            const DependencyList &dependencies);
+	                            const LogicalDependencyList &dependencies);
 
 	DUCKDB_API bool AlterEntry(CatalogTransaction transaction, const string &name, AlterInfo &alter_info);
 
@@ -21078,9 +21505,9 @@ public:
 	//! Default interrupt state will be set to InterruptMode::NO_INTERRUPTS and throw an error on use of Callback()
 	InterruptState();
 	//! Register the task to be interrupted and set mode to InterruptMode::TASK, the preferred way to handle interrupts
-	InterruptState(weak_ptr<Task> task);
+	explicit InterruptState(weak_ptr<Task> task);
 	//! Register signal state and set mode to InterruptMode::BLOCKING, used for code paths without Task.
-	InterruptState(weak_ptr<InterruptDoneSignalState> done_signal);
+	explicit InterruptState(weak_ptr<InterruptDoneSignalState> done_signal);
 
 	//! Perform the callback to indicate the Interrupt is over
 	DUCKDB_API void Callback() const;
@@ -21147,7 +21574,7 @@ class ClientContextLock;
 
 struct BlockedSink {
 public:
-	BlockedSink(InterruptState state, idx_t chunk_size) : state(state), chunk_size(chunk_size) {
+	BlockedSink(InterruptState state, idx_t chunk_size) : state(std::move(state)), chunk_size(chunk_size) {
 	}
 
 public:
@@ -21162,7 +21589,7 @@ protected:
 	enum class Type { SIMPLE };
 
 public:
-	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(context) {
+	BufferedData(Type type, weak_ptr<ClientContext> context) : type(type), context(std::move(context)) {
 	}
 	virtual ~BufferedData() {
 	}
@@ -21231,7 +21658,7 @@ private:
 	static constexpr idx_t BUFFER_SIZE = 100000;
 
 public:
-	SimpleBufferedData(weak_ptr<ClientContext> context);
+	explicit SimpleBufferedData(weak_ptr<ClientContext> context);
 	~SimpleBufferedData() override;
 
 public:
@@ -24448,6 +24875,26 @@ DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/chrono.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+#include <chrono>
+
+namespace duckdb {
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
+using std::chrono::milliseconds;
+using std::chrono::system_clock;
+using std::chrono::time_point;
+} // namespace duckdb
 
 
 
@@ -24472,8 +24919,8 @@ public:
 	//! the total elapsed time. Otherwise returns how far along the timer is
 	//! right now.
 	double Elapsed() const {
-		auto _end = finished ? end : Tick();
-		return std::chrono::duration_cast<std::chrono::duration<double>>(_end - start).count();
+		auto measured_end = finished ? end : Tick();
+		return std::chrono::duration_cast<std::chrono::duration<double>>(measured_end - start).count();
 	}
 
 private:
@@ -24797,12 +25244,12 @@ struct SettingLookupResult {
 public:
 	SettingLookupResult() : scope(SettingScope::INVALID) {
 	}
-	SettingLookupResult(SettingScope scope) : scope(scope) {
+	explicit SettingLookupResult(SettingScope scope) : scope(scope) {
 		D_ASSERT(scope != SettingScope::INVALID);
 	}
 
 public:
-	operator bool() {
+	operator bool() { // NOLINT: allow implicit conversion to bool
 		return scope != SettingScope::INVALID;
 	}
 
@@ -24822,7 +25269,7 @@ struct AccessModeSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowPersistentSecrets {
@@ -24832,7 +25279,7 @@ struct AllowPersistentSecrets {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct CheckpointThresholdSetting {
@@ -24842,7 +25289,7 @@ struct CheckpointThresholdSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DebugCheckpointAbort {
@@ -24852,7 +25299,7 @@ struct DebugCheckpointAbort {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DebugForceExternal {
@@ -24862,7 +25309,7 @@ struct DebugForceExternal {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DebugForceNoCrossProduct {
@@ -24872,7 +25319,7 @@ struct DebugForceNoCrossProduct {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct OrderedAggregateThreshold {
@@ -24882,7 +25329,7 @@ struct OrderedAggregateThreshold {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT; // NOLINT
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DebugAsOfIEJoin {
@@ -24891,7 +25338,7 @@ struct DebugAsOfIEJoin {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                                 // NOLINT
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PreferRangeJoins {
@@ -24900,7 +25347,7 @@ struct PreferRangeJoins {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                     // NOLINT
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DebugWindowMode {
@@ -24909,7 +25356,7 @@ struct DebugWindowMode {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DefaultCollationSetting {
@@ -24920,7 +25367,7 @@ struct DefaultCollationSetting {
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DefaultOrderSetting {
@@ -24929,7 +25376,7 @@ struct DefaultOrderSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DefaultNullOrderSetting {
@@ -24938,7 +25385,7 @@ struct DefaultNullOrderSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DefaultSecretStorage {
@@ -24947,7 +25394,7 @@ struct DefaultSecretStorage {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DisabledFileSystemsSetting {
@@ -24956,7 +25403,7 @@ struct DisabledFileSystemsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DisabledOptimizersSetting {
@@ -24965,7 +25412,7 @@ struct DisabledOptimizersSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableExternalAccessSetting {
@@ -24976,7 +25423,7 @@ struct EnableExternalAccessSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableFSSTVectors {
@@ -24986,7 +25433,7 @@ struct EnableFSSTVectors {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowUnsignedExtensionsSetting {
@@ -24995,7 +25442,16 @@ struct AllowUnsignedExtensionsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct AllowExtensionsMetadataMismatchSetting {
+	static constexpr const char *Name = "allow_extensions_metadata_mismatch";
+	static constexpr const char *Description = "Allow to load extensions with not compatible metadata";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowUnredactedSecretsSetting {
@@ -25004,7 +25460,7 @@ struct AllowUnredactedSecretsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct CustomExtensionRepository {
@@ -25013,7 +25469,7 @@ struct CustomExtensionRepository {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AutoloadExtensionRepository {
@@ -25023,7 +25479,7 @@ struct AutoloadExtensionRepository {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AutoinstallKnownExtensions {
@@ -25033,7 +25489,7 @@ struct AutoinstallKnownExtensions {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AutoloadKnownExtensions {
@@ -25043,7 +25499,7 @@ struct AutoloadKnownExtensions {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableObjectCacheSetting {
@@ -25052,7 +25508,7 @@ struct EnableObjectCacheSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableHTTPMetadataCacheSetting {
@@ -25061,7 +25517,7 @@ struct EnableHTTPMetadataCacheSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableProfilingSetting {
@@ -25071,7 +25527,7 @@ struct EnableProfilingSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableProgressBarSetting {
@@ -25081,7 +25537,7 @@ struct EnableProgressBarSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct EnableProgressBarPrintSetting {
@@ -25091,7 +25547,7 @@ struct EnableProgressBarPrintSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ErrorsAsJsonSetting {
@@ -25100,7 +25556,7 @@ struct ErrorsAsJsonSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ExplainOutputSetting {
@@ -25109,7 +25565,7 @@ struct ExplainOutputSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ExportLargeBufferArrow {
@@ -25119,7 +25575,7 @@ struct ExportLargeBufferArrow {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ExtensionDirectorySetting {
@@ -25128,7 +25584,7 @@ struct ExtensionDirectorySetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ExternalThreadsSetting {
@@ -25137,7 +25593,7 @@ struct ExternalThreadsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct FileSearchPathSetting {
@@ -25146,7 +25602,7 @@ struct FileSearchPathSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ForceCompressionSetting {
@@ -25155,7 +25611,7 @@ struct ForceCompressionSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ForceBitpackingModeSetting {
@@ -25164,7 +25620,7 @@ struct ForceBitpackingModeSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct HomeDirectorySetting {
@@ -25173,7 +25629,7 @@ struct HomeDirectorySetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct IntegerDivisionSetting {
@@ -25183,17 +25639,17 @@ struct IntegerDivisionSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct LogQueryPathSetting {
 	static constexpr const char *Name = "log_query_path";
 	static constexpr const char *Description =
-	    "Specifies the path to which queries should be logged (default: empty string, queries are not logged)";
+	    "Specifies the path to which queries should be logged (default: NULL, queries are not logged)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct LockConfigurationSetting {
@@ -25202,7 +25658,7 @@ struct LockConfigurationSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ImmediateTransactionModeSetting {
@@ -25212,7 +25668,7 @@ struct ImmediateTransactionModeSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct MaximumExpressionDepthSetting {
@@ -25223,7 +25679,7 @@ struct MaximumExpressionDepthSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct MaximumMemorySetting {
@@ -25232,7 +25688,7 @@ struct MaximumMemorySetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct OldImplicitCasting {
@@ -25241,7 +25697,7 @@ struct OldImplicitCasting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PartitionedWriteFlushThreshold {
@@ -25251,7 +25707,7 @@ struct PartitionedWriteFlushThreshold {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PasswordSetting {
@@ -25260,16 +25716,16 @@ struct PasswordSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PerfectHashThresholdSetting {
 	static constexpr const char *Name = "perfect_ht_threshold";
-	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table (default: 12)";
+	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PivotFilterThreshold {
@@ -25279,17 +25735,16 @@ struct PivotFilterThreshold {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PivotLimitSetting {
 	static constexpr const char *Name = "pivot_limit";
-	static constexpr const char *Description =
-	    "The maximum number of pivot columns in a pivot statement (default: 100000)";
+	static constexpr const char *Description = "The maximum number of pivot columns in a pivot statement";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PreserveIdentifierCase {
@@ -25299,7 +25754,7 @@ struct PreserveIdentifierCase {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct PreserveInsertionOrder {
@@ -25310,7 +25765,7 @@ struct PreserveInsertionOrder {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ProfileOutputSetting {
@@ -25320,7 +25775,7 @@ struct ProfileOutputSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ProfilingModeSetting {
@@ -25329,7 +25784,7 @@ struct ProfilingModeSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ProgressBarTimeSetting {
@@ -25339,7 +25794,7 @@ struct ProgressBarTimeSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct SchemaSetting {
@@ -25349,7 +25804,7 @@ struct SchemaSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct SearchPathSetting {
@@ -25359,7 +25814,7 @@ struct SearchPathSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct SecretDirectorySetting {
@@ -25368,7 +25823,7 @@ struct SecretDirectorySetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct TempDirectorySetting {
@@ -25377,7 +25832,7 @@ struct TempDirectorySetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ThreadsSetting {
@@ -25386,7 +25841,7 @@ struct ThreadsSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct UsernameSetting {
@@ -25395,7 +25850,7 @@ struct UsernameSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct FlushAllocatorSetting {
@@ -25405,7 +25860,7 @@ struct FlushAllocatorSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct DuckDBApiSetting {
@@ -25414,7 +25869,7 @@ struct DuckDBApiSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct CustomUserAgentSetting {
@@ -25423,7 +25878,7 @@ struct CustomUserAgentSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
 };
 
 } // namespace duckdb
@@ -25567,7 +26022,7 @@ public:
 	                                                 bool requires_valid_transaction = true);
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const std::string &key, Value &result) const;
 
 	//! Returns the parser options for this client context
 	DUCKDB_API ParserOptions GetParserOptions() const;
@@ -25759,14 +26214,14 @@ public:
 	//! Print the object to stderr
 	DUCKDB_API static void Print(const string &str);
 	//! Print the formatted object to the stream
-	template <typename... Args>
-	static void PrintF(OutputStream stream, const string &str, Args... params) {
+	template <typename... ARGS>
+	static void PrintF(OutputStream stream, const string &str, ARGS... params) {
 		Printer::Print(stream, StringUtil::Format(str, params...));
 	}
 	//! Print the formatted object to stderr
-	template <typename... Args>
-	static void PrintF(const string &str, Args... params) {
-		Printer::PrintF(OutputStream::STREAM_STDERR, str, std::forward<Args>(params)...);
+	template <typename... ARGS>
+	static void PrintF(const string &str, ARGS... params) {
+		Printer::PrintF(OutputStream::STREAM_STDERR, str, std::forward<ARGS>(params)...);
 	}
 	//! Directly prints the string to stdout without a newline
 	DUCKDB_API static void RawPrint(OutputStream stream, const string &str);
@@ -26028,7 +26483,7 @@ public:
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -26050,7 +26505,7 @@ class LogicalOperator;
 class SelectStatement;
 struct CSVReaderOptions;
 
-typedef void (*warning_callback)(std::string);
+typedef void (*warning_callback_t)(std::string);
 
 //! A connection to a database. This represents a (client) connection that can
 //! be used to query the database.
@@ -26067,7 +26522,7 @@ public:
 	DUCKDB_API ~Connection();
 
 	shared_ptr<ClientContext> context;
-	warning_callback warning_cb;
+	warning_callback_t warning_cb;
 
 public:
 	//! Returns query profiling information for the current query
@@ -26080,8 +26535,6 @@ public:
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
-
-	DUCKDB_API void SetWarningCallback(warning_callback);
 
 	//! Enable aggressive verification/testing of queries, should only be used in testing
 	DUCKDB_API void EnableQueryVerification();
@@ -26101,8 +26554,8 @@ public:
 	//! MaterializedQueryResult.
 	DUCKDB_API unique_ptr<MaterializedQueryResult> Query(unique_ptr<SQLStatement> statement);
 	// prepared statements
-	template <typename... Args>
-	unique_ptr<QueryResult> Query(const string &query, Args... args) {
+	template <typename... ARGS>
+	unique_ptr<QueryResult> Query(const string &query, ARGS... args) {
 		vector<Value> values;
 		return QueryParamsRecursive(query, values, args...);
 	}
@@ -26185,28 +26638,29 @@ public:
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
-	template <typename TR, typename... Args>
-	void CreateScalarFunction(const string &name, TR (*udf_func)(Args...)) {
-		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, udf_func);
-		UDFWrapper::RegisterFunction<TR, Args...>(name, function, *context);
+	// NOLINTBEGIN
+	template <typename TR, typename... ARGS>
+	void CreateScalarFunction(const string &name, TR (*udf_func)(ARGS...)) {
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, ARGS...>(name, udf_func);
+		UDFWrapper::RegisterFunction<TR, ARGS...>(name, function, *context);
 	}
 
-	template <typename TR, typename... Args>
+	template <typename TR, typename... ARGS>
 	void CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                          TR (*udf_func)(Args...)) {
-		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
+	                          TR (*udf_func)(ARGS...)) {
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, ARGS...>(name, args, ret_type, udf_func);
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
-	template <typename TR, typename... Args>
+	template <typename TR, typename... ARGS>
 	void CreateVectorizedFunction(const string &name, scalar_function_t udf_func,
 	                              LogicalType varargs = LogicalType::INVALID) {
-		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, std::move(varargs));
+		UDFWrapper::RegisterFunction<TR, ARGS...>(name, udf_func, *context, std::move(varargs));
 	}
 
 	void CreateVectorizedFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                              scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
-		UDFWrapper::RegisterFunction(name, std::move(args), std::move(ret_type), udf_func, *context,
+		UDFWrapper::RegisterFunction(name, std::move(args), std::move(ret_type), std::move(udf_func), *context,
 		                             std::move(varargs));
 	}
 
@@ -26224,23 +26678,24 @@ public:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_typeA) {
+	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_type_a) {
 		AggregateFunction function =
-		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_typeA);
+		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_type_a);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_typeA,
-	                             LogicalType input_typeB) {
+	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_type_a,
+	                             LogicalType input_type_b) {
 		AggregateFunction function =
-		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
+		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_type_a, input_type_b);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
-	void CreateAggregateFunction(const string &name, vector<LogicalType> arguments, LogicalType return_type,
-	                             aggregate_size_t state_size, aggregate_initialize_t initialize,
-	                             aggregate_update_t update, aggregate_combine_t combine, aggregate_finalize_t finalize,
+	void CreateAggregateFunction(const string &name, const vector<LogicalType> &arguments,
+	                             const LogicalType &return_type, aggregate_size_t state_size,
+	                             aggregate_initialize_t initialize, aggregate_update_t update,
+	                             aggregate_combine_t combine, aggregate_finalize_t finalize,
 	                             aggregate_simple_update_t simple_update = nullptr,
 	                             bind_aggregate_function_t bind = nullptr,
 	                             aggregate_destructor_t destructor = nullptr) {
@@ -26249,12 +26704,13 @@ public:
 		                                        finalize, simple_update, bind, destructor);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
+	// NOLINTEND
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(const string &query, vector<Value> &values);
 
-	template <typename T, typename... Args>
-	unique_ptr<QueryResult> QueryParamsRecursive(const string &query, vector<Value> &values, T value, Args... args) {
+	template <typename T, typename... ARGS>
+	unique_ptr<QueryResult> QueryParamsRecursive(const string &query, vector<Value> &values, T value, ARGS... args) {
 		values.push_back(Value::CreateValue<T>(value));
 		return QueryParamsRecursive(query, values, args...);
 	}
@@ -26433,7 +26889,7 @@ struct BindCastInfo {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -26451,7 +26907,7 @@ struct BoundCastData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
@@ -26507,9 +26963,9 @@ typedef unique_ptr<FunctionLocalState> (*init_cast_local_state_t)(CastLocalState
 
 struct BoundCastInfo {
 	DUCKDB_API
-	BoundCastInfo(
+	BoundCastInfo( // NOLINT: allow explicit cast from cast_function_t
 	    cast_function_t function, unique_ptr<BoundCastData> cast_data = nullptr,
-	    init_cast_local_state_t init_local_state = nullptr); // NOLINT: allow explicit cast from cast_function_t
+	    init_cast_local_state_t init_local_state = nullptr);
 	cast_function_t function;
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
@@ -26709,10 +27165,10 @@ struct ParserExtensionParseData {
 struct ParserExtensionParseResult {
 	ParserExtensionParseResult() : type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
 	}
-	ParserExtensionParseResult(string error_p)
+	explicit ParserExtensionParseResult(string error_p)
 	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(std::move(error_p)) {
 	}
-	ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
+	explicit ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
 	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(std::move(parse_data_p)) {
 	}
 
@@ -26730,7 +27186,7 @@ typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//
-struct ParserExtensionPlanResult {
+struct ParserExtensionPlanResult { // NOLINT: work-around bug in clang-tidy
 	//! The table function to execute
 	TableFunction function;
 	//! Parameters to the function
@@ -26854,75 +27310,6 @@ private:
 
 } // namespace duckdb
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/catalog/dependency_list.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/catalog/catalog_entry_map.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-
-namespace duckdb {
-class CatalogEntry;
-
-struct CatalogEntryHashFunction {
-	uint64_t operator()(const reference<CatalogEntry> &a) const {
-		std::hash<void *> hash_func;
-		return hash_func((void *)&a.get());
-	}
-};
-
-struct CatalogEntryEquality {
-	bool operator()(const reference<CatalogEntry> &a, const reference<CatalogEntry> &b) const {
-		return RefersToSameObject(a, b);
-	}
-};
-
-using catalog_entry_set_t = unordered_set<reference<CatalogEntry>, CatalogEntryHashFunction, CatalogEntryEquality>;
-
-template <typename T>
-using catalog_entry_map_t = unordered_map<reference<CatalogEntry>, T, CatalogEntryHashFunction, CatalogEntryEquality>;
-
-using catalog_entry_vector_t = vector<reference<CatalogEntry>>;
-
-} // namespace duckdb
-
-
-namespace duckdb {
-class Catalog;
-class CatalogEntry;
-class DependencySetCatalogEntry;
-
-//! The DependencyList
-class DependencyList {
-	friend class DependencyManager;
-	friend class DependencySetCatalogEntry;
-
-public:
-	DUCKDB_API void AddDependency(CatalogEntry &entry);
-
-	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
-
-private:
-	catalog_entry_set_t set;
-};
-} // namespace duckdb
 
 
 
@@ -26938,7 +27325,7 @@ public:
 	explicit PhysicalPlanGenerator(ClientContext &context);
 	~PhysicalPlanGenerator();
 
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
 	//! This data structure is used to establish it.
 	unordered_map<idx_t, std::shared_ptr<ColumnDataCollection>> recursive_cte_tables;
@@ -26997,6 +27384,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalReset &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalVacuum &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUnnest &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalMaterializedCTE &op);
@@ -27449,6 +27837,7 @@ class ViewCatalogEntry;
 class TableMacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
+class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
@@ -27473,6 +27862,7 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
+	// NOLINTNEXTLINE - work-around bug in clang-tidy
 	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, string name_p, idx_t depth)
 	    : binding(binding), type(std::move(type_p)), name(std::move(name_p)), depth(depth) {
 	}
@@ -27547,8 +27937,8 @@ public:
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
-	//! Find a common table expression by name; returns nullptr if none exists
-	optional_ptr<CommonTableExpressionInfo> FindCTE(const string &name, bool skip = false);
+	//! Find all candidate common table expression by name; returns empty vector if none exists
+	vector<reference<CommonTableExpressionInfo>> FindCTE(const string &name, bool skip = false);
 
 	bool CTEIsAlreadyBound(CommonTableExpressionInfo &cte);
 
@@ -27573,6 +27963,8 @@ public:
 	void BindDoUpdateSetExpressions(const string &table_alias, LogicalInsert &insert, UpdateSetInfo &set_info,
 	                                TableCatalogEntry &table, TableStorageInfo &storage_info);
 	void BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &table, InsertStatement &stmt);
+
+	void BindVacuumTable(LogicalVacuum &vacuum, unique_ptr<LogicalOperator> &root);
 
 	static void BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema);
 	static void BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog = nullptr,
@@ -27641,6 +28033,8 @@ private:
 	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
 	                                                  BaseTableRef &ref);
 
+	template <class T>
+	BoundStatement BindWithCTE(T &statement);
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
 	BoundStatement Bind(CopyStatement &stmt);
@@ -27674,6 +28068,8 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
+	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
+	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
@@ -27683,6 +28079,7 @@ private:
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node);
+	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node, unique_ptr<LogicalOperator> base);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
@@ -27730,9 +28127,9 @@ private:
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
-	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index,
-	                       const vector<idx_t> &expansion_count = {});
+	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
+	void BindModifiers(BoundQueryNode &result, idx_t table_index, const vector<string> &names,
+	                   const vector<LogicalType> &sql_types, const SelectBindState &bind_state);
 
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
@@ -27774,10 +28171,8 @@ private:
 
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 
-	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(CopyDatabaseStatement &stmt, Catalog &from_database,
-	                                                   Catalog &to_database);
-	unique_ptr<LogicalOperator> BindCopyDatabaseData(CopyDatabaseStatement &stmt, Catalog &from_database,
-	                                                 Catalog &to_database);
+	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
+	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const string &target_database_name);
 
 	unique_ptr<BoundTableRef> BindShowQuery(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
@@ -27808,7 +28203,7 @@ struct LogicalExtensionOperator;
 
 class OperatorExtension {
 public:
-	bind_function_t Bind;
+	bind_function_t Bind; // NOLINT: backwards compatibility
 
 	//! Additional info passed to the CreatePlan & Bind functions
 	shared_ptr<OperatorExtensionInfo> operator_info;
@@ -27934,6 +28329,7 @@ public:
 
 namespace duckdb {
 
+class BufferManager;
 class BufferPool;
 class CastFunctionSet;
 class ClientContext;
@@ -27959,7 +28355,7 @@ typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, co
 typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
 typedef void (*reset_global_function_t)(DatabaseInstance *db, DBConfig &config);
 typedef void (*reset_local_function_t)(ClientContext &context);
-typedef Value (*get_setting_function_t)(ClientContext &context);
+typedef Value (*get_setting_function_t)(const ClientContext &context);
 
 struct ConfigurationOption {
 	const char *name;
@@ -27975,6 +28371,7 @@ struct ConfigurationOption {
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
 
 struct ExtensionOption {
+	// NOLINTNEXTLINE: work around bug in clang-tidy
 	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p,
 	                Value default_value_p)
 	    : description(std::move(description_p)), type(std::move(type_p)), set_function(set_function_p),
@@ -28027,6 +28424,9 @@ struct DBConfigOptions {
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
 	string temporary_directory;
+	//! Whether or not to invoke filesystem trim on free blocks after checkpoint. This will reclaim
+	//! space for sparse files, on platforms that support it.
+	bool trim_free_blocks = false;
 	//! Whether or not to allow printing unredacted secrets
 	bool allow_unredacted_secrets = false;
 	//! The collation type of the database
@@ -28070,6 +28470,8 @@ struct DBConfigOptions {
 	string extension_directory;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	//! Whether extensions with missing metadata should be loaded
+	bool allow_extensions_metadata_mismatch = false;
 	//! Enable emitting FSST Vectors
 	bool enable_fsst_vectors = false;
 	//! Start transactions immediately in all attached databases - instead of lazily when a database is referenced
@@ -28081,7 +28483,7 @@ struct DBConfigOptions {
 	//! Whether or not the configuration settings can be altered
 	bool lock_configuration = false;
 	//! Whether to print bindings when printing the plan (debug mode only)
-	static bool debug_print_bindings;
+	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728;
 	//! DuckDB API surface
@@ -28100,7 +28502,7 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
-	DUCKDB_API DBConfig(bool read_only);
+	explicit DUCKDB_API DBConfig(bool read_only);
 	DUCKDB_API DBConfig(const case_insensitive_map_t<Value> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
@@ -28133,6 +28535,8 @@ public:
 	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
+	//! Provide a custom buffer manager implementation (if desired).
+	shared_ptr<BufferManager> buffer_manager;
 	//! Set of callbacks that can be installed by extensions
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 
@@ -28149,9 +28553,9 @@ public:
 	DUCKDB_API void AddExtensionOption(const string &name, string description, LogicalType parameter,
 	                                   const Value &default_value = Value(), set_option_callback_t function = nullptr);
 	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
-	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
+	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
-	DUCKDB_API static ConfigurationOption *GetOptionByName(const string &name);
+	DUCKDB_API static optional_ptr<const ConfigurationOption> GetOptionByName(const string &name);
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value);
 	DUCKDB_API void SetOptionByName(const string &name, const Value &value);
@@ -28282,6 +28686,17 @@ class FileSystem;
 class TaskScheduler;
 class ObjectCache;
 struct AttachInfo;
+class DatabaseFileSystem;
+
+struct ExtensionInfo {
+	explicit ExtensionInfo(const std::string &version) : extension_version(version) {
+	}
+	ExtensionInfo() : ExtensionInfo("defaultme") {
+	}
+	ExtensionInfo(const ExtensionInfo &x) : ExtensionInfo(x.extension_version) {
+	}
+	std::string extension_version;
+};
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -28296,22 +28711,25 @@ public:
 	BufferPool &GetBufferPool() const;
 	DUCKDB_API SecretManager &GetSecretManager();
 	DUCKDB_API BufferManager &GetBufferManager();
+	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
-	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name);
+	DUCKDB_API void SetExtensionLoaded(const std::string &extension_name, const std::string &extension_version = "");
 
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
+	DUCKDB_API static const DatabaseInstance &GetDatabase(const ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+	DUCKDB_API const unordered_map<string, ExtensionInfo> &LoadedExtensionsData();
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 
-	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result);
+	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) const;
 
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(ClientContext &context, const AttachInfo &info,
 	                                                    const string &type, AccessMode access_mode);
@@ -28323,13 +28741,15 @@ private:
 	void Configure(DBConfig &config);
 
 private:
-	unique_ptr<BufferManager> buffer_manager;
+	shared_ptr<BufferManager> buffer_manager;
 	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
+	unordered_map<std::string, ExtensionInfo> loaded_extensions_data;
 	ValidChecker db_validity;
+	unique_ptr<DatabaseFileSystem> db_file_system;
 };
 
 //! The database object. This object holds the catalog and all the
@@ -28400,7 +28820,7 @@ enum class AppenderType : uint8_t {
 class BaseAppender {
 protected:
 	//! The amount of tuples that will be gathered in the column data collection before flushing
-	static constexpr const idx_t FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100;
+	static constexpr const idx_t FLUSH_COUNT = STANDARD_VECTOR_SIZE * 100ULL;
 
 	Allocator &allocator;
 	//! The append types
@@ -28437,8 +28857,8 @@ public:
 	DUCKDB_API void Append(const char *value, uint32_t length);
 
 	// prepared statements
-	template <typename... Args>
-	void AppendRow(Args... args) {
+	template <typename... ARGS>
+	void AppendRow(ARGS... args) {
 		BeginRow();
 		AppendRowRecursive(args...);
 	}
@@ -28451,7 +28871,7 @@ public:
 	vector<LogicalType> &GetTypes() {
 		return types;
 	}
-	idx_t CurrentColumn() {
+	idx_t CurrentColumn() const {
 		return column;
 	}
 	DUCKDB_API void AppendDataChunk(DataChunk &value);
@@ -28473,8 +28893,8 @@ protected:
 		EndRow();
 	}
 
-	template <typename T, typename... Args>
-	void AppendRowRecursive(T value, Args... args) {
+	template <typename T, typename... ARGS>
+	void AppendRowRecursive(T value, ARGS... args) {
 		Append<T>(value);
 		AppendRowRecursive(args...);
 	}
@@ -31253,7 +31673,7 @@ class UUID {
 public:
 	constexpr static const uint8_t STRING_SIZE = 36;
 	//! Convert a uuid string to a hugeint object
-	static bool FromString(string str, hugeint_t &result);
+	static bool FromString(const string &str, hugeint_t &result);
 	//! Convert a uuid string to a hugeint object
 	static bool FromCString(const char *str, idx_t len, hugeint_t &result) {
 		return FromString(string(str, 0, len), result);
@@ -31275,7 +31695,7 @@ public:
 		return string(buff, STRING_SIZE);
 	}
 
-	static hugeint_t FromString(string str) {
+	static hugeint_t FromString(const string &str) {
 		hugeint_t result;
 		FromString(str, result);
 		return result;
@@ -31299,8 +31719,8 @@ public:
 
 namespace duckdb {
 
-struct dtime_t;
-struct dtime_tz_t;
+struct dtime_t;    // NOLINT
+struct dtime_tz_t; // NOLINT
 
 //! The Time class is a static class that holds helper functions for the Time
 //! type.
@@ -31469,7 +31889,8 @@ public:
 namespace duckdb {
 
 struct CreateFunctionInfo : public CreateInfo {
-	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA) : CreateInfo(type, schema) {
+	explicit CreateFunctionInfo(CatalogType type, string schema = DEFAULT_SCHEMA)
+	    : CreateInfo(type, std::move(schema)) {
 		D_ASSERT(type == CatalogType::SCALAR_FUNCTION_ENTRY || type == CatalogType::AGGREGATE_FUNCTION_ENTRY ||
 		         type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY ||
 		         type == CatalogType::MACRO_ENTRY || type == CatalogType::TABLE_MACRO_ENTRY);
@@ -31582,7 +32003,7 @@ typedef void (*pragma_function_t)(ClientContext &context, const FunctionParamete
 //!   -> this is similar to a call pragma but without parameters
 //! Pragma functions can either return a new query to execute (pragma_query_t)
 //! or they can
-class PragmaFunction : public SimpleNamedParameterFunction {
+class PragmaFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	// Call
 	DUCKDB_API static PragmaFunction PragmaCall(const string &name, pragma_query_t query, vector<LogicalType> arguments,
@@ -31616,7 +32037,7 @@ namespace duckdb {
 template <class T>
 class FunctionSet {
 public:
-	explicit FunctionSet(string name) : name(name) {
+	explicit FunctionSet(string name) : name(std::move(name)) {
 	}
 
 	//! The name of the function set
@@ -31843,8 +32264,7 @@ class ColumnDataCollection;
 class ExecutionContext;
 
 struct LocalFunctionData {
-	virtual ~LocalFunctionData() {
-	}
+	virtual ~LocalFunctionData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -31853,14 +32273,13 @@ struct LocalFunctionData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct GlobalFunctionData {
-	virtual ~GlobalFunctionData() {
-	}
+	virtual ~GlobalFunctionData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -31869,14 +32288,13 @@ struct GlobalFunctionData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct PreparedBatchData {
-	virtual ~PreparedBatchData() {
-	}
+	virtual ~PreparedBatchData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -31885,18 +32303,18 @@ struct PreparedBatchData {
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct CopyFunctionBindInput {
+	explicit CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
+	}
+
 	const CopyInfo &info;
 
 	string file_extension;
-
-	CopyFunctionBindInput(const CopyInfo &info_p) : info(info_p) {
-	}
 };
 
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
@@ -31936,7 +32354,7 @@ enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
 
 typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
 
-class CopyFunction : public Function {
+class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
 	explicit CopyFunction(const string &name)
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
