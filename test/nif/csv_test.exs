@@ -16,10 +16,20 @@ defmodule Duckdbex.Nif.CSVTest do
   end
 
   test "read csv using user defined options", %{conn: conn} do
-    assert {:ok, res} = Duckdbex.NIF.query(conn, "SELECT * FROM read_csv('test/support/data.csv', header = false);")
+    assert {:ok, res} =
+             Duckdbex.NIF.query(
+               conn,
+               "SELECT * FROM read_csv('test/support/data.csv', header = false);"
+             )
+
     assert [["c1", "c2", "c3"], ["1", "2", "3"], ["a", "b", "c"]] = Duckdbex.NIF.fetch_all(res)
 
-    assert {:ok, res} = Duckdbex.NIF.query(conn, "SELECT * FROM read_csv('test/support/data.csv', header = true);")
+    assert {:ok, res} =
+             Duckdbex.NIF.query(
+               conn,
+               "SELECT * FROM read_csv('test/support/data.csv', header = true);"
+             )
+
     assert [["1", "2", "3"], ["a", "b", "c"]] = Duckdbex.NIF.fetch_all(res)
   end
 

@@ -54,7 +54,7 @@ defmodule Duckdbex.MixProject do
 
   defp nif_versions(opts) do
     if String.contains?(opts.target, "windows") or
-       String.contains?(opts.target, "darwin") do
+         String.contains?(opts.target, "darwin") do
       ["2.16"]
     else
       ["2.15"]

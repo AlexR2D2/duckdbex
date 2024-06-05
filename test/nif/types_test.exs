@@ -395,7 +395,7 @@ defmodule Duckdbex.Nif.QueryTest do
     assert [[%{"1" => 1, "5" => 2}]] = NIF.fetch_all(r)
 
     assert {:error, "Conversion Error:" <> _details} =
-      NIF.query(conn, "SELECT map([1, 2, 3], [1, 'a', 2.4::DECIMAL(3, 2)]);")
+             NIF.query(conn, "SELECT map([1, 2, 3], [1, 'a', 2.4::DECIMAL(3, 2)]);")
 
     assert {:ok, r} =
              NIF.query(conn, "select map([['a', 'b'], ['c', 'd']], [[1.1, 2.2], [3.3, 4.4]]);")
