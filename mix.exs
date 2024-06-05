@@ -1,14 +1,14 @@
 defmodule Duckdbex.MixProject do
   use Mix.Project
 
-  @version "0.2.10"
-  @duckdb_version "0.10.2"
+  @version "0.3.0"
+  @duckdb_version "1.0.0"
 
   def project do
     [
       app: :duckdbex,
       version: @version,
-      elixir: "~> 1.12",
+      elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
@@ -23,10 +23,10 @@ defmodule Duckdbex.MixProject do
         "https://github.com/AlexR2D2/duckdbex/releases/download/v#{@version}/@{artefact_filename}",
       make_precompiler_filename: "duckdb_nif",
       make_precompiler_nif_versions: [
-        versions: ["2.15", "2.16"],
-        availability: &target_available_for_nif_version?/2
+        versions: &nif_versions/1,
+        fallback_version: &fallback_nif_versions/1
       ],
-      cc_precompiler: [cleanup: "clean"],
+      cc_precompiler: cc_precompiler(),
       # Docs
       name: "Duckdbex",
       source_url: "https://github.com/AlexR2D2/duckdbex/",
@@ -46,38 +46,66 @@ defmodule Duckdbex.MixProject do
 
   defp deps do
     [
-      {:elixir_make, "~> 0.7", runtime: false},
+      {:elixir_make, "~> 0.8", runtime: false},
       {:cc_precompiler, "~> 0.1", runtime: false},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false}
     ]
   end
 
-  def target_available_for_nif_version?(target, nif_version) do
-    if String.contains?(target, "windows") do
-      nif_version == "2.16"
+  defp nif_versions(opts) do
+    if String.contains?(opts.target, "windows") or
+       String.contains?(opts.target, "darwin") do
+      ["2.16"]
     else
-      true
+      ["2.15"]
     end
+  end
+
+  defp fallback_nif_versions(opts) do
+    hd(nif_versions(opts))
   end
 
   defp package do
     [
       files: ~w(
         lib
-        c_src/*
-        c_src/duckdb/*
+        c_src
         bin
         .formatter.exs
+        Makefile*
         mix.exs
         checksum.exs
         README.md
         LICENSE
-        Makefile*
       ),
       name: "duckdbex",
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/AlexR2D2/duckdbex/"
+        "GitHub" => "https://github.com/AlexR2D2/duckdbex",
+        "Changelog" => "https://github.com/AlexR2D2/duckdbex/blob/main/CHANGELOG.md"
+      }
+    ]
+  end
+
+  defp cc_precompiler do
+    [
+      cleanup: "clean",
+      compilers: %{
+        {:unix, :linux} => %{
+          :include_default_ones => true,
+          "x86_64-linux-musl" => "x86_64-linux-musl-",
+          "aarch64-linux-musl" => "aarch64-linux-musl-",
+          "riscv64-linux-musl" => "riscv64-linux-musl-",
+          "x86_64-linux-gnu" => "x86_64-linux-gnu-",
+          "aarch64-linux-gnu" => "aarch64-linux-gnu-",
+          "riscv64-linux-gnu" => "riscv64-linux-gnu-"
+        },
+        {:unix, :darwin} => %{
+          :include_default_ones => true
+        },
+        {:win32, :nt} => %{
+          :include_default_ones => true
+        }
       }
     ]
   end
@@ -90,7 +118,7 @@ defmodule Duckdbex.MixProject do
         "CHANGELOG.md": []
       ],
       source_ref: "v#{@version}",
-      source_url: "https://github.com/AlexR2D2/duckdbex/"
+      source_url: "https://github.com/AlexR2D2/duckdbex"
     ]
   end
 

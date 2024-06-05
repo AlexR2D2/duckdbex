@@ -280,7 +280,7 @@ namespace {
 
     if (nif::is_atom(env, term, "erlang")) {
       sink.allocator = duckdb::make_uniq<duckdb::Allocator>(nif::eddb_allocate, nif::eddb_free, nif::eddb_reallocate, nullptr);
-      sink.default_allocator = duckdb::make_shared<duckdb::Allocator>(nif::eddb_allocate, nif::eddb_free, nif::eddb_reallocate, nullptr);
+      sink.default_allocator = duckdb::make_shared_ptr<duckdb::Allocator>(nif::eddb_allocate, nif::eddb_free, nif::eddb_reallocate, nullptr);
       return true;
     }
 

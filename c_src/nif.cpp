@@ -73,10 +73,7 @@ library_version_of_storage(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   if (!enif_get_uint64(env, argv[0], &storage_format_version))
     return enif_make_badarg(env);
 
-  if (const char* lib_vsn = duckdb::GetDuckDBVersion(storage_format_version))
-    return nif::make_binary_term(env, lib_vsn, std::strlen(lib_vsn));
-  else
-    return nif::make_atom(env, "nil");
+  return nif::make_binary_term(env, duckdb::GetDuckDBVersion(storage_format_version));
 }
 
 static ERL_NIF_TERM
