@@ -20,17 +20,17 @@ jobs:
       matrix:
         job:
           - { os: "ubuntu-20.04", otp: "23", elixir: "1.14" }
-          - { os: "macos-11", otp: "24.3.4.16", elixir: "1.14.3"}
+          - { os: "macos-12", otp: "24.3.4.16", elixir: "1.14.3"}
           - { os: "windows-2019", otp: "25", elixir: "1.14"}
     steps:
       - uses: actions/checkout@v3
       - uses: erlef/setup-beam@v1
-        if: matrix.job.os != 'macos-11'
+        if: matrix.job.os != 'macos-12'
         with:
           otp-version: ${{ matrix.job.otp }}
           elixir-version: ${{ matrix.job.elixir }}
       - name: Install erlang and elixir
-        if: matrix.job.os == 'macos-11'
+        if: matrix.job.os == 'macos-12'
         run: |
           export ROOT_DIR=$(pwd)
 
@@ -84,7 +84,7 @@ jobs:
       - name: Create precompiled library
         shell: bash
         run: |
-          if [ "${{ matrix.job.os }}" = "macos-11" ]; then
+          if [ "${{ matrix.job.os }}" = "macos-12" ]; then
             export PATH=$(pwd)/cache/otp/usr/local/bin:$(pwd)/./cache/elixir/elixir-${{ matrix.job.elixir }}/bin:${PATH}
             export ERL_ROOTDIR=$(pwd)/cache/otp/usr/local/lib/erlang
           elif [ "${{ matrix.job.os }}" = "ubuntu-20.04" ]; then
