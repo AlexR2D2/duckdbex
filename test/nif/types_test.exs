@@ -378,6 +378,13 @@ defmodule Duckdbex.Nif.QueryTest do
     assert [] = NIF.fetch_all(r)
   end
 
+  test "ARRAY", %{conn: conn} do
+    assert {:ok, _} = NIF.query(conn, "CREATE TABLE an_array(embeddings FLOAT[3])")
+    assert {:ok, _} = NIF.query(conn, "INSERT INTO an_array VALUES ([1, 2, 3])")
+    assert {:ok, r} = NIF.query(conn, "SELECT * FROM an_array")
+    assert [[[1.0, 2.0, 3.0]]] = NIF.fetch_all(r)
+  end
+
   test "MAP", %{conn: conn} do
     assert {:ok, r} = NIF.query(conn, "select map();")
     assert [[%{}]] = NIF.fetch_all(r)

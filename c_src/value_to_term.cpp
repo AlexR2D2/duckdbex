@@ -190,6 +190,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         sink = make_binary_term(env, varchar.c_str(), varchar.size());
         return true;
       }
+    case duckdb::LogicalTypeId::ARRAY:
     case duckdb::LogicalTypeId::LIST: {
         auto& list = duckdb::ListValue::GetChildren(value);
         std::vector<ERL_NIF_TERM> term_array(list.size());
