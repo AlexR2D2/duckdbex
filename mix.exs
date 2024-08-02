@@ -52,13 +52,8 @@ defmodule Duckdbex.MixProject do
     ]
   end
 
-  defp nif_versions(opts) do
-    if String.contains?(opts.target, "windows") or
-         String.contains?(opts.target, "darwin") do
-      ["2.16"]
-    else
-      ["2.15"]
-    end
+  defp nif_versions(_opts) do
+    ["2.16", "2.17"]
   end
 
   defp fallback_nif_versions(opts) do
@@ -92,18 +87,11 @@ defmodule Duckdbex.MixProject do
       cleanup: "clean",
       compilers: %{
         {:unix, :linux} => %{
-          :include_default_ones => true,
-          "x86_64-linux-musl" => "x86_64-linux-musl-",
-          "aarch64-linux-musl" => "aarch64-linux-musl-",
-          "riscv64-linux-musl" => "riscv64-linux-musl-",
           "x86_64-linux-gnu" => "x86_64-linux-gnu-",
           "aarch64-linux-gnu" => "aarch64-linux-gnu-",
           "riscv64-linux-gnu" => "riscv64-linux-gnu-"
         },
         {:unix, :darwin} => %{
-          :include_default_ones => true
-        },
-        {:win32, :nt} => %{
           :include_default_ones => true
         }
       }
