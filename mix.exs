@@ -92,7 +92,8 @@ defmodule Duckdbex.MixProject do
           "riscv64-linux-gnu" => "riscv64-linux-gnu-"
         },
         {:unix, :darwin} => %{
-          :include_default_ones => true
+          "aarch64-apple-darwin" => "aarch64-apple-darwin-",
+          "x86_64-apple-darwin" => "x86_64-apple-darwin-"
         }
       }
     ]
