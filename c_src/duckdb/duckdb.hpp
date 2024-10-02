@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "fa5c2fe15f"
-#define DUCKDB_VERSION "v1.1.0"
+#define DUCKDB_SOURCE_ID "af39bd0dcf"
+#define DUCKDB_VERSION "v1.1.1"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 1
-#define DUCKDB_PATCH_VERSION "0"
+#define DUCKDB_PATCH_VERSION "1"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -7700,7 +7700,7 @@ class FileBuffer;
 class BufferHandle {
 public:
 	DUCKDB_API BufferHandle();
-	DUCKDB_API BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node);
+	DUCKDB_API explicit BufferHandle(shared_ptr<BlockHandle> handle);
 	DUCKDB_API ~BufferHandle();
 	// disable copy constructors
 	BufferHandle(const BufferHandle &other) = delete;
@@ -7735,7 +7735,7 @@ private:
 	//! The block handle
 	shared_ptr<BlockHandle> handle;
 	//! The managed buffer node
-	FileBuffer *node;
+	optional_ptr<FileBuffer> node;
 };
 
 } // namespace duckdb
@@ -8745,88 +8745,8 @@ struct ArrowArrayStream {
 
 
 
-
-
-
-
-
-
-namespace duckdb {
-
-class DataChunk;
-
-//! Abstract chunk fetcher
-class ChunkScanState {
-public:
-	explicit ChunkScanState();
-	virtual ~ChunkScanState();
-
-public:
-	ChunkScanState(const ChunkScanState &other) = delete;
-	ChunkScanState(ChunkScanState &&other) = default;
-	ChunkScanState &operator=(const ChunkScanState &other) = delete;
-	ChunkScanState &operator=(ChunkScanState &&other) = default;
-
-public:
-	virtual bool LoadNextChunk(ErrorData &error) = 0;
-	virtual bool HasError() const = 0;
-	virtual ErrorData &GetError() = 0;
-	virtual const vector<LogicalType> &Types() const = 0;
-	virtual const vector<string> &Names() const = 0;
-	idx_t CurrentOffset() const;
-	idx_t RemainingInChunk() const;
-	DataChunk &CurrentChunk();
-	bool ChunkIsEmpty() const;
-	bool Finished() const;
-	bool ScanStarted() const;
-	void IncreaseOffset(idx_t increment, bool unsafe = false);
-
-protected:
-	idx_t offset = 0;
-	bool finished = false;
-	unique_ptr<DataChunk> current_chunk;
-};
-
-} // namespace duckdb
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/main/client_properties.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-namespace duckdb {
-
-enum class ArrowOffsetSize : uint8_t { REGULAR, LARGE };
-
-//! A set of properties from the client context that can be used to interpret the query result
-struct ClientProperties {
-	ClientProperties(string time_zone_p, ArrowOffsetSize arrow_offset_size_p, bool arrow_use_list_view_p,
-	                 bool produce_arrow_string_view_p, bool lossless_conversion)
-	    : time_zone(std::move(time_zone_p)), arrow_offset_size(arrow_offset_size_p),
-	      arrow_use_list_view(arrow_use_list_view_p), arrow_lossless_conversion(lossless_conversion) {
-	}
-	ClientProperties() {};
-	string time_zone = "UTC";
-	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
-	bool arrow_use_list_view = false;
-	bool produce_arrow_string_view = false;
-	bool arrow_lossless_conversion = false;
-};
-} // namespace duckdb
-
-
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
 namespace duckdb {
-class QueryResult;
-class DataChunk;
 
 class ArrowSchemaWrapper {
 public:
@@ -8859,25 +8779,16 @@ public:
 public:
 	void GetSchema(ArrowSchemaWrapper &schema);
 
-	shared_ptr<ArrowArrayWrapper> GetNextChunk();
+	virtual shared_ptr<ArrowArrayWrapper> GetNextChunk();
 
 	const char *GetError();
 
-	~ArrowArrayStreamWrapper();
+	virtual ~ArrowArrayStreamWrapper();
 	ArrowArrayStreamWrapper() {
 		arrow_array_stream.release = nullptr;
 	}
 };
 
-class ArrowUtil {
-public:
-	static bool TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
-	                          idx_t &result_count, ErrorData &error);
-	static idx_t FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out);
-
-private:
-	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, ErrorData &error);
-};
 } // namespace duckdb
 
 
@@ -10730,6 +10641,51 @@ public:
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/parser/simplified_token.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+namespace duckdb {
+
+//! Simplified tokens are a simplified (dense) representation of the lexer
+//! Used for simple syntax highlighting in the tests
+enum class SimplifiedTokenType : uint8_t {
+	SIMPLIFIED_TOKEN_IDENTIFIER,
+	SIMPLIFIED_TOKEN_NUMERIC_CONSTANT,
+	SIMPLIFIED_TOKEN_STRING_CONSTANT,
+	SIMPLIFIED_TOKEN_OPERATOR,
+	SIMPLIFIED_TOKEN_KEYWORD,
+	SIMPLIFIED_TOKEN_COMMENT
+};
+
+struct SimplifiedToken {
+	SimplifiedTokenType type;
+	idx_t start;
+};
+
+enum class KeywordCategory : uint8_t {
+	KEYWORD_RESERVED,
+	KEYWORD_UNRESERVED,
+	KEYWORD_TYPE_FUNC,
+	KEYWORD_COL_NAME,
+	KEYWORD_NONE
+};
+
+struct ParserKeyword {
+	string name;
+	KeywordCategory category;
+};
+
+} // namespace duckdb
+
 
 namespace duckdb {
 
@@ -10737,6 +10693,8 @@ class KeywordHelper {
 public:
 	//! Returns true if the given text matches a keyword of the parser
 	static bool IsKeyword(const string &text);
+
+	static KeywordCategory KeywordCategoryType(const string &text);
 
 	static string EscapeQuotes(const string &text, char quote = '"');
 
@@ -11526,7 +11484,6 @@ public:
 
 	static int Sign(hugeint_t n);
 	static hugeint_t Abs(hugeint_t n);
-
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops
 	// this is because they seem to be consistently much faster (benchmarked on a Macbook Pro)
@@ -14872,6 +14829,38 @@ struct StatementProperties {
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/main/client_properties.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+namespace duckdb {
+
+enum class ArrowOffsetSize : uint8_t { REGULAR, LARGE };
+
+//! A set of properties from the client context that can be used to interpret the query result
+struct ClientProperties {
+	ClientProperties(string time_zone_p, ArrowOffsetSize arrow_offset_size_p, bool arrow_use_list_view_p,
+	                 bool produce_arrow_string_view_p, bool lossless_conversion)
+	    : time_zone(std::move(time_zone_p)), arrow_offset_size(arrow_offset_size_p),
+	      arrow_use_list_view(arrow_use_list_view_p), arrow_lossless_conversion(lossless_conversion) {
+	}
+	ClientProperties() {};
+	string time_zone = "UTC";
+	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
+	bool arrow_use_list_view = false;
+	bool produce_arrow_string_view = false;
+	bool arrow_lossless_conversion = false;
+};
+} // namespace duckdb
 
 
 namespace duckdb {
@@ -15165,6 +15154,7 @@ enum class PendingExecutionResult : uint8_t {
 //
 //
 //===----------------------------------------------------------------------===//
+
 
 
 
@@ -21144,6 +21134,7 @@ public:
 
 
 
+
 namespace duckdb {
 
 class Binder;
@@ -21308,7 +21299,7 @@ protected:
 	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function,
 	                          const LogicalType &list_child_type);
 
-	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	virtual unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 	LogicalType ResolveOperatorType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
 	LogicalType ResolveCoalesceType(OperatorExpression &op, vector<unique_ptr<Expression>> &children);
@@ -21341,6 +21332,7 @@ protected:
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const string &function_name);
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func);
+	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);
 };
 
 } // namespace duckdb
@@ -23168,6 +23160,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_varint
 	DUCKDB_TYPE_VARINT = 35,
+	// SQLNULL type
+	DUCKDB_TYPE_SQLNULL = 36,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
@@ -23901,8 +23895,8 @@ Returns the number of rows present in the result object.
 * @return The number of rows present in the result object.
 */
 DUCKDB_API idx_t duckdb_row_count(duckdb_result *result);
-#endif
 
+#endif
 /*!
 Returns the number of rows changed by the query stored in the result. This is relevant only for INSERT/UPDATE/DELETE
 queries. For other queries the rows_changed will be 0.
@@ -23933,9 +23927,7 @@ printf("Data for row %d: %d\n", row, data[row]);
 * @return The column data of the specified column.
 */
 DUCKDB_API void *duckdb_column_data(duckdb_result *result, idx_t col);
-#endif
 
-#ifndef DUCKDB_API_NO_DEPRECATED
 /*!
 **DEPRECATED**: Prefer using `duckdb_result_get_chunk` instead.
 
@@ -23958,8 +23950,8 @@ if (nullmask[row]) {
 * @return The nullmask of the specified column.
 */
 DUCKDB_API bool *duckdb_nullmask_data(duckdb_result *result, idx_t col);
-#endif
 
+#endif
 /*!
 Returns the error message contained within the result. The error is only set if `duckdb_query` returns `DuckDBError`.
 
@@ -24025,6 +24017,7 @@ Returns the number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 
+#endif
 /*!
 Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
 
@@ -24033,7 +24026,6 @@ Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on er
 */
 DUCKDB_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 
-#endif
 //===--------------------------------------------------------------------===//
 // Safe Fetch Functions
 //===--------------------------------------------------------------------===//
@@ -24698,8 +24690,8 @@ Note that the result must be freed with `duckdb_destroy_result`.
 */
 DUCKDB_API duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_result *out_result);
-#endif
 
+#endif
 //===--------------------------------------------------------------------===//
 // Extract Statements
 //===--------------------------------------------------------------------===//
@@ -24789,8 +24781,8 @@ Note that after calling `duckdb_pending_prepared_streaming`, the pending result 
 */
 DUCKDB_API duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
                                                           duckdb_pending_result *out_result);
-#endif
 
+#endif
 /*!
 Closes the pending result and de-allocates all memory allocated for the result.
 
@@ -27073,8 +27065,8 @@ It is not known beforehand how many chunks will be returned by this result.
 * @return The resulting data chunk. Returns `NULL` if the result has an error.
 */
 DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
-#endif
 
+#endif
 /*!
 Fetches a data chunk from a duckdb_result. This function should be called repeatedly until the result is exhausted.
 
@@ -29610,6 +29602,8 @@ private:
 	unique_ptr<BoundTableRef> BindShowTable(ShowRef &ref);
 	unique_ptr<BoundTableRef> BindSummarize(ShowRef &ref);
 
+	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+
 private:
 	Binder(ClientContext &context, shared_ptr<Binder> parent, BinderType binder_type);
 };
@@ -29968,7 +29962,7 @@ struct DBConfigOptions {
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
-	idx_t allocator_bulk_deallocation_flush_threshold = 1073741824ULL;
+	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
 	//! Whether the allocator background thread is enabled
 	bool allocator_background_threads = false;
 	//! DuckDB API surface
@@ -30088,7 +30082,7 @@ public:
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	static idx_t GetSystemAvailableMemory(FileSystem &fs);
-	static idx_t ParseMemoryLimitSlurm(const string &arg);
+	static optional_idx ParseMemoryLimitSlurm(const string &arg);
 	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
@@ -31097,7 +31091,7 @@ struct HTTPProxyUsername {
 };
 
 struct HTTPProxyPassword {
-	static constexpr const char *Name = "http_proxy";
+	static constexpr const char *Name = "http_proxy_password";
 	static constexpr const char *Description = "Password for HTTP proxy";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
@@ -31187,7 +31181,9 @@ struct StreamingBufferSize {
 struct MaximumTempDirectorySize {
 	static constexpr const char *Name = "max_temp_directory_size";
 	static constexpr const char *Description =
-	    "The maximum amount of data stored inside the 'temp_directory' (when set) (e.g. 1GB)";
+	    "The maximum amount of data stored inside the 'temp_directory' (when set). If the `temp_directory` is set to "
+	    "an existing directory, this option defaults to the available disk space on "
+	    "that drive. Otherwise, it defaults to 0 (implying that the temporary directory is not used).";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
@@ -32756,6 +32752,7 @@ struct ParsedExtensionMetaData {
 	string duckdb_capi_version;
 	string extension_version;
 	string signature;
+	string extension_abi_metadata;
 
 	bool AppearsValid() {
 		return magic_value == EXPECTED_MAGIC_VALUE;
