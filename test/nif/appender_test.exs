@@ -380,4 +380,32 @@ defmodule Duckdbex.Nif.AppenderTest do
 
     assert ^result = Duckdbex.NIF.fetch_all(r)
   end
+
+  test "appender schema table", %{conn: conn} do
+    {:ok, _} =
+      Duckdbex.NIF.query(conn, """
+          create schema schema_1;
+      """)
+
+    {:ok, _} =
+      Duckdbex.NIF.query(conn, """
+        CREATE TABLE schema_1.appender_test_1(
+          bigint BIGINT,
+        );
+      """)
+
+    assert {:ok, appender} = Duckdbex.NIF.appender(conn, "schema_1", "appender_test_1")
+
+    assert :ok =
+             Duckdbex.NIF.appender_add_row(appender, [
+               123,
+             ])
+
+    assert :ok = Duckdbex.NIF.appender_flush(appender)
+
+    {:ok, r} = Duckdbex.NIF.query(conn, "SELECT * FROM schema_1.appender_test_1;")
+
+    assert [[123]] =
+             Duckdbex.NIF.fetch_all(r)
+  end
 end

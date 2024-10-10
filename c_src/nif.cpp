@@ -346,21 +346,50 @@ fetch_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 static ERL_NIF_TERM
 appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  erlang_resource<duckdb::Connection>* connres = nullptr;
-  if(!enif_get_resource(env, argv[0], connection_nif_type, (void**)&connres))
+  if (argc < 2 || argc > 3) {
     return enif_make_badarg(env);
+  }
+
+  erlang_resource<duckdb::Connection>* connres = nullptr;
+  if (!enif_get_resource(env, argv[0], connection_nif_type, (void**)&connres)) {
+    return enif_make_badarg(env);
+  }
 
   ErlNifBinary binary_table_name;
-  if (!enif_inspect_binary(env, argv[1], &binary_table_name))
-    return enif_make_badarg(env);
+  if (argc == 2) {
+    // Only table name is provided
+    if (!enif_inspect_binary(env, argv[1], &binary_table_name)) {
+      return enif_make_badarg(env);
+    }
 
-  std::string table_name((const char*)binary_table_name.data, binary_table_name.size);
+    std::string table_name((const char*)binary_table_name.data, binary_table_name.size);
 
-  if (!connres->data->TableInfo(table_name))
-    return nif::make_error_tuple(env, "Table '" + table_name + "' could not be found");
+    if (!connres->data->TableInfo(table_name))
+      return nif::make_error_tuple(env, "Table '" + table_name + "' could not be found");
 
-  ErlangResourceBuilder<duckdb::Appender> resource_builder(appender_nif_type, *connres->data, table_name);
-  return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
+    ErlangResourceBuilder<duckdb::Appender> resource_builder(appender_nif_type, *connres->data, table_name);
+    return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
+  } else {
+    ErlNifBinary binary_schema_name;
+
+    // Schema name and table name are provided
+    if (!enif_inspect_binary(env, argv[1], &binary_schema_name)) {
+      return enif_make_badarg(env);
+    }
+    if (!enif_inspect_binary(env, argv[2], &binary_table_name)) {
+      return enif_make_badarg(env);
+    }
+
+    std::string schema_name((const char*)binary_schema_name.data, binary_schema_name.size);
+    std::string table_name((const char*)binary_table_name.data, binary_table_name.size);
+
+    if (!connres->data->TableInfo(schema_name, table_name)) {
+      return nif::make_error_tuple(env, "Table '" + schema_name + "." + table_name + "' could not be found");
+    }
+
+    ErlangResourceBuilder<duckdb::Appender> resource_builder(appender_nif_type, *connres->data, schema_name, table_name);
+    return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
+  }
 }
 
 static ERL_NIF_TERM
@@ -599,6 +628,7 @@ static ErlNifFunc nif_funcs[] = {
   {"fetch_chunk", 1, fetch_chunk, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_all", 1, fetch_all, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender", 2, appender, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"appender", 3, appender, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender_add_row", 2, appender_add_row, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender_add_rows", 2, appender_add_rows, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender_flush", 1, appender_flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
