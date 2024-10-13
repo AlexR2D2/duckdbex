@@ -46,6 +46,9 @@ defmodule Duckdbex.NIF do
   @spec appender(connection(), binary()) :: {:ok, appender()} | {:error, reason()}
   def appender(_connection, _table_name), do: :erlang.nif_error(:not_loaded)
 
+  @spec appender(connection(), binary(), binary()) :: {:ok, appender()} | {:error, reason()}
+  def appender(_connection, _schema_name, _table_name), do: :erlang.nif_error(:not_loaded)
+
   @spec appender_add_row(appender(), list()) :: :ok | {:error, reason()}
   def appender_add_row(_appender, _row), do: :erlang.nif_error(:not_loaded)
 
