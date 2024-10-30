@@ -215,7 +215,7 @@ defmodule Duckdbex do
     iex> {:ok, _appender} = Duckdbex.appender(conn, "schema_1", "table_1")
   """
   @spec appender(connection(), binary(), binary()) :: {:ok, appender()} | {:error, reason()}
-  def appender(connection, schema_name, table_name) when is_reference(connection) and is_binary(table_name),
+  def appender(connection, schema_name, table_name) when is_reference(connection) and is_binary(schema_name) and is_binary(table_name),
     do: Duckdbex.NIF.appender(connection, schema_name, table_name)
 
   @doc """
