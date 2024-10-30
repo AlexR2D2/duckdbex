@@ -202,6 +202,23 @@ defmodule Duckdbex do
     do: Duckdbex.NIF.appender(connection, table_name)
 
   @doc """
+  Creates the Appender to load bulk data into a DuckDB database with schema name.
+
+  This is the recommended way to load bulk data.
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, _res} = Duckdbex.query(conn, "CREATE SCHEMA schema_1")
+    iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE schema_1.table_1 (data INTEGER);")
+    iex> {:ok, _appender} = Duckdbex.appender(conn, "schema_1", "table_1")
+  """
+  @spec appender(connection(), binary(), binary()) :: {:ok, appender()} | {:error, reason()}
+  def appender(connection, schema_name, table_name) when is_reference(connection) and is_binary(schema_name) and is_binary(table_name),
+    do: Duckdbex.NIF.appender(connection, schema_name, table_name)
+
+  @doc """
   Append row into a DuckDB database table.
 
   Any values added to the appender are cached prior to being inserted into the database system for performance reasons. That means that, while appending, the rows might not be immediately visible in the system. The cache is automatically flushed when the appender goes out of scope or when Duckdbex.appender_close(appender) is called. The cache can also be manually flushed using the Duckdbex.appender_flush(appender) method. After either flush or close is called, all the data has been written to the database system.
