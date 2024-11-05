@@ -93,10 +93,8 @@ nif::make_binary_term(ErlNifEnv* env, const char* cstr, size_t len) {
     memcpy(enif_make_new_binary(env, len, &result), cstr, len);
     return result;
   } else {
-    return enif_make_atom(env, "null");
+    return enif_make_atom(env, "nil");
   };
-
-  // return enif_make_string(env, cstr, ERL_NIF_LATIN1);
 }
 
 ERL_NIF_TERM

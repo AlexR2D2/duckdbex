@@ -37,6 +37,7 @@ class ErlangResourceBuilder {
       if (resource) {
         resource->data = nullptr;
         enif_release_resource(resource);
+        resource = nullptr;
       }
     }
 
@@ -45,10 +46,14 @@ class ErlangResourceBuilder {
     }
 
     ERL_NIF_TERM make_and_release_resource(ErlNifEnv* env) {
-      ERL_NIF_TERM term = enif_make_resource(env, resource);
-      enif_release_resource(resource);
-      resource = nullptr;
-      return term;
+      if (resource) {
+        ERL_NIF_TERM term = enif_make_resource(env, resource);
+        enif_release_resource(resource);
+        resource = nullptr;
+        return term;
+      } else {
+        throw std::runtime_error("resource is empty");
+      }
     }
   private:
     Resource* resource;

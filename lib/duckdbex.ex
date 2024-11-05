@@ -215,8 +215,9 @@ defmodule Duckdbex do
     iex> {:ok, _appender} = Duckdbex.appender(conn, "schema_1", "table_1")
   """
   @spec appender(connection(), binary(), binary()) :: {:ok, appender()} | {:error, reason()}
-  def appender(connection, schema_name, table_name) when is_reference(connection) and is_binary(schema_name) and is_binary(table_name),
-    do: Duckdbex.NIF.appender(connection, schema_name, table_name)
+  def appender(connection, schema_name, table_name)
+      when is_reference(connection) and is_binary(schema_name) and is_binary(table_name),
+      do: Duckdbex.NIF.appender(connection, schema_name, table_name)
 
   @doc """
   Append row into a DuckDB database table.
@@ -395,7 +396,7 @@ defmodule Duckdbex do
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE hugeints(value HUGEINT);")
     iex> {:ok, _res} = Duckdbex.query(conn, "INSERT INTO hugeints VALUES (98233720368547758080000::hugeint);")
     iex> hugeint = Duckdbex.integer_to_hugeint(98233720368547758080000)
-    iex> {:ok, res} = Duckdbex.query(conn, "SELECT * FROM hugeints WHERE value = $1", [{:hugeint, hugeint}])
+    iex> {:ok, res} = Duckdbex.query(conn, "SELECT * FROM hugeints WHERE value = $1", [hugeint])
     iex> [[{5325, 4808176044395724800}]] = Duckdbex.fetch_all(res)
   """
   def integer_to_hugeint(integer) when is_integer(integer) do
