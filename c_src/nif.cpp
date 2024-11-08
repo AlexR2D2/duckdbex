@@ -9,16 +9,6 @@
 #include <iostream>
 
 /*
- * Resources
- */
-
-static ErlNifResourceType* database_nif_type = nullptr;
-static ErlNifResourceType* connection_nif_type = nullptr;
-static ErlNifResourceType* query_result_nif_type = nullptr;
-static ErlNifResourceType* prepared_statement_nif_type = nullptr;
-static ErlNifResourceType* appender_nif_type = nullptr;
-
-/*
  * DuckDB API
  */
 
@@ -27,8 +17,8 @@ number_of_threads(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
-  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
+  auto dbres = get_resource<duckdb::DuckDB>(env, argv[0]);
+  if (!dbres)
     return enif_make_badarg(env);
 
   return enif_make_uint64(env, dbres->data->NumberOfThreads());
@@ -39,8 +29,8 @@ extension_is_loaded(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
-  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
+  auto dbres = get_resource<duckdb::DuckDB>(env, argv[0]);
+  if (!dbres)
     return enif_make_badarg(env);
 
   ErlNifBinary extension;
@@ -115,8 +105,8 @@ open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 static ERL_NIF_TERM
 connection(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  erlang_resource<duckdb::DuckDB>* dbres = nullptr;
-  if(!enif_get_resource(env, argv[0], database_nif_type, (void**)&dbres))
+  auto dbres = get_resource<duckdb::DuckDB>(env, argv[0]);
+  if (!dbres)
     return enif_make_badarg(env);
 
   ErlangResourceBuilder<duckdb::Connection> resource_builder(connection_nif_type, *dbres->data);
@@ -126,8 +116,8 @@ connection(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 static ERL_NIF_TERM
 query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  erlang_resource<duckdb::Connection>* connres = nullptr;
-  if(!enif_get_resource(env, argv[0], connection_nif_type, (void**)&connres))
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
     return enif_make_badarg(env);
 
   ErlNifBinary sql_stmt;
@@ -176,8 +166,8 @@ query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 static ERL_NIF_TERM
 prepare_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  erlang_resource<duckdb::Connection>* connres = nullptr;
-  if(!enif_get_resource(env, argv[0], connection_nif_type, (void**)&connres))
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
     return enif_make_badarg(env);
 
   ErlNifBinary sql_stmt;
@@ -197,8 +187,8 @@ prepare_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 static ERL_NIF_TERM
 execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  erlang_resource<duckdb::PreparedStatement>* stmtres = nullptr;
-  if(!enif_get_resource(env, argv[0], prepared_statement_nif_type, (void**)&stmtres))
+  auto stmtres = get_resource<duckdb::PreparedStatement>(env, argv[0]);
+  if (!stmtres)
     return enif_make_badarg(env);
 
   duckdb::vector<duckdb::Value> query_params;
@@ -241,8 +231,8 @@ columns(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::QueryResult>* result = nullptr;
-  if(!enif_get_resource(env, argv[0], query_result_nif_type, (void**)&result))
+  auto result = get_resource<duckdb::QueryResult>(env, argv[0]);
+  if (!result)
     return enif_make_badarg(env);
 
   if (result->data->HasError()) {
@@ -267,8 +257,8 @@ fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::QueryResult>* result = nullptr;
-  if(!enif_get_resource(env, argv[0], query_result_nif_type, (void**)&result))
+  auto result = get_resource<duckdb::QueryResult>(env, argv[0]);
+  if (!result)
     return enif_make_badarg(env);
 
   if (result->data->HasError()) {
@@ -308,8 +298,8 @@ fetch_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::QueryResult>* result = nullptr;
-  if(!enif_get_resource(env, argv[0], query_result_nif_type, (void**)&result))
+  auto result = get_resource<duckdb::QueryResult>(env, argv[0]);
+  if (!result)
     return enif_make_badarg(env);
 
   if (result->data->HasError()) {
@@ -350,10 +340,9 @@ appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
   }
 
-  erlang_resource<duckdb::Connection>* connres = nullptr;
-  if (!enif_get_resource(env, argv[0], connection_nif_type, (void**)&connres)) {
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
     return enif_make_badarg(env);
-  }
 
   ErlNifBinary binary_table_name;
   if (argc == 2) {
@@ -397,8 +386,8 @@ appender_add_row(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::Appender>* apres = nullptr;
-  if(!enif_get_resource(env, argv[0], appender_nif_type, (void**)&apres))
+  auto apres = get_resource<duckdb::Appender>(env, argv[0]);
+  if (!apres)
     return enif_make_badarg(env);
 
   if (!enif_is_list(env, argv[1]))
@@ -434,8 +423,8 @@ appender_add_rows(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 2)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::Appender>* apres = nullptr;
-  if(!enif_get_resource(env, argv[0], appender_nif_type, (void**)&apres))
+  auto apres = get_resource<duckdb::Appender>(env, argv[0]);
+  if (!apres)
     return enif_make_badarg(env);
 
   if (!enif_is_list(env, argv[1]))
@@ -474,8 +463,8 @@ appender_flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::Appender>* apres = nullptr;
-  if(!enif_get_resource(env, argv[0], appender_nif_type, (void**)&apres))
+  auto apres = get_resource<duckdb::Appender>(env, argv[0]);
+  if (!apres)
     return enif_make_badarg(env);
 
   apres->data->Flush();
@@ -488,11 +477,35 @@ appender_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
 
-  erlang_resource<duckdb::Appender>* apres = nullptr;
-  if(!enif_get_resource(env, argv[0], appender_nif_type, (void**)&apres))
+  auto apres = get_resource<duckdb::Appender>(env, argv[0]);
+  if (!apres)
     return enif_make_badarg(env);
 
   apres->data->Close();
+  apres->data = nullptr;
+
+  return nif::make_atom(env, "ok");
+}
+
+static ERL_NIF_TERM
+release(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  if (auto res = get_resource<duckdb::Appender>(env, argv[0]))
+    res->data = nullptr;
+
+  if (auto res = get_resource<duckdb::PreparedStatement>(env, argv[0]))
+    res->data = nullptr;
+
+  if (auto res = get_resource<duckdb::QueryResult>(env, argv[0]))
+    res->data = nullptr;
+
+  if (auto res = get_resource<duckdb::Connection>(env, argv[0]))
+    res->data = nullptr;
+
+  if (auto res = get_resource<duckdb::DuckDB>(env, argv[0]))
+    res->data = nullptr;
 
   return nif::make_atom(env, "ok");
 }
@@ -632,7 +645,8 @@ static ErlNifFunc nif_funcs[] = {
   {"appender_add_row", 2, appender_add_row, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender_add_rows", 2, appender_add_rows, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender_flush", 1, appender_flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"appender_close", 1, appender_close, ERL_NIF_DIRTY_JOB_IO_BOUND}
+  {"appender_close", 1, appender_close, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"release", 1, release, ERL_NIF_DIRTY_JOB_IO_BOUND}
 };
 
 ERL_NIF_INIT(Elixir.Duckdbex.NIF, nif_funcs, on_load, on_reload, on_upgrade, NULL)

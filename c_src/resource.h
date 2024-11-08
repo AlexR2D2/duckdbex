@@ -2,10 +2,28 @@
 #include "duckdb.hpp"
 #include <erl_nif.h>
 
+/*
+ * Erlang resources
+ */
+
+static ErlNifResourceType* database_nif_type = nullptr;
+static ErlNifResourceType* connection_nif_type = nullptr;
+static ErlNifResourceType* query_result_nif_type = nullptr;
+static ErlNifResourceType* prepared_statement_nif_type = nullptr;
+static ErlNifResourceType* appender_nif_type = nullptr;
+
+/*
+ * Erlang resource holds DuckDB object
+ */
+
 template<class T>
 struct erlang_resource {
   std::unique_ptr<T> data;
 };
+
+/*
+ * Erlang resource builder
+ */
 
 template<class Data>
 class ErlangResourceBuilder {
@@ -58,3 +76,59 @@ class ErlangResourceBuilder {
   private:
     Resource* resource;
 };
+
+/*
+ * Erlang resource getters
+ */
+
+template <class T>
+erlang_resource<T>* get_resource(ErlNifEnv* env, ERL_NIF_TERM term);
+
+template <>
+erlang_resource<duckdb::DuckDB>* get_resource(ErlNifEnv* env, ERL_NIF_TERM term) {
+  erlang_resource<duckdb::DuckDB>* resource = nullptr;
+  if(enif_get_resource(env, term, database_nif_type, (void**)&resource) && resource->data)
+    return resource;
+  return nullptr;
+}
+
+template <>
+erlang_resource<duckdb::Connection>* get_resource(ErlNifEnv* env, ERL_NIF_TERM term) {
+  erlang_resource<duckdb::Connection>* resource = nullptr;
+  if(enif_get_resource(env, term, connection_nif_type, (void**)&resource) && resource->data)
+    return resource;
+  return nullptr;
+}
+
+template <>
+erlang_resource<duckdb::QueryResult>* get_resource(ErlNifEnv* env, ERL_NIF_TERM term) {
+  erlang_resource<duckdb::QueryResult>* resource = nullptr;
+  if(enif_get_resource(env, term, query_result_nif_type, (void**)&resource) && resource->data)
+    return resource;
+  return nullptr;
+}
+
+template <>
+erlang_resource<duckdb::PreparedStatement>* get_resource(ErlNifEnv* env, ERL_NIF_TERM term) {
+  erlang_resource<duckdb::PreparedStatement>* resource = nullptr;
+  if(enif_get_resource(env, term, prepared_statement_nif_type, (void**)&resource) && resource->data)
+    return resource;
+  return nullptr;
+}
+
+template <>
+erlang_resource<duckdb::Appender>* get_resource(ErlNifEnv* env, ERL_NIF_TERM term) {
+  erlang_resource<duckdb::Appender>* resource = nullptr;
+  if(enif_get_resource(env, term, appender_nif_type, (void**)&resource) && resource->data)
+    return resource;
+  return nullptr;
+}
+
+template <class T>
+erlang_resource<T>* get_resource(ErlNifEnv* env, ERL_NIF_TERM term, ErlNifResourceType* resource_type) {
+  erlang_resource<T>* resource = nullptr;
+  if(enif_get_resource(env, term, resource_type, (void**)&resource) && resource->data)
+    return resource;
+
+  return nullptr;
+}

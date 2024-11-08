@@ -33,4 +33,7 @@ namespace nif {
 
   bool
   is_atom(ErlNifEnv* env, ERL_NIF_TERM term, const char* expected_atom);
+
+  bool
+  atom_to_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string&);
 }

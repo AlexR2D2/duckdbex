@@ -308,7 +308,7 @@ Duckdbex.query(conn, "CREATE TABLE map_table (map_col MAP(INT, DOUBLE));")
 Duckdbex.query(conn, "INSERT INTO map_table VALUES (map([1, 2], [2.98, 3.14])), (map([3, 4], [9.8, 1.6]));")
 
 {:ok, r} = Duckdbex.query(conn, "SELECT * FROM map_table")
-[[%{1 => 2.98, 2 => 3.14}], [%{3 => 9.8, 4 => 1.6}]] = Duckdbex.fetch_all(r)
+[[[{1, 2.98}, {2, 3.14}]], [[{3, 9.8}, {4, 1.6}]]] = Duckdbex.fetch_all(r)
 ```
 
 ### UNION
@@ -320,7 +320,7 @@ A UNION type (not to be confused with the SQL UNION operator) is a nested type c
 {:ok, _} = Duckdbex.query(conn, "CREATE TABLE tbl1(u UNION(num INT, str VARCHAR));")
 {:ok, _} = Duckdbex.query(conn, "INSERT INTO tbl1 values (1) , ('two') , (union_value(str := 'three'));")
 {:ok, r} = Duckdbex.query(conn, "SELECT u from tbl1;")
-[[%{"num" => 1}], [%{"str" => "two"}], [%{"str" => "three"}]] = Duckdbex.fetch_all(r)
+[[{"num", 1}], [{"str", "two"}], [{"str", "three"}]] = Duckdbex.fetch_all(r)
 ```
 
 ### ENUM
@@ -331,7 +331,7 @@ The ENUM type represents a dictionary data structure with all possible unique va
 {:ok, _} = Duckdbex.query(conn, "CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');")
 
 {:ok, _} = Duckdbex.query(conn, "CREATE TABLE person (name text, current_mood mood);")
-{:ok, _} = Duckdbex.query(conn, "INSERT INTO person VALUES ('Pedro','happy'), ('Mark', NULL), ('Pagliacci', 'sad'), ackey', 'ok');")
+{:ok, _} = Duckdbex.query(conn, "INSERT INTO person VALUES ('Pedro','happy'), ('Mark', NULL), ('Pagliacci', 'sad'), ('ackey', 'ok');")
 
 {:ok, r} = Duckdbex.query(conn, "SELECT * FROM person WHERE current_mood = 'sad';")
 [["Pagliacci", "sad"]] = Duckdbex.fetch_all(r)

@@ -752,7 +752,7 @@ bool nif::term_to_list(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalT
     return false;
 
   if (list_length == 0) {
-    sink = move(duckdb::Value::EMPTYLIST(child_type));
+    sink = move(duckdb::Value::LIST(child_type, std::vector<duckdb::Value>()));
     return true;
   }
 

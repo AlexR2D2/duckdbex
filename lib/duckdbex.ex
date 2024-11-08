@@ -274,7 +274,7 @@ defmodule Duckdbex do
     do: Duckdbex.NIF.appender_flush(appender)
 
   @doc """
-  Flush the changes made by the appender and close it.
+  Flush the changes made by the appender and close it. Also it will release appender resource (see Duckdbex.release(resource))
 
   The appender cannot be used after this point
 
@@ -294,6 +294,26 @@ defmodule Duckdbex do
   @spec appender_close(appender()) :: :ok | {:error, reason()}
   def appender_close(appender) when is_reference(appender),
     do: Duckdbex.NIF.appender_close(appender)
+
+  @doc """
+  Release resource (db, connection, stmt, query_result)
+
+  Will cause destruction and automatic closing the releasing resource in the calling process on dirty schedulers. The released resource cannot be used after this point.
+
+  If you do not release some resource you have the resource will be automatically released by the Erlang garbage collector (GC) when you lose last ref to the resource, but the GC may run resource releasing in the main schedulers which may affect the performance of your main system perfomance.
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open("my_database.duckdb", %Duckdbex.Config{})
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1 WHERE $1 = 1;", [1])
+    iex> :ok = Duckdbex.release(res)
+    iex> :ok = Duckdbex.release(conn)
+    iex> :ok = Duckdbex.release(db)
+  """
+  @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
+  def release(resource) when is_reference(resource),
+    do: Duckdbex.NIF.release(resource)
 
   @doc """
   Returns the version of the linked DuckDB, with a version postfix for dev versions

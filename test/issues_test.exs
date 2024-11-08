@@ -54,4 +54,145 @@ defmodule Duckdbex.IssuesTest do
              ] = Duckdbex.fetch_all(r)
     end
   end
+
+  describe "https://github.com/AlexR2D2/duckdbex/pull/28" do
+    test "insert union without params", %{conn: conn} do
+      Duckdbex.query(
+        conn,
+        """
+          CREATE TABLE test_table(
+            test_field UNION(single_text text, multiple_text text[])
+          );
+        """
+      )
+
+      assert {:ok, stmt} =
+               Duckdbex.prepare_statement(
+                 conn,
+                 """
+                   INSERT INTO test_table (test_field)
+                   VALUES ('test')
+                 """
+               )
+
+      assert {:ok, _res} = Duckdbex.execute_statement(stmt)
+
+      assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT * FROM test_table;")
+      assert {:ok, res} = Duckdbex.execute_statement(stmt)
+      assert [[{"single_text", "test"}]] = Duckdbex.fetch_all(res)
+    end
+
+    test "insert union with params", %{conn: conn} do
+      Duckdbex.query(
+        conn,
+        """
+          CREATE TABLE test_table(
+            test_field UNION(single_text text, multiple_text text[])
+          );
+        """
+      )
+
+      assert {:ok, stmt} =
+               Duckdbex.prepare_statement(
+                 conn,
+                 """
+                   INSERT INTO test_table (test_field)
+                   VALUES (?), (?)
+                 """
+               )
+
+      assert {:ok, _res} =
+               Duckdbex.execute_statement(stmt, [
+                 {"multiple_text", ["one", "two"]},
+                 {"single_text", "one"}
+               ])
+
+      assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT * FROM test_table;")
+      assert {:ok, res} = Duckdbex.execute_statement(stmt)
+
+      assert [[{"multiple_text", ["one", "two"]}], [{"single_text", "one"}]] =
+               Duckdbex.fetch_all(res)
+    end
+
+    test "insert struct without params", %{conn: conn} do
+      Duckdbex.query(conn, """
+        create type test_struct as struct(
+          test_field text
+        );
+      """)
+
+      Duckdbex.query(conn, """
+        CREATE TABLE test_table(
+          test_struct test_struct
+        );
+      """)
+
+      assert {:ok, stmt} =
+               Duckdbex.prepare_statement(conn, """
+                 INSERT INTO test_table (test_struct)
+                 VALUES (struct_pack(test_field := 'test'))
+               """)
+
+      assert {:ok, _res} = Duckdbex.execute_statement(stmt)
+
+      assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT * FROM test_table;")
+      assert {:ok, res} = Duckdbex.execute_statement(stmt)
+      assert [[%{"test_field" => "test"}]] = Duckdbex.fetch_all(res)
+    end
+
+    test "insert struct with struct as param", %{conn: conn} do
+      Duckdbex.query(conn, """
+        create type test_struct as struct(
+          test_field text
+        );
+      """)
+
+      Duckdbex.query(conn, """
+        CREATE TABLE test_table(
+          test_struct test_struct
+        );
+      """)
+
+      assert {:ok, stmt} =
+               Duckdbex.prepare_statement(conn, """
+                 INSERT INTO test_table (test_struct)
+                 VALUES (?)
+               """)
+
+      assert {:ok, _res} =
+               Duckdbex.execute_statement(stmt, [%{"test_field" => "test_value"}])
+
+      assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT * FROM test_table;")
+      assert {:ok, res} = Duckdbex.execute_statement(stmt)
+      assert [[%{"test_field" => "test_value"}]] = Duckdbex.fetch_all(res)
+    end
+
+    test "insert struct with a value of strut fields as param", %{conn: conn} do
+      Duckdbex.query(conn, """
+        create type test_struct as struct(
+          test_field text
+        );
+      """)
+
+      Duckdbex.query(conn, """
+        CREATE TABLE test_table(
+          test_struct test_struct
+        );
+      """)
+
+      assert {:ok, stmt} =
+               Duckdbex.prepare_statement(conn, """
+                 INSERT INTO test_table (test_struct)
+                 VALUES (struct_pack(test_field := ?))
+               """)
+
+      # TODO: create an issue to DuckDB?
+      # DuckDB PreparedStatement.GetExpectedParameterTypes() do not returns requiered parameters
+      # Is this a bug?
+
+      assert {:error,
+              "Invalid Input Error: Values were not provided for the following prepared statement parameters: 1"} =
+               Duckdbex.execute_statement(stmt, ["test_value"])
+    end
+  end
 end

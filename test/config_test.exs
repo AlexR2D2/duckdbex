@@ -19,6 +19,20 @@ defmodule Duckdbex.Nif.ConfigTest do
     {:ok, _db} = Duckdbex.open(":memory:", %Duckdbex.Config{memory_allocator: :erlang})
   end
 
+  test "disabled optimizers" do
+    {:ok, _db} =
+      Duckdbex.open(":memory:", %Duckdbex.Config{
+        disabled_optimizers: [:invalid, :expression_rewriter]
+      })
+  end
+
+  test "user options" do
+    {:ok, _db} =
+      Duckdbex.open(":memory:", %Duckdbex.Config{
+        user_options: [{"my_option", 42}, {"option2", "mem"}]
+      })
+  end
+
   test "invalid config option" do
     assert_raise(ArgumentError, fn ->
       Duckdbex.open(":memory:", %{invalid: "config"})

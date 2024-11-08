@@ -111,6 +111,15 @@ defmodule DuckdbexTest do
     assert :ok = Duckdbex.appender_close(appender)
   end
 
+  test "release/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert :ok = Duckdbex.release(db)
+
+    assert_raise ArgumentError, fn ->
+      Duckdbex.number_of_threads(db)
+    end
+  end
+
   test "integer_to_hugeint/1" do
     assert {0, 0} =
              Duckdbex.integer_to_hugeint(-0)

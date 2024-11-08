@@ -116,3 +116,20 @@ bool nif::is_atom(ErlNifEnv* env, ERL_NIF_TERM term, const char* expected_atom) 
 
   return std::strcmp(&atom[0], expected_atom) == 0;
 }
+
+bool nif::atom_to_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string& sink) {
+  if (!enif_is_atom(env, term))
+    return false;
+
+  unsigned atom_len = 0;
+  if (!enif_get_atom_length(env, term, &atom_len, ERL_NIF_LATIN1))
+    return false;
+
+  std::vector<char> atom(atom_len + 1);
+  if(!enif_get_atom(env, term, &atom[0], atom.size(), ERL_NIF_LATIN1))
+    return false;
+
+  sink = std::string(&atom[0], atom.size());
+
+  return true;
+}

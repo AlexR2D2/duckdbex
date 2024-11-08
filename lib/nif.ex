@@ -61,6 +61,9 @@ defmodule Duckdbex.NIF do
   @spec appender_flush(appender()) :: :ok | {:error, reason()}
   def appender_close(_appender), do: :erlang.nif_error(:not_loaded)
 
+  @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
+  def release(_resource), do: :erlang.nif_error(:not_loaded)
+
   @spec library_version() :: binary()
   def library_version(), do: :erlang.nif_error(:not_loaded)
 
