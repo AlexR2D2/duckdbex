@@ -11,6 +11,26 @@ defmodule Duckdbex do
   @type appender :: reference()
 
   @doc """
+  Release resource (db, connection, stmt, query_result)
+
+  Will cause destruction and automatic closing the releasing resource in the calling process on dirty schedulers. The released resource cannot be used after this point.
+
+  If you do not release some resource you have the resource will be automatically released by the Erlang garbage collector (GC) when you lose last ref to the resource, but the GC may run resource releasing in the main schedulers which may affect the performance of your main system perfomance.
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open("my_database.duckdb", %Duckdbex.Config{})
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1 WHERE $1 = 1;", [1])
+    iex> :ok = Duckdbex.release(res)
+    iex> :ok = Duckdbex.release(conn)
+    iex> :ok = Duckdbex.release(db)
+  """
+  @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
+  def release(resource) when is_reference(resource),
+    do: Duckdbex.NIF.release(resource)
+
+  @doc """
   Opens database in the specified file.
 
   If specified file does not exist, a new database file with the given name will be created automatically.
@@ -48,7 +68,6 @@ defmodule Duckdbex do
   ## Examples
 
     iex> {:ok, _db} = Duckdbex.open()
-
   """
   @spec open() :: {:ok, db()} | {:error, reason()}
   def open(),
@@ -138,6 +157,87 @@ defmodule Duckdbex do
   @spec execute_statement(statement(), list()) :: {:ok, query_result()} | {:error, reason()}
   def execute_statement(statement, args) when is_reference(statement) and is_list(args),
     do: Duckdbex.NIF.execute_statement(statement, args)
+
+  @doc """
+  Begin a transaction
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> :ok = Duckdbex.begin_transaction(conn)
+  """
+  @spec begin_transaction(connection()) :: :ok | {:error, reason()}
+  def begin_transaction(connection) when is_reference(connection),
+    do: Duckdbex.NIF.begin_transaction(connection)
+
+  @doc """
+  Commit the transaction
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> :ok = Duckdbex.begin_transaction(conn)
+    iex> :ok = Duckdbex.commit(conn)
+  """
+  @spec commit(connection()) :: :ok | {:error, reason()}
+  def commit(connection) when is_reference(connection),
+    do: Duckdbex.NIF.commit(connection)
+
+  @doc """
+  Rollback the transaction
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> :ok = Duckdbex.begin_transaction(conn)
+    iex> :ok = Duckdbex.rollback(conn)
+  """
+  @spec rollback(connection()) :: :ok | {:error, reason()}
+  def rollback(connection) when is_reference(connection),
+    do: Duckdbex.NIF.rollback(connection)
+
+  @doc """
+  Set transaction autocommit for connection
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> :ok = Duckdbex.set_auto_commit(conn, true)
+  """
+  @spec set_auto_commit(connection(), boolean()) :: :ok | {:error, reason()}
+  def set_auto_commit(connection, auto_commit?)
+      when is_reference(connection) and is_boolean(auto_commit?),
+      do: Duckdbex.NIF.set_auto_commit(connection, auto_commit?)
+
+  @doc """
+  Check if transaction autocommit is set for connection
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, true} = Duckdbex.is_auto_commit(conn)
+  """
+  @spec is_auto_commit(connection()) :: {:ok, boolean()} | {:error, reason()}
+  def is_auto_commit(connection) when is_reference(connection),
+    do: Duckdbex.NIF.is_auto_commit(connection)
+
+  @doc """
+  Checks if there is an active transaction for connection
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, false} = Duckdbex.has_active_transaction(conn)
+  """
+  @spec has_active_transaction(connection()) :: {:ok, boolean()} | {:error, reason()}
+  def has_active_transaction(connection) when is_reference(connection),
+    do: Duckdbex.NIF.has_active_transaction(connection)
 
   @doc """
   Returns columns names from the query result.
@@ -294,26 +394,6 @@ defmodule Duckdbex do
   @spec appender_close(appender()) :: :ok | {:error, reason()}
   def appender_close(appender) when is_reference(appender),
     do: Duckdbex.NIF.appender_close(appender)
-
-  @doc """
-  Release resource (db, connection, stmt, query_result)
-
-  Will cause destruction and automatic closing the releasing resource in the calling process on dirty schedulers. The released resource cannot be used after this point.
-
-  If you do not release some resource you have the resource will be automatically released by the Erlang garbage collector (GC) when you lose last ref to the resource, but the GC may run resource releasing in the main schedulers which may affect the performance of your main system perfomance.
-
-  ## Examples
-
-    iex> {:ok, db} = Duckdbex.open("my_database.duckdb", %Duckdbex.Config{})
-    iex> {:ok, conn} = Duckdbex.connection(db)
-    iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1 WHERE $1 = 1;", [1])
-    iex> :ok = Duckdbex.release(res)
-    iex> :ok = Duckdbex.release(conn)
-    iex> :ok = Duckdbex.release(db)
-  """
-  @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
-  def release(resource) when is_reference(resource),
-    do: Duckdbex.NIF.release(resource)
 
   @doc """
   Returns the version of the linked DuckDB, with a version postfix for dev versions

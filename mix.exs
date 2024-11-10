@@ -1,7 +1,7 @@
 defmodule Duckdbex.MixProject do
   use Mix.Project
 
-  @version "0.3.7"
+  @version "0.3.8"
   @duckdb_version "1.1.3"
 
   def project do
@@ -48,7 +48,7 @@ defmodule Duckdbex.MixProject do
     [
       {:elixir_make, "~> 0.8", runtime: false},
       {:cc_precompiler, "~> 0.1", runtime: false},
-      {:ex_doc, "~> 0.24", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
     ]
   end
 

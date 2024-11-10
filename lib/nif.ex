@@ -13,6 +13,9 @@ defmodule Duckdbex.NIF do
   def init(),
     do: :ok = :erlang.load_nif(Path.join(:code.priv_dir(:duckdbex), "duckdb_nif"), 0)
 
+  @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
+  def release(_resource), do: :erlang.nif_error(:not_loaded)
+
   @spec open(binary(), Duckdbex.Config.t()) :: {:ok, db()} | {:error, reason()}
   def open(_path, _config), do: :erlang.nif_error(:not_loaded)
 
@@ -33,6 +36,24 @@ defmodule Duckdbex.NIF do
 
   @spec execute_statement(statement(), list()) :: {:ok, query_result()} | {:error, reason()}
   def execute_statement(_statement, _args), do: :erlang.nif_error(:not_loaded)
+
+  @spec begin_transaction(connection()) :: :ok | {:error, reason()}
+  def begin_transaction(_conn), do: :erlang.nif_error(:not_loaded)
+
+  @spec commit(connection()) :: :ok | {:error, reason()}
+  def commit(_conn), do: :erlang.nif_error(:not_loaded)
+
+  @spec rollback(connection()) :: :ok | {:error, reason()}
+  def rollback(_conn), do: :erlang.nif_error(:not_loaded)
+
+  @spec set_auto_commit(connection(), boolean()) :: :ok | {:error, reason()}
+  def set_auto_commit(_conn, _auto_commit?), do: :erlang.nif_error(:not_loaded)
+
+  @spec is_auto_commit(connection()) :: {:ok, boolean()} | {:error, reason()}
+  def is_auto_commit(_conn), do: :erlang.nif_error(:not_loaded)
+
+  @spec has_active_transaction(connection()) :: {:ok, boolean()} | {:error, reason()}
+  def has_active_transaction(_conn), do: :erlang.nif_error(:not_loaded)
 
   @spec columns(query_result()) :: list(binary()) | {:error, reason()}
   def columns(_query_result), do: :erlang.nif_error(:not_loaded)
@@ -60,9 +81,6 @@ defmodule Duckdbex.NIF do
 
   @spec appender_flush(appender()) :: :ok | {:error, reason()}
   def appender_close(_appender), do: :erlang.nif_error(:not_loaded)
-
-  @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
-  def release(_resource), do: :erlang.nif_error(:not_loaded)
 
   @spec library_version() :: binary()
   def library_version(), do: :erlang.nif_error(:not_loaded)

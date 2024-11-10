@@ -1,5 +1,8 @@
 # Changelog
 
+0.3.8
+- Added transaction managing functions: begin_transaction, commit, rollback, set_auto_commit, is_auto_commit, has_active_transaction
+
 0.3.7
 - DuckDB 1.1.3 bugfix release.
 - Added release(resource) function.

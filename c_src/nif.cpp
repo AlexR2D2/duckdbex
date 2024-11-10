@@ -227,6 +227,96 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 static ERL_NIF_TERM
+begin_transaction(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
+    return enif_make_badarg(env);
+
+  duckdb::unique_ptr<duckdb::QueryResult> result = connres->data->Query("BEGIN TRANSACTION");
+  if (result->HasError())
+    return nif::make_error_tuple(env, result->GetErrorObject().Message());
+
+  return nif::make_atom(env, "ok");
+}
+
+static ERL_NIF_TERM
+commit(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
+    return enif_make_badarg(env);
+
+  duckdb::unique_ptr<duckdb::QueryResult> result = connres->data->Query("COMMIT");
+  if (result->HasError())
+    return nif::make_error_tuple(env, result->GetErrorObject().Message());
+
+  return nif::make_atom(env, "ok");
+}
+
+static ERL_NIF_TERM
+rollback(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
+    return enif_make_badarg(env);
+
+  duckdb::unique_ptr<duckdb::QueryResult> result = connres->data->Query("ROLLBACK");
+  if (result->HasError())
+    return nif::make_error_tuple(env, result->GetErrorObject().Message());
+
+  return nif::make_atom(env, "ok");
+}
+
+static ERL_NIF_TERM
+set_auto_commit(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2)
+    return enif_make_badarg(env);
+
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
+    return enif_make_badarg(env);
+
+  duckdb::Value boolean;
+  if (!nif::term_to_boolean(env, argv[1], boolean))
+    return enif_make_badarg(env);
+
+  connres->data->SetAutoCommit(duckdb::BooleanValue::Get(boolean));
+
+  return nif::make_atom(env, "ok");
+}
+
+static ERL_NIF_TERM
+is_auto_commit(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
+    return enif_make_badarg(env);
+
+  return nif::make_ok_tuple(env, nif::make_atom(env, connres->data->IsAutoCommit() ? "true" : "false"));
+}
+
+static ERL_NIF_TERM
+has_active_transaction(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
+    return enif_make_badarg(env);
+
+  return nif::make_ok_tuple(env, nif::make_atom(env, connres->data->HasActiveTransaction() ? "true" : "false"));
+}
+
+static ERL_NIF_TERM
 columns(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (argc != 1)
     return enif_make_badarg(env);
@@ -637,6 +727,12 @@ static ErlNifFunc nif_funcs[] = {
   {"prepare_statement", 2, prepare_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 1, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 2, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"begin_transaction", 1, begin_transaction, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"commit", 1, commit, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"rollback", 1, rollback, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"set_auto_commit", 2, set_auto_commit, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"is_auto_commit", 1, is_auto_commit, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"has_active_transaction", 1, has_active_transaction, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"columns", 1, columns, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_chunk", 1, fetch_chunk, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_all", 1, fetch_all, ERL_NIF_DIRTY_JOB_IO_BOUND},

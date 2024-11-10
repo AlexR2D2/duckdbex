@@ -32,6 +32,66 @@ defmodule DuckdbexTest do
     assert {:ok, _res} = Duckdbex.query(conn, "SELECT 1 WHERE 1 = $1;", [1])
   end
 
+  test "prepare/execute statement" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT 1;")
+    assert {:ok, res} = Duckdbex.execute_statement(stmt)
+    assert [[1]] = Duckdbex.fetch_all(res)
+  end
+
+  test "prepare/execute statement with params" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT 1 WHERE $1 = 1;")
+    assert {:ok, res} = Duckdbex.execute_statement(stmt, [1])
+    assert [[1]] = Duckdbex.fetch_all(res)
+  end
+
+  test "begin_transaction/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert :ok = Duckdbex.begin_transaction(conn)
+  end
+
+  test "commit/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert :ok = Duckdbex.begin_transaction(conn)
+    assert :ok = Duckdbex.commit(conn)
+  end
+
+  test "rollback/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert :ok = Duckdbex.begin_transaction(conn)
+    assert :ok = Duckdbex.rollback(conn)
+  end
+
+  test "set_auto_commit/2" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert :ok = Duckdbex.set_auto_commit(conn, true)
+  end
+
+  test "is_auto_commit/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert {:ok, true} = Duckdbex.is_auto_commit(conn)
+    assert :ok = Duckdbex.set_auto_commit(conn, false)
+    assert {:ok, false} = Duckdbex.is_auto_commit(conn)
+  end
+
+  test "has_active_transaction/1" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+    assert {:ok, false} = Duckdbex.has_active_transaction(conn)
+    assert :ok = Duckdbex.begin_transaction(conn)
+    assert {:ok, true} = Duckdbex.has_active_transaction(conn)
+    assert :ok = Duckdbex.rollback(conn)
+    assert {:ok, false} = Duckdbex.has_active_transaction(conn)
+  end
+
   test "columns/1" do
     assert {:ok, db} = Duckdbex.open()
     assert {:ok, conn} = Duckdbex.connection(db)
