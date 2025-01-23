@@ -49,7 +49,19 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
       }
     case duckdb::LogicalTypeId::DOUBLE: {
         auto a_double = value.GetValueUnsafe<double>();
-        sink = enif_make_double(env, a_double);
+
+        // Handle special floating-point cases
+        if (std::isinf(a_double)) {
+            if (a_double > 0) {
+                sink = make_atom(env, "infinity"); // Positive infinity
+            } else {
+                sink = make_atom(env, "-infinity"); // Negative infinity
+            }
+        } else if (std::isnan(a_double)) {
+            sink = make_atom(env, "nan"); // Handle NaN
+        } else {
+            sink = enif_make_double(env, a_double); // Regular double handling
+        }
         return true;
       }
     case duckdb::LogicalTypeId::DECIMAL: {
