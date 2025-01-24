@@ -25,6 +25,17 @@ defmodule Duckdbex.FetchTest do
     assert [] == Duckdbex.fetch_chunk(result_ref)
   end
 
+  test "divide by zero does not crash", %{conn: conn} do
+    {:ok, result_ref} = Duckdbex.query(conn, "SELECT 0/0")
+    assert [[:nan]] == Duckdbex.fetch_all(result_ref)
+
+    {:ok, result_ref} = Duckdbex.query(conn, "SELECT 1/0")
+    assert [[:infinity]] == Duckdbex.fetch_all(result_ref)
+
+    {:ok, result_ref} = Duckdbex.query(conn, "SELECT -1/0")
+    assert [[:"-infinity"]] == Duckdbex.fetch_all(result_ref)
+  end
+
   test "fetch_all", %{conn: conn} do
     {:ok, _} =
       Duckdbex.query(conn, """
