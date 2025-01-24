@@ -124,35 +124,7 @@ query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!enif_inspect_binary(env, argv[1], &sql_stmt))
     return enif_make_badarg(env);
 
-  auto statement = connres->data->Prepare(std::string((const char*)sql_stmt.data, sql_stmt.size));
-  if (!statement->success)
-    return nif::make_error_tuple(env, statement->error.Message());
-
-  duckdb::vector<duckdb::Value> query_params;
-
-  duckdb::case_insensitive_map_t<duckdb::LogicalType> params_types = statement->GetExpectedParameterTypes();
-
-  if (params_types.size()) {
-    if (argc != 3)
-      return enif_make_badarg(env);
-
-    if (!enif_is_list(env, argv[2]))
-      return enif_make_badarg(env);
-
-    ERL_NIF_TERM item, items;
-    items = argv[2];
-    int arg_idx = 0;
-    while(enif_get_list_cell(env, items, &item, &items)) {
-      duckdb::Value value;
-      auto arg_idx_str = std::to_string(arg_idx + 1);
-      if (!nif::term_to_value(env, item, params_types[arg_idx_str], value))
-        return nif::make_error_tuple(env, "invalid type of parameter #" + arg_idx_str);
-      query_params.push_back(move(value));
-      arg_idx++;
-    }
-  }
-
-  duckdb::unique_ptr<duckdb::QueryResult> result = statement->Execute(query_params, false);
+  duckdb::unique_ptr<duckdb::QueryResult> result = connres->data->Query(std::string((const char*)sql_stmt.data), sql_stmt.size);
 
   if (result->HasError())
     return nif::make_error_tuple(env, result->GetErrorObject().Message());
@@ -209,7 +181,7 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       auto arg_idx_str = std::to_string(arg_idx + 1);
       if (!nif::term_to_value(env, item, params_types[arg_idx_str], value))
         return nif::make_error_tuple(env, "invalid type of parameter #" + arg_idx_str);
-      query_params.push_back(move(value));
+      query_params.push_back(std::move(value));
       arg_idx++;
     }
   }

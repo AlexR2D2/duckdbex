@@ -102,6 +102,7 @@ defmodule Duckdbex do
 
   @doc """
   Issues a query to the database with parameters and returns a result reference.
+  This is a short cut for prepared statements.
 
   ## Examples
 
@@ -111,8 +112,11 @@ defmodule Duckdbex do
   """
   @spec query(connection(), binary(), list()) :: {:ok, query_result()} | {:error, reason()}
   def query(connection, sql_string, args)
-      when is_reference(connection) and is_binary(sql_string) and is_list(args),
-      do: Duckdbex.NIF.query(connection, sql_string, args)
+      when is_reference(connection) and is_binary(sql_string) and is_list(args) do
+    with {:ok, stmt_ref} <- Duckdbex.prepare_statement(connection, sql_string) do
+      Duckdbex.execute_statement(stmt_ref, args)
+    end
+  end
 
   @doc """
   Prepare the specified query, returning a reference to the prepared statement object
