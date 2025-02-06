@@ -47,6 +47,7 @@ jobs:
         with:
           files: |
             cache/*.tar.gz
+
   macos:
     runs-on: ${{matrix.runner}}
     # Homebrew supports versioned Erlang/OTP but not Elixir
@@ -86,3 +87,51 @@ jobs:
         with:
           files: |
             ${{ matrix.runner == 'macos-13' && 'cache/*x86_64*.tar.gz' || 'cache/*aarch64*.tar.gz' }}
+
+  windows:
+    name: Windows Erlang/OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
+    runs-on: windows-latest
+    env:
+      MIX_ENV: "prod"
+    strategy:
+      matrix:
+        otp: ["25.0", "26.0"]
+        elixir: ["1.14.5"]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
+      - name: Setup Visual Studio Shell
+        uses: egor-tensin/vs-shell@v2
+        with:
+          arch: x64
+      - name: Install MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-cmake
+      - name: Add MSYS2 to PATH
+        run: |
+          echo "C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Mix Test
+        run: |
+          mix deps.get
+          mix test
+      - name: Create precompiled library
+        run: |
+          $env:ELIXIR_MAKE_CACHE_DIR = "$(Get-Location)\cache"
+          New-Item -ItemType Directory -Force -Path $env:ELIXIR_MAKE_CACHE_DIR
+          mix elixir_make.precompile
+      - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            cache/*-windows-*.tar.gz
