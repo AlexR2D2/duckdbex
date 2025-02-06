@@ -16,9 +16,6 @@ jobs:
       MIX_ENV: "prod"
     strategy:
       matrix:
-        # Elixir 1.14.5 is first version compatible with OTP 26
-        # NIF versions change according to
-        # https://github.com/erlang/otp/blob/dd57c853a324a9572a9e5ce227d8675ff004c6fe/erts/emulator/beam/erl_nif.h#L33
         otp: ["25.0", "26.0"]
         elixir: ["1.14.5"]
     steps:
@@ -27,7 +24,7 @@ jobs:
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
-      - name: Install system dependecies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential automake autoconf pkg-config bc m4 unzip zip \
@@ -36,11 +33,14 @@ jobs:
             libstdc++-10-dev erlang-dev
       - name: Patch source code
         run: |
-          # Ensure cmath is included and functions are available
-          echo '#include <cmath>' > temp_header.hpp
-          echo 'namespace std { using ::isinf; using ::isnan; }' >> temp_header.hpp
+          echo '#define _GLIBCXX_USE_C99_MATH 1' > temp_header.hpp
+          echo '#include <cmath>' >> temp_header.hpp
+          echo '#include <math.h>' >> temp_header.hpp
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
+          # Also replace the isinf/isnan calls directly
+          sed -i 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
+          sed -i 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
       - name: Mix Test
         run: |
           mix deps.get
@@ -49,8 +49,7 @@ jobs:
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
-          # Define _GNU_SOURCE to ensure all math functions are available
-          export CXXFLAGS="-D_GNU_SOURCE -std=gnu++11"
+          export CXXFLAGS="-D_GNU_SOURCE -std=c++11"
           mix elixir_make.precompile
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -58,54 +57,11 @@ jobs:
           files: |
             cache/*.tar.gz
 
-  macos:
-    runs-on: ${{matrix.runner}}
-    # Homebrew supports versioned Erlang/OTP but not Elixir
-    # It's a deliberate design decision from Homebrew to
-    # only support versioned distrinutions for certin packages
-    name: Mac (${{ matrix.runner == 'macos-13' && 'Intel' || 'ARM' }}) Erlang/OTP ${{matrix.otp}} / Elixir
-    env:
-      MIX_ENV: "prod"
-    strategy:
-      matrix:
-        runner: ["macos-13", "macos-14"]
-        otp: ["25.0", "26.0"]
-        elixir: ["1.14.5"]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: asdf-vm/actions/install@v2
-        with:
-          tool_versions: |
-            erlang ${{matrix.otp}}
-            elixir ${{matrix.elixir}}
-      - name: Install libomp
-        run: |
-          brew install libomp
-          mix local.hex --force
-          mix local.rebar --force
-      - name: Mix Test
-        run: |
-          mix deps.get
-          MIX_ENV=test mix test
-      - name: Create precompiled library
-        run: |
-          export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
-          mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
-          mix elixir_make.precompile
-      - uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: |
-            ${{ matrix.runner == 'macos-13' && 'cache/*x86_64*.tar.gz' || 'cache/*aarch64*.tar.gz' }}
-
   windows:
     name: Windows Erlang/OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     runs-on: windows-latest
     env:
       MIX_ENV: "prod"
-    defaults:
-      run:
-        shell: msys2 {0}
     strategy:
       matrix:
         otp: ["25.0", "26.0"]
@@ -130,22 +86,28 @@ jobs:
             mingw-w64-x86_64-pkg-config
             base-devel
             git
-      - name: Mix Get Deps
+      - name: Setup Mix
+        shell: cmd
         run: |
           mix local.hex --force
           mix local.rebar --force
-          mix deps.get
+      - name: Get Dependencies
+        shell: cmd
+        run: mix deps.get
       - name: Patch source code
+        shell: msys2 {0}
         run: |
-          echo '#include <cmath>' > temp_header.hpp
-          echo 'namespace std { using ::isinf; using ::isnan; }' >> temp_header.hpp
+          echo '#define _USE_MATH_DEFINES' > temp_header.hpp
+          echo '#include <cmath>' >> temp_header.hpp
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
-      - name: Mix Test
+      - name: Run Tests
+        shell: msys2 {0}
         run: |
           export CXXFLAGS="-D_GNU_SOURCE -std=gnu++11"
           mix test
       - name: Create precompiled library
+        shell: msys2 {0}
         run: |
           export ELIXIR_MAKE_CACHE_DIR="$(pwd)/cache"
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
