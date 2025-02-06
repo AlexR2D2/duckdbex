@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+env:
+  DUCKDBEX_VERSION: "0.3.8"
+  DUCKDB_VERSION: "2.16"
+
 jobs:
   linux:
     name: Linux Erlang/OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
@@ -20,10 +24,28 @@ jobs:
         elixir: ["1.14.5"]
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Cache mix deps
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+            ~/.cache/duckdbex-nif-*
+          key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
+      
+      - name: Setup DuckDBex NIF
+        run: |
+          mkdir -p ~/.cache
+          curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-x86_64-linux-gnu-${DUCKDBEX_VERSION}.tar.gz -o ~/.cache/duckdbex-nif-${DUCKDB_VERSION}-x86_64-linux-gnu-${DUCKDBEX_VERSION}.tar.gz
+      
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
+          
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -31,6 +53,7 @@ jobs:
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
             libstdc++-10-dev erlang-dev
+            
       - name: Patch source code
         run: |
           echo '#define _GLIBCXX_USE_C99_MATH 1' > temp_header.hpp
@@ -38,19 +61,21 @@ jobs:
           echo '#include <math.h>' >> temp_header.hpp
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
-          # Also replace the isinf/isnan calls directly
           sed -i 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
           sed -i 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
+          
       - name: Mix Test
         run: |
           mix deps.get
           MIX_ENV=test mix test
+          
       - name: Create precompiled library
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
           export CXXFLAGS="-D_GNU_SOURCE -std=c++11"
           mix elixir_make.precompile
+          
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
@@ -69,16 +94,39 @@ jobs:
         elixir: ["1.14.5"]
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Cache mix deps
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+            ~/Library/Caches/duckdbex-nif-*
+          key: ${{ runner.os }}-${{ matrix.runner }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.runner }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
+            
+      - name: Setup DuckDBex NIF
+        run: |
+          mkdir -p ~/Library/Caches
+          if [ "${{ matrix.runner }}" = "macos-13" ]; then
+            curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-x86_64-darwin-${DUCKDBEX_VERSION}.tar.gz -o ~/Library/Caches/duckdbex-nif-${DUCKDB_VERSION}-x86_64-darwin-${DUCKDBEX_VERSION}.tar.gz
+          else
+            curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-aarch64-darwin-${DUCKDBEX_VERSION}.tar.gz -o ~/Library/Caches/duckdbex-nif-${DUCKDB_VERSION}-aarch64-darwin-${DUCKDBEX_VERSION}.tar.gz
+          fi
+      
       - uses: asdf-vm/actions/install@v2
         with:
           tool_versions: |
             erlang ${{matrix.otp}}
             elixir ${{matrix.elixir}}
+            
       - name: Install libomp
         run: |
           brew install libomp
           mix local.hex --force
           mix local.rebar --force
+          
       - name: Patch source code
         run: |
           echo '#include <cmath>' > temp_header.hpp
@@ -87,16 +135,19 @@ jobs:
           mv value_to_term_new.cpp c_src/value_to_term.cpp
           sed -i '' 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
           sed -i '' 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
+          
       - name: Mix Test
         run: |
           mix deps.get
           MIX_ENV=test mix test
+          
       - name: Create precompiled library
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
           export CXXFLAGS="-std=c++11"
           mix elixir_make.precompile
+          
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
@@ -114,10 +165,29 @@ jobs:
         elixir: ["1.14.5"]
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Cache mix deps
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+            ~\AppData\Local\duckdbex-nif-*
+          key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
+            
+      - name: Setup DuckDBex NIF
+        shell: cmd
+        run: |
+          mkdir %USERPROFILE%\AppData\Local
+          curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-%DUCKDB_VERSION%-x86_64-windows-%DUCKDBEX_VERSION%.tar.gz -o %USERPROFILE%\AppData\Local\duckdbex-nif-%DUCKDB_VERSION%-x86_64-windows-%DUCKDBEX_VERSION%.tar.gz
+      
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
+          
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -132,14 +202,17 @@ jobs:
             mingw-w64-x86_64-pkg-config
             base-devel
             git
+            
       - name: Setup Mix
         shell: cmd
         run: |
           mix local.hex --force
           mix local.rebar --force
+          
       - name: Get Dependencies
         shell: cmd
         run: mix deps.get
+        
       - name: Patch source code
         shell: msys2 {0}
         run: |
@@ -147,11 +220,13 @@ jobs:
           echo '#include <cmath>' >> temp_header.hpp
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
+          
       - name: Run Tests
         shell: cmd
         run: |
           set CXXFLAGS=-D_GNU_SOURCE -std=gnu++11
           mix test
+          
       - name: Create precompiled library
         shell: cmd
         run: |
@@ -159,6 +234,7 @@ jobs:
           mkdir %ELIXIR_MAKE_CACHE_DIR%
           set CXXFLAGS=-D_GNU_SOURCE -std=gnu++11
           mix elixir_make.precompile
+          
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
