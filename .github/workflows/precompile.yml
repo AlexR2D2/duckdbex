@@ -34,6 +34,13 @@ jobs:
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
             libstdc++-10-dev erlang-dev
+      - name: Patch source code
+        run: |
+          # Ensure cmath is included and functions are available
+          echo '#include <cmath>' > temp_header.hpp
+          echo 'namespace std { using ::isinf; using ::isnan; }' >> temp_header.hpp
+          cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
+          mv value_to_term_new.cpp c_src/value_to_term.cpp
       - name: Mix Test
         run: |
           mix deps.get
@@ -42,8 +49,8 @@ jobs:
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
-          # Force include cmath and set strict C++11 mode
-          export CXXFLAGS="-std=gnu++11 -include cmath"
+          # Define _GNU_SOURCE to ensure all math functions are available
+          export CXXFLAGS="-D_GNU_SOURCE -std=gnu++11"
           mix elixir_make.precompile
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -96,6 +103,9 @@ jobs:
     runs-on: windows-latest
     env:
       MIX_ENV: "prod"
+    defaults:
+      run:
+        shell: msys2 {0}
     strategy:
       matrix:
         otp: ["25.0", "26.0"]
@@ -106,32 +116,40 @@ jobs:
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
-      - name: Setup Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1
+      - uses: msys2/setup-msys2@v2
         with:
-          arch: x64
-          sdk: 10.0.22000.0
-          vsversion: 2022
-          uwp: false
-          spectre: true
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-gcc-libs
+            mingw-w64-x86_64-gdb
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-tools-git
+            mingw-w64-x86_64-pkg-config
+            base-devel
+            git
       - name: Mix Get Deps
         run: |
+          mix local.hex --force
+          mix local.rebar --force
           mix deps.get
-      - name: Mix Test
-        shell: cmd
-        env:
-          CL: "/Zp8 /GS /DWIN32 /D_WINDOWS /D_CRT_SECURE_NO_WARNINGS"
-          LINK: "/NOLOGO /MACHINE:X64 /SUBSYSTEM:CONSOLE"
+      - name: Patch source code
         run: |
+          echo '#include <cmath>' > temp_header.hpp
+          echo 'namespace std { using ::isinf; using ::isnan; }' >> temp_header.hpp
+          cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
+          mv value_to_term_new.cpp c_src/value_to_term.cpp
+      - name: Mix Test
+        run: |
+          export CXXFLAGS="-D_GNU_SOURCE -std=gnu++11"
           mix test
       - name: Create precompiled library
-        shell: cmd
-        env:
-          CL: "/Zp8 /GS /DWIN32 /D_WINDOWS /D_CRT_SECURE_NO_WARNINGS"
-          LINK: "/NOLOGO /MACHINE:X64 /SUBSYSTEM:CONSOLE"
         run: |
-          set ELIXIR_MAKE_CACHE_DIR=%CD%\cache
-          mkdir %ELIXIR_MAKE_CACHE_DIR%
+          export ELIXIR_MAKE_CACHE_DIR="$(pwd)/cache"
+          mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          export CXXFLAGS="-D_GNU_SOURCE -std=gnu++11"
           mix elixir_make.precompile
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
