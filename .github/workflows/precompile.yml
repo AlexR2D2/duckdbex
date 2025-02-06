@@ -25,6 +25,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
+
+      - name: Setup Mix
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+
       - name: Cache mix deps
         uses: actions/cache@v3
         with:
@@ -40,12 +50,15 @@ jobs:
         run: |
           mkdir -p ~/.cache
           curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-x86_64-linux-gnu-${DUCKDBEX_VERSION}.tar.gz -o ~/.cache/duckdbex-nif-${DUCKDB_VERSION}-x86_64-linux-gnu-${DUCKDBEX_VERSION}.tar.gz
-      
-      - uses: erlef/setup-beam@v1
-        with:
-          otp-version: ${{matrix.otp}}
-          elixir-version: ${{matrix.elixir}}
+          ls -la ~/.cache/
           
+      - name: Get Dependencies
+        run: |
+          mix deps.get
+          # Wait a moment to ensure NIF is available
+          sleep 5
+          ls -la ~/.cache/
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -66,7 +79,6 @@ jobs:
           
       - name: Mix Test
         run: |
-          mix deps.get
           MIX_ENV=test mix test
           
       - name: Create precompiled library
@@ -95,6 +107,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
+      - uses: asdf-vm/actions/install@v2
+        with:
+          tool_versions: |
+            erlang ${{matrix.otp}}
+            elixir ${{matrix.elixir}}
+
+      - name: Setup Mix
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+            
       - name: Cache mix deps
         uses: actions/cache@v3
         with:
@@ -114,18 +137,18 @@ jobs:
           else
             curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-aarch64-darwin-${DUCKDBEX_VERSION}.tar.gz -o ~/Library/Caches/duckdbex-nif-${DUCKDB_VERSION}-aarch64-darwin-${DUCKDBEX_VERSION}.tar.gz
           fi
-      
-      - uses: asdf-vm/actions/install@v2
-        with:
-          tool_versions: |
-            erlang ${{matrix.otp}}
-            elixir ${{matrix.elixir}}
+          ls -la ~/Library/Caches/
+
+      - name: Get Dependencies
+        run: |
+          mix deps.get
+          # Wait a moment to ensure NIF is available
+          sleep 5
+          ls -la ~/Library/Caches/
             
       - name: Install libomp
         run: |
           brew install libomp
-          mix local.hex --force
-          mix local.rebar --force
           
       - name: Patch source code
         run: |
@@ -138,7 +161,6 @@ jobs:
           
       - name: Mix Test
         run: |
-          mix deps.get
           MIX_ENV=test mix test
           
       - name: Create precompiled library
@@ -188,20 +210,11 @@ jobs:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
           
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-gcc-libs
-            mingw-w64-x86_64-gdb
-            mingw-w64-x86_64-make
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-tools-git
-            mingw-w64-x86_64-pkg-config
-            base-devel
-            git
+      - name: Setup Visual Studio Dev Environment
+        uses: microsoft/setup-msbuild@v1.1
+        
+      - name: Setup Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
             
       - name: Setup Mix
         shell: cmd
@@ -211,20 +224,25 @@ jobs:
           
       - name: Get Dependencies
         shell: cmd
-        run: mix deps.get
+        run: |
+          mix deps.get
+          # Wait a moment to ensure NIF is available
+          timeout /t 5
+          dir %USERPROFILE%\AppData\Local
         
       - name: Patch source code
-        shell: msys2 {0}
+        shell: cmd
         run: |
-          echo '#define _USE_MATH_DEFINES' > temp_header.hpp
-          echo '#include <cmath>' >> temp_header.hpp
-          cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
-          mv value_to_term_new.cpp c_src/value_to_term.cpp
+          echo #define _USE_MATH_DEFINES > temp_header.hpp
+          echo #include ^<cmath^> >> temp_header.hpp
+          type temp_header.hpp c_src\value_to_term.cpp > value_to_term_new.cpp
+          move /y value_to_term_new.cpp c_src\value_to_term.cpp
           
       - name: Run Tests
         shell: cmd
         run: |
-          set CXXFLAGS=-D_GNU_SOURCE -std=gnu++11
+          set CXX=cl.exe
+          set CXXFLAGS=/EHsc /MP
           mix test
           
       - name: Create precompiled library
@@ -232,7 +250,8 @@ jobs:
         run: |
           set ELIXIR_MAKE_CACHE_DIR=%CD%\cache
           mkdir %ELIXIR_MAKE_CACHE_DIR%
-          set CXXFLAGS=-D_GNU_SOURCE -std=gnu++11
+          set CXX=cl.exe
+          set CXXFLAGS=/EHsc /MP
           mix elixir_make.precompile
           
       - uses: softprops/action-gh-release@v1
