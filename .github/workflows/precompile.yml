@@ -42,7 +42,8 @@ jobs:
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
-          export CXXFLAGS="-I/usr/include/c++/10 -I/usr/include/x86_64-linux-gnu/c++/10"
+          # Force include cmath and set strict C++11 mode
+          export CXXFLAGS="-std=gnu++11 -include cmath"
           mix elixir_make.precompile
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -105,30 +106,29 @@ jobs:
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
-      - name: Setup Visual Studio Build Tools
-        uses: microsoft/setup-msbuild@v1.1
       - name: Setup Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
-      - name: Install MSYS2
-        uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-make
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-cmake
-      - name: Add MSYS2 to PATH
-        run: |
-          echo "C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Mix Test
+          arch: x64
+          sdk: 10.0.22000.0
+          vsversion: 2022
+          uwp: false
+          spectre: true
+      - name: Mix Get Deps
         run: |
           mix deps.get
+      - name: Mix Test
+        shell: cmd
+        env:
+          CL: "/Zp8 /GS /DWIN32 /D_WINDOWS /D_CRT_SECURE_NO_WARNINGS"
+          LINK: "/NOLOGO /MACHINE:X64 /SUBSYSTEM:CONSOLE"
+        run: |
           mix test
       - name: Create precompiled library
         shell: cmd
+        env:
+          CL: "/Zp8 /GS /DWIN32 /D_WINDOWS /D_CRT_SECURE_NO_WARNINGS"
+          LINK: "/NOLOGO /MACHINE:X64 /SUBSYSTEM:CONSOLE"
         run: |
           set ELIXIR_MAKE_CACHE_DIR=%CD%\cache
           mkdir %ELIXIR_MAKE_CACHE_DIR%
