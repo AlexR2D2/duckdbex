@@ -57,6 +57,52 @@ jobs:
           files: |
             cache/*.tar.gz
 
+  macos:
+    runs-on: ${{matrix.runner}}
+    name: Mac (${{ matrix.runner == 'macos-13' && 'Intel' || 'ARM' }}) Erlang/OTP ${{matrix.otp}} / Elixir
+    env:
+      MIX_ENV: "prod"
+    strategy:
+      matrix:
+        runner: ["macos-13", "macos-14"]
+        otp: ["25.0", "26.0"]
+        elixir: ["1.14.5"]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: asdf-vm/actions/install@v2
+        with:
+          tool_versions: |
+            erlang ${{matrix.otp}}
+            elixir ${{matrix.elixir}}
+      - name: Install libomp
+        run: |
+          brew install libomp
+          mix local.hex --force
+          mix local.rebar --force
+      - name: Patch source code
+        run: |
+          echo '#include <cmath>' > temp_header.hpp
+          echo '#include <math.h>' >> temp_header.hpp
+          cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
+          mv value_to_term_new.cpp c_src/value_to_term.cpp
+          sed -i '' 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
+          sed -i '' 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
+      - name: Mix Test
+        run: |
+          mix deps.get
+          MIX_ENV=test mix test
+      - name: Create precompiled library
+        run: |
+          export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
+          mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          export CXXFLAGS="-std=c++11"
+          mix elixir_make.precompile
+      - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ matrix.runner == 'macos-13' && 'cache/*x86_64*.tar.gz' || 'cache/*aarch64*.tar.gz' }}
+
   windows:
     name: Windows Erlang/OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     runs-on: windows-latest
