@@ -29,6 +29,27 @@ defmodule Duckdbex.Config do
           | :extension
           | :materialized_cte
 
+  @type compressionType() ::
+          :compression_auto
+          | :compression_uncompressed
+          # internal only
+          | :compression_constant
+          | :compression_rle
+          | :compression_dictionary
+          | :compression_prof_delta
+          | :compression_bitpacking
+          | :compression_fsst
+          | :compression_chimp
+          | :compression_patas
+          | :compression_alp
+          | :compression_alprd
+          | :compression_zstd
+          | :compression_roaring
+          #  internal only
+          | :compression_empty
+          # This has to stay the last entry of the type!
+          | :compression_count
+
   defstruct [
     # Access mode of the database
     access_mode: :automatic,
@@ -95,9 +116,6 @@ defmodule Duckdbex.Config do
     # Enable COPY and related commands
     enable_external_access: true,
 
-    # Whether or not object cache is used
-    object_cache_enable: false,
-
     # Whether or not the global http metadata cache is used
     http_metadata_cache_enable: false,
 
@@ -122,8 +140,14 @@ defmodule Duckdbex.Config do
     # The set(elixir list) of disabled optimizers (default empty)
     disabled_optimizers: nil,
 
+    # The average string length required to use ZSTD compression. Default: 4096
+    zstd_min_string_length: nil,
+
     # Force a specific compression method to be used when checkpointing (if available)
-    force_compression: :auto,
+    force_compression: nil,
+
+    # The set of disabled compression methods (default empty)
+    disabled_compression_methods: nil,
 
     # Force a specific bitpacking mode to be used when using the bitpacking compression method
     force_bitpacking_mode: :auto,
@@ -218,6 +242,12 @@ defmodule Duckdbex.Config do
     # The maximum amount of vacuum tasks to schedule during a checkpoint
     max_vacuum_tasks: nil,
 
+    # Paths that are explicitly allowed, even if enable_external_access is false
+    # TODO: allowed_paths: nil,
+
+    # Directories that are explicitly allowed, even if enable_external_access is false
+    # TODO: allowed_directories: nil,
+
     # The memory allocator used by the database system
     #  :duckdb - native DuckDB allocator,
     #  :erlang - erlang 'void *enif_alloc(size_t size)' allocator
@@ -269,8 +299,6 @@ defmodule Duckdbex.Config do
 
   `:enable_external_access`: Enable COPY and related commands. Default: `true`.
 
-  `:object_cache_enable`: Whether or not object cache is used. Default: `false`.
-
   `:http_metadata_cache_enable`: Whether or not the global http metadata cache is used. Default: `false`.
 
   `:http_proxy`: HTTP Proxy config as 'hostname:port'. Default: `nil`.
@@ -287,7 +315,11 @@ defmodule Duckdbex.Config do
 
   `:disabled_optimizers`: The set(elixir list) of disabled optimizers. Default: `nil`.
 
+  `:zstd_min_string_length`: The average string length required to use ZSTD compression. Default: 4096.
+
   `:force_compression`: Force a specific compression method to be used when checkpointing (if available). Maybe `:auto`, `:uncompressed`, `:constant`, `:rle`, `:dictionary`, `:pfor_delta`, `:bitpacking`, `:fsst`, `:chimp`, `:patas`. Default: `:auto`.
+
+  `:disabled_compression_methods`: The set of disabled compression methods. Default `nil`.
 
   `:force_bitpacking_mode`: Force a specific bitpacking mode to be used when using the bitpacking compression method. Maybe `:auto`, `:constant`, `:constant_delta`, `:delta_for`, `:for`. Default: `:auto`.
 
@@ -369,7 +401,6 @@ defmodule Duckdbex.Config do
           default_order_type: :asc | :desc,
           default_null_order: :nulls_last | :nulls_first,
           enable_external_access: boolean(),
-          object_cache_enable: boolean(),
           http_metadata_cache_enable: boolean(),
           http_proxy: binary() | nil,
           http_proxy_username: binary() | nil,
@@ -378,17 +409,9 @@ defmodule Duckdbex.Config do
           checkpoint_on_shutdown: boolean(),
           serialization_compatibility: binary() | nil,
           disabled_optimizers: list(Duckdbex.Config.optimizer_type()) | [] | nil,
-          force_compression:
-            :auto
-            | :uncompressed
-            | :constant
-            | :rle
-            | :dictionary
-            | :pfor_delta
-            | :bitpacking
-            | :fsst
-            | :chimp
-            | :patas,
+          zstd_min_string_length: pos_integer() | nil,
+          force_compression: Duckdbex.Config.compressionType() | nil,
+          disabled_compression_methods: list(Duckdbex.Config.compressionType()) | [] | nil,
           force_bitpacking_mode: :auto | :constant | :constant_delta | :delta_for | :for,
           preserve_insertion_order: boolean(),
           arrow_offset_size: :regular | :large,

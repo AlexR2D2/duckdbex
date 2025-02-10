@@ -286,10 +286,6 @@ namespace {
     return set_boolean(env, term, sink.options.enable_external_access);
   }
 
-  bool set_object_cache_enable(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.object_cache_enable);
-  }
-
   bool set_http_metadata_cache_enable(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     return set_boolean(env, term, sink.options.http_metadata_cache_enable);
   }
@@ -431,63 +427,164 @@ namespace {
     return true;
   }
 
+  bool set_zstd_min_string_length(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    ErlNifUInt64 zstd_min_string_length;
+    if (!enif_get_uint64(env, term, &zstd_min_string_length))
+      return false;
+
+    sink.options.zstd_min_string_length = zstd_min_string_length;
+
+    return true;
+  }
+
   bool set_force_compression(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "auto")) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    if (nif::is_atom(env, term, "compression_auto")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_AUTO;
       return true;
     }
 
-    if (nif::is_atom(env, term, "uncompressed")) {
+    if (nif::is_atom(env, term, "compression_uncompressed")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_UNCOMPRESSED;
       return true;
     }
 
-    if (nif::is_atom(env, term, "constant")) {
+    if (nif::is_atom(env, term, "compression_constant")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_CONSTANT;
       return true;
     }
 
-    if (nif::is_atom(env, term, "rle")) {
+    if (nif::is_atom(env, term, "compression_rle")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_RLE;
       return true;
     }
 
-    if (nif::is_atom(env, term, "dictionary")) {
+    if (nif::is_atom(env, term, "compression_dictionary")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_DICTIONARY;
       return true;
     }
 
-    if (nif::is_atom(env, term, "pfor_delta")) {
+    if (nif::is_atom(env, term, "compression_prof_delta")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_PFOR_DELTA;
       return true;
     }
 
-    if (nif::is_atom(env, term, "bitpacking")) {
+    if (nif::is_atom(env, term, "compression_bitpacking")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_BITPACKING;
       return true;
     }
 
-    if (nif::is_atom(env, term, "fsst")) {
+    if (nif::is_atom(env, term, "compression_fsst")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_FSST;
       return true;
     }
 
-    if (nif::is_atom(env, term, "chimp")) {
+    if (nif::is_atom(env, term, "compression_chimp")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_CHIMP;
       return true;
     }
 
-    if (nif::is_atom(env, term, "patas")) {
+    if (nif::is_atom(env, term, "compression_patas")) {
       sink.options.force_compression = duckdb::CompressionType::COMPRESSION_PATAS;
       return true;
     }
 
-    if (nif::is_atom(env, term, "patas")) {
-      sink.options.force_compression = duckdb::CompressionType::COMPRESSION_PATAS;
+    if (nif::is_atom(env, term, "compression_alp")) {
+      sink.options.force_compression = duckdb::CompressionType::COMPRESSION_ALP;
+      return true;
+    }
+
+    if (nif::is_atom(env, term, "compression_alprd")) {
+      sink.options.force_compression = duckdb::CompressionType::COMPRESSION_ALPRD;
+      return true;
+    }
+
+    if (nif::is_atom(env, term, "compression_zstd")) {
+      sink.options.force_compression = duckdb::CompressionType::COMPRESSION_ZSTD;
+      return true;
+    }
+
+    if (nif::is_atom(env, term, "compression_roaring")) {
+      sink.options.force_compression = duckdb::CompressionType::COMPRESSION_ROARING;
+      return true;
+    }
+
+    if (nif::is_atom(env, term, "compression_empty")) {
+      sink.options.force_compression = duckdb::CompressionType::COMPRESSION_EMPTY;
+      return true;
+    }
+
+    if (nif::is_atom(env, term, "compression_count")) {
+      sink.options.force_compression = duckdb::CompressionType::COMPRESSION_COUNT;
       return true;
     }
 
     return false;
+  }
+
+  bool set_disabled_compression_methods(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    if (!enif_is_list(env, term))
+      return false;
+
+    unsigned list_length = 0;
+    if (!enif_get_list_length(env, term, &list_length))
+      return false;
+
+    std::set<duckdb::CompressionType> compressions;
+
+    ERL_NIF_TERM list = term;
+    for (size_t i = 0; i < list_length; i++) {
+      ERL_NIF_TERM head, tail;
+      if (!enif_get_list_cell(env, list, &head, &tail))
+        return false;
+
+      if (nif::is_atom(env, head, "compression_auto"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_AUTO);
+      if (nif::is_atom(env, head, "compression_uncompressed"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_UNCOMPRESSED);
+      if (nif::is_atom(env, head, "compression_constant"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_CONSTANT);
+      if (nif::is_atom(env, head, "compression_rle"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_RLE);
+      if (nif::is_atom(env, head, "compression_dictionary"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_DICTIONARY);
+      if (nif::is_atom(env, head, "compression_prof_delta"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_PFOR_DELTA);
+      if (nif::is_atom(env, head, "compression_bitpacking"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_BITPACKING);
+      if (nif::is_atom(env, head, "compression_fsst"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_FSST);
+      if (nif::is_atom(env, head, "compression_chimp"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_CHIMP);
+      if (nif::is_atom(env, head, "compression_patas"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_PATAS);
+      if (nif::is_atom(env, head, "compression_alp"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_ALP);
+      if (nif::is_atom(env, head, "compression_alprd"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_ALPRD);
+      if (nif::is_atom(env, head, "compression_zstd"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_ZSTD);
+      if (nif::is_atom(env, head, "compression_roaring"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_ROARING);
+      if (nif::is_atom(env, head, "compression_empty"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_EMPTY);
+      if (nif::is_atom(env, head, "compression_count"))
+        compressions.insert(duckdb::CompressionType::COMPRESSION_COUNT);
+
+      list = tail;
+    }
+
+    sink.options.disabled_compression_methods = compressions;
+
+    return true;
   }
 
   bool set_force_bitpacking_mode(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -542,7 +639,7 @@ namespace {
   }
 
   bool set_arrow_arrow_lossless_conversion(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.arrow_arrow_lossless_conversion);
+    return set_boolean(env, term, sink.options.arrow_lossless_conversion);
   }
 
   bool set_produce_arrow_string_views(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -818,9 +915,6 @@ namespace {
     if (nif::is_atom(env, name, "enable_external_access"))
       return set_enable_external_access(env, value, sink);
 
-    if (nif::is_atom(env, name, "object_cache_enable"))
-      return set_object_cache_enable(env, value, sink);
-
     if (nif::is_atom(env, name, "http_metadata_cache_enable"))
       return set_http_metadata_cache_enable(env, value, sink);
 
@@ -845,8 +939,14 @@ namespace {
     if (nif::is_atom(env, name, "disabled_optimizers"))
       return set_disabled_optimizers(env, value, sink);
 
+    if (nif::is_atom(env, name, "zstd_min_string_length"))
+      return set_zstd_min_string_length(env, value, sink);
+
     if (nif::is_atom(env, name, "force_compression"))
       return set_force_compression(env, value, sink);
+
+    if (nif::is_atom(env, name, "disabled_compression_methods"))
+      return set_disabled_compression_methods(env, value, sink);
 
     if (nif::is_atom(env, name, "force_bitpacking_mode"))
       return set_force_bitpacking_mode(env, value, sink);
@@ -928,6 +1028,7 @@ namespace {
 
     if (nif::is_atom(env, name, "catalog_error_max_schemas"))
       return set_catalog_error_max_schemas(env, value, sink);
+
     if (nif::is_atom(env, name, "max_vacuum_tasks"))
       return set_max_vacuum_tasks(env, value, sink);
 

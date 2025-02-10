@@ -2,8 +2,14 @@ defmodule Duckdbex.TypesTest do
   use ExUnit.Case, async: true
 
   setup ctx do
-    assert {:ok, db} = Duckdbex.open(":memory:", %Duckdbex.Config{})
+    assert {:ok, db} =
+             Duckdbex.open(":memory:", %Duckdbex.Config{allow_unsigned_extensions: true})
+
     assert {:ok, conn} = Duckdbex.connection(db)
+
+    assert {:ok, _res} = Duckdbex.query(conn, "INSTALL core_functions;")
+    assert {:ok, _res} = Duckdbex.query(conn, "LOAD core_functions;")
+
     Map.put(ctx, :conn, conn)
   end
 

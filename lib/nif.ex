@@ -1,7 +1,8 @@
 defmodule Duckdbex.NIF do
   @moduledoc false
 
-  @on_load :init
+  @compile {:autoload, false}
+  @on_load {:init, 0}
 
   @type db() :: reference()
   @type connection() :: reference()
@@ -10,8 +11,9 @@ defmodule Duckdbex.NIF do
   @type appender :: reference()
   @type reason() :: :atom | binary()
 
-  def init(),
-    do: :ok = :erlang.load_nif(Path.join(:code.priv_dir(:duckdbex), "duckdb_nif"), 0)
+  def init() do
+    :erlang.load_nif(Path.join(:code.priv_dir(:duckdbex), "duckdb_nif"), 0)
+  end
 
   @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
   def release(_resource), do: :erlang.nif_error(:not_loaded)

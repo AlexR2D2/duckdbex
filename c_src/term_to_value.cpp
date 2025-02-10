@@ -457,11 +457,17 @@ bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
     duckdb::idx_t pos = 0;
     duckdb::date_t date;
     bool special = false;
-    if (!duckdb::Date::TryConvertDate((const char*)bin.data, bin.size, pos, date, special))
-      return false;
+    bool strict = false;
 
-    sink = move(duckdb::Value::DATE(date));
-    return true;
+    duckdb::DateCastResult result = duckdb::Date::TryConvertDate((const char*)bin.data, bin.size, pos, date, special, strict);
+    if (result == duckdb::DateCastResult::SUCCESS) {
+      sink = move(duckdb::Value::DATE(date));
+      return true;
+    } else {
+      // TODO: Forward cast error to the client
+      // enum class DateCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_RANGE };
+      // return false;
+    }
   }
 
   return false;
@@ -579,7 +585,7 @@ bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
     if (!duckdb::Timestamp::TryFromDatetime(date, timez, timestamp))
       return false;
 
-    sink = move(duckdb::Value::TIMESTAMPTZ(timestamp));
+    sink = move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
     return true;
   }
 
@@ -588,11 +594,16 @@ bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
     bool has_offset = false;
     duckdb::string_t tz;
     duckdb::timestamp_t timestamp;
-    if (!duckdb::Timestamp::TryConvertTimestampTZ((const char*)bin.data, bin.size, timestamp, has_offset, tz))
-      return false;
 
-    sink = move(duckdb::Value::TIMESTAMPTZ(timestamp));
-    return true;
+    duckdb::TimestampCastResult result = duckdb::Timestamp::TryConvertTimestampTZ((const char*)bin.data, bin.size, timestamp, has_offset, tz);
+    if (result == duckdb::TimestampCastResult::SUCCESS) {
+      sink = move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
+      return true;
+    } else {
+      // TODO: Return the cast result to client
+      // enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE, ERROR_RANGE };
+      // return false;
+    }
   }
 
   return false;
@@ -786,7 +797,7 @@ bool nif::term_to_array(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
     return false;
 
   if (list_length == 0) {
-    sink = move(duckdb::Value::EMPTYARRAY(child_type, 0));
+    sink = move(duckdb::Value::ARRAY(child_type, duckdb::vector<duckdb::Value>(0)));
     return true;
   }
 
