@@ -1,5 +1,8 @@
 # Changelog
 
+0.3.10
+  - [DuckDB 1.2.1 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.2.1)
+
 0.3.9
 - [DuckDB 1.2.0 release](https://github.com/duckdb/duckdb/releases/tag/v1.2.0). Please, read the [Announcing DuckDB 1.2.0](https://duckdb.org/2025/02/05/announcing-duckdb-120)
 - Fixed the isinf/isnan build error on Linux
