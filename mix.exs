@@ -1,8 +1,8 @@
 defmodule Duckdbex.MixProject do
   use Mix.Project
 
-  @version "0.3.10"
-  @duckdb_version "1.2.1"
+  @version "0.3.11"
+  @duckdb_version "1.2.2"
 
   def project do
     [

@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "8e52ec4395"
-#define DUCKDB_VERSION "v1.2.1"
+#define DUCKDB_SOURCE_ID "7c039464e4"
+#define DUCKDB_VERSION "v1.2.2"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 2
-#define DUCKDB_PATCH_VERSION "1"
+#define DUCKDB_PATCH_VERSION "2"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -3164,17 +3164,17 @@ struct NumericCastImpl<TO, FROM, false> {
 
 		if (!NumericLimits<FROM>::IsSigned() && !NumericLimits<TO>::IsSigned() &&
 		    (unsigned_in < unsigned_min || unsigned_in > unsigned_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(unsigned_min), static_cast<TO>(unsigned_max));
 		}
 
 		if (NumericLimits<FROM>::IsSigned() && NumericLimits<TO>::IsSigned() &&
 		    (signed_in < signed_min || signed_in > signed_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(signed_min), static_cast<TO>(signed_max));
 		}
 
 		if (NumericLimits<FROM>::IsSigned() != NumericLimits<TO>::IsSigned() &&
 		    (signed_in < signed_min || unsigned_in > unsigned_max)) {
-			ThrowNumericCastError(val, minval, maxval);
+			ThrowNumericCastError(val, static_cast<TO>(signed_min), static_cast<TO>(unsigned_max));
 		}
 
 		return static_cast<TO>(val);
@@ -30854,6 +30854,8 @@ public:
 	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
 	//! Whether or not we should preserve insertion order for executing the given sink
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
+	//! The order preservation type of the given operator decided by recursively looking at its children
+	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
 
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
@@ -31003,6 +31005,8 @@ namespace duckdb {
 
 enum class OutputStream : uint8_t { STREAM_STDOUT = 1, STREAM_STDERR = 2 };
 
+typedef void (*line_printer_f)(OutputStream stream, const string &str);
+
 //! Printer is a static class that allows printing to logs or stdout/stderr
 class Printer {
 public:
@@ -31028,6 +31032,12 @@ public:
 	DUCKDB_API static bool IsTerminal(OutputStream stream);
 	//! The terminal width
 	DUCKDB_API static idx_t TerminalWidth();
+
+	// hook to allow capturing the output and routing it somewhere else / reformat it};
+	static line_printer_f line_printer;
+
+private:
+	static void DefaultLinePrint(OutputStream stream, const string &str);
 };
 } // namespace duckdb
 
@@ -31727,8 +31737,9 @@ public:
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
 	                                                       const string &table_name, const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindConstraint(Constraint &constraint, const string &table, const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindUniqueConstraint(Constraint &constraint, const string &table,
+	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const string &table,
+	                                           const ColumnList &columns);
+	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const string &table,
 	                                                 const ColumnList &columns);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
@@ -33824,6 +33835,7 @@ private:
 
 } // namespace duckdb
 
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -34173,6 +34185,11 @@ struct PreparedStatementCallbackInfo {
 	const PendingQueryParameters &parameters;
 };
 
+struct BindPreparedStatementCallbackInfo {
+	PreparedStatementData &prepared_statement;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
+};
+
 //! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
 //! e.g. caches that need to live as long as a ClientContext or Query.
 class ClientContextState {
@@ -34210,6 +34227,10 @@ public:
 	}
 	virtual RebindQueryInfo OnExecutePrepared(ClientContext &context, PreparedStatementCallbackInfo &info,
 	                                          RebindQueryInfo current_rebind) {
+		return RebindQueryInfo::DO_NOT_REBIND;
+	}
+	virtual RebindQueryInfo OnRebindPreparedStatement(ClientContext &context, BindPreparedStatementCallbackInfo &info,
+	                                                  RebindQueryInfo current_rebind) {
 		return RebindQueryInfo::DO_NOT_REBIND;
 	}
 	virtual void WriteProfilingInformation(std::ostream &ss) {
