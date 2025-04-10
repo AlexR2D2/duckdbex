@@ -122,6 +122,39 @@ Duckdbex.fetch_chunk(result_ref)
 # => []
 ```
 
+## Closing connection, database and releasing resources
+
+All opened database/connecions/results refs will be closed/released automatically as soon as the ref for an object (db, conn, result_ref) will be thrown away. For example:
+
+Lets open the database:
+
+```elixir
+# Open an existing database file
+{:ok, db} = Duckdbex.open("exis_movies.duckdb")
+#Reference<0.1076596279.3008626690.232411>
+```
+
+Now the `db` holds the reference `#Reference<0.1076596279.3008626690.232411>` to the underline database object. If you throw away the 'db' ref to the underline database object the database will be closed automatically. Lets simulate this via 'assignment' to `db` some stub value
+
+
+```elixir
+# throw away the ref to the database
+db = "forcing closing the database"
+```
+
+Now the `db` holds the `"forcing closing the database"` binary and there is no any 'variable' in out code what holds the ref `#Reference<0.1076596279.3008626690.232411>` to the database. So, technically speaking, ref count to underlive database object is 0. Erlang automatically calls the destructor for database object and it will be closed correctly. So, if, for example, you holds the db ref in GenServer state the db will be closed automatically if GenServer will be terminated/crashed. You don't need to call some function to close database.
+
+But what if you need to close the database/connection/result_ref explicitdly, for example, you want close database (flush all underline db buffers to disk) and when archive the db file. To prevent using the strange code like `db = "forcing closing the database"` there is `Duckdbex.release(resource)` function to explicitly closing any underline DuckDB resource:
+
+```elixir
+iex> {:ok, db} = Duckdbex.open("my_database.duckdb", %Duckdbex.Config{})
+iex> {:ok, conn} = Duckdbex.connection(db)
+iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1 WHERE $1 = 1;", [1])
+iex> :ok = Duckdbex.release(res)
+iex> :ok = Duckdbex.release(conn)
+iex> :ok = Duckdbex.release(db)
+```
+
 ## Prepared statement
 
 Prepared statement speeding up queries that will be executed many times with different parameters. Also it allows to avoid string concatenation/SQL injection attacks.
