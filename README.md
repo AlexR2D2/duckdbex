@@ -142,7 +142,7 @@ Now the `db` holds the reference `#Reference<0.1076596279.3008626690.232411>` to
 db = "forcing closing the database"
 ```
 
-Now the `db` holds the `"forcing closing the database"` binary and there is no any 'variable' in out code what holds the ref `#Reference<0.1076596279.3008626690.232411>` to the database. So, technically speaking, ref count to underlive database object is 0. Erlang automatically calls the destructor for database object and it will be closed correctly. So, if, for example, you holds the db ref in GenServer state the db will be closed automatically if GenServer will be terminated/crashed. You don't need to call some function to close database.
+Now the `db` holds the `"forcing closing the database"` binary and there is no any 'variable' in out code what holds the ref `#Reference<0.1076596279.3008626690.232411>` to the database. So, technically speaking, ref count to underline database object is 0. Erlang automatically calls the destructor for database object and it will be closed correctly. So, if, for example, you holds the db ref in GenServer state the db will be closed automatically if GenServer will be terminated/crashed. You don't need to call some function to close database.
 
 But what if you need to close the database/connection/result_ref explicitdly, for example, you want close database (flush all underline db buffers to disk) and when archive the db file. To prevent using the strange code like `db = "forcing closing the database"` there is `Duckdbex.release(resource)` function to explicitly closing any underline DuckDB resource:
 
@@ -154,6 +154,8 @@ iex> :ok = Duckdbex.release(res)
 iex> :ok = Duckdbex.release(conn)
 iex> :ok = Duckdbex.release(db)
 ```
+
+Now, all are explicitly closed.
 
 ## Prepared statement
 
