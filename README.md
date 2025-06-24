@@ -1,10 +1,10 @@
 # Duckdbex
 
-This is **Elixir** Library what embeds C++ [DuckDB](https://duckdb.org) database into you **Elixir** application.
+This is an **Elixir** Library that embeds C++ [DuckDB](https://duckdb.org) database into your **Elixir** application.
 
 DuckDB is an in-process SQL database management system designed to support analytical query workloads, also known as Online analytical processing (OLAP). It has no external dependencies, neither for compilation nor during run-time and completely embedded (like Sqlite) within a host (BEAM in our case) process.
 
-To find out where and why you could use DuckDB, please, see [why DuckDB](https://duckdb.org/why_duckdb) section of DuckDB docs.
+To find out where and why you could use DuckDB, please see [why DuckDB](https://duckdb.org/why_duckdb) section of DuckDB docs.
 
 Also, you may find useful the DuckDB [documentation](https://duckdb.org/docs/sql/introduction).
 
@@ -62,7 +62,7 @@ The DuckDB has a number of different options and could be configured by passing 
 
 ## Create Connection
 
-With the DuckDB instance, you can create one or many Connection instances using the `Duckdbex.connection/1` function. In fact, the DuckDB connection is the native OS thread (not a lightweight Elixir process). While individual connections are thread-safe, they will be locked during querying. So, it is recommended to use the different DuckDB connections in the different Elixir processees to allow for the best parallel performance.
+With the DuckDB instance, you can create one or many Connection instances using the `Duckdbex.connection/1` function. In fact, the DuckDB connection is the native OS thread (not a lightweight Elixir process). While individual connections are thread-safe, they will be locked during querying. So, it is recommended to use the different DuckDB connections in the different Elixir processes to allow for the best parallel performance.
 
 ```elixir
 {:ok, db} = Duckdbex.open()
@@ -134,7 +134,7 @@ Lets open the database:
 #Reference<0.1076596279.3008626690.232411>
 ```
 
-Now the `db` holds the reference `#Reference<0.1076596279.3008626690.232411>` to the underline database object. If you throw away the 'db' ref to the underline database object the database will be closed automatically. Lets simulate this via 'assignment' to `db` some stub value
+Now the `db` holds the reference `#Reference<0.1076596279.3008626690.232411>` to the underlying database object. If you throw away the 'db' ref to the underlying database object the database will be closed automatically. Lets simulate this via 'assignment' to `db` some stub value
 
 
 ```elixir
@@ -142,9 +142,9 @@ Now the `db` holds the reference `#Reference<0.1076596279.3008626690.232411>` to
 db = "forcing closing the database"
 ```
 
-Now the `db` holds the `"forcing closing the database"` binary and there is no any 'variable' in out code what holds the ref `#Reference<0.1076596279.3008626690.232411>` to the database. So, technically speaking, ref count to underline database object is 0. Erlang automatically calls the destructor for database object and it will be closed correctly. So, if, for example, you holds the db ref in GenServer state the db will be closed automatically if GenServer will be terminated/crashed. You don't need to call some function to close database.
+Now the `db` holds the `"forcing closing the database"` binary and there is no any 'variable' in out code what holds the ref `#Reference<0.1076596279.3008626690.232411>` to the database. So, technically speaking, ref count to underlying database object is 0. Erlang automatically calls the destructor for database object and it will be closed correctly. So, if, for example, you holds the db ref in GenServer state the db will be closed automatically if GenServer will be terminated/crashed. You don't need to call some function to close database.
 
-But what if you need to close the database/connection/result_ref explicitdly, for example, you want close database (flush all underline db buffers to disk) and when archive the db file. To prevent using the strange code like `db = "forcing closing the database"` there is `Duckdbex.release(resource)` function to explicitly closing any underline DuckDB resource:
+But what if you need to close the database/connection/result_ref explicitly, for example, you want to close the database (flush all underlying db buffers to disk) and when archive the db file. To prevent using the strange code like `db = "forcing closing the database"` there is `Duckdbex.release(resource)` function to explicitly closing any underlying DuckDB resource:
 
 ```elixir
 iex> {:ok, db} = Duckdbex.open("my_database.duckdb", %Duckdbex.Config{})
@@ -199,7 +199,7 @@ DuckDB provides several methods that allows you to easily and efficiently insert
 
 ### Insert Statements
 
-This is standart way of inserting data into relational database, but DuckDB **is not recommended to use this method if you are inserting more than a few records**. See [details](https://duckdb.org/docs/data/insert). To insert bulk data into database, please, use [Appender](#appender).
+This is standard way of inserting data into relational database, but DuckDB **is not recommended to use this method if you are inserting more than a few records**. See [details](https://duckdb.org/docs/data/insert). To insert bulk data into database, please, use [Appender](#appender).
 
 ```elixir
 {:ok, db} = Duckdbex.open()
@@ -213,7 +213,7 @@ A more detailed description together with syntax diagram can be found [here](htt
 
 ### CSV Files
 
-DuckDB has an embedded CSV reader that allows to load CSV files directly into database (escaping data transfering from Elixir to NIF, so ERTS doesn't involved in this). Also, DuckDB supports **compressed** CSV files, e.g. a gzipped file like `my_csv_file.csv.gz` and etc.
+DuckDB has an embedded CSV reader that allows to load CSV files directly into database (escaping data transferring from Elixir to NIF, so ERTS doesn't involved in this). Also, DuckDB supports **compressed** CSV files, e.g. a gzipped file like `my_csv_file.csv.gz`, etc.
 
 For example we have a `test.csv` CSV file:
 ```csv
@@ -437,7 +437,7 @@ Documentation generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 
 ## Huge numbers (hugeint)
 
-The BIGINT and HUGEINT types are designed to be used when the range of the integer type is insufficient. Hugeint in DuckDB is 128bit integer. Because max native integer in C++ is 64bit integer, HUGEINT is represented as combination of two 64bit integers. There is no efficient way to pass HUGEINT from DuckDB(C++) to Elixir(Erlang) than to pass it as is - combination of two 64bit integers. But in Elixir there is no restrictions to integers, so if you will get instead of integer a tuple of two integers you should conver it to integet via `DuckDB.hugeint_to_integer({upper_int, lower_int})`.
+The BIGINT and HUGEINT types are designed to be used when the range of the integer type is insufficient. Hugeint in DuckDB is 128bit integer. Because max native integer in C++ is 64bit integer, HUGEINT is represented as combination of two 64bit integers. There is no efficient way to pass HUGEINT from DuckDB(C++) to Elixir(Erlang) than to pass it as is - combination of two 64bit integers. But in Elixir there is no restrictions to integers, so if you will get instead of integer a tuple of two integers you should convert it to integer via `DuckDB.hugeint_to_integer({upper_int, lower_int})`.
 
 ```elixir
 > {:ok, r} = Duckdbex.query(conn, "SELECT SUM(1);")
