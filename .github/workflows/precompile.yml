@@ -75,8 +75,6 @@ jobs:
           echo '#include <math.h>' >> temp_header.hpp
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
-          sed -i 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
-          sed -i 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
 
       - name: Create precompiled library
         run: |
@@ -119,6 +117,9 @@ jobs:
           - runner: "macos-14"
             otp: "27.0"
             elixir: "1.18.2"
+          - runner: "macos-14"
+            otp: "28.0"
+            elixir: "1.18.4"
     steps:
       - uses: actions/checkout@v3
 
@@ -160,8 +161,6 @@ jobs:
           echo '#include <math.h>' >> temp_header.hpp
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
-          sed -i '' 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
-          sed -i '' 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
 
       - name: Create precompiled library
         run: |
