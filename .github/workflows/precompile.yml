@@ -55,18 +55,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
 
-      - name: Setup DuckDBex NIF
-        run: |
-          mkdir -p ~/.cache
-          curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-x86_64-linux-gnu-${DUCKDBEX_VERSION}.tar.gz -o ~/.cache/duckdbex-nif-${DUCKDB_VERSION}-x86_64-linux-gnu-${DUCKDBEX_VERSION}.tar.gz
-          ls -la ~/.cache/
-
       - name: Get Dependencies
         run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
           mix deps.get
-          # Wait a moment to ensure NIF is available
-          sleep 5
-          ls -la ~/.cache/
 
       - name: Install system dependencies
         run: |
@@ -95,6 +87,7 @@ jobs:
 
       - name: Mix Test
         run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
           MIX_ENV=test mix test
 
       - uses: softprops/action-gh-release@v1
@@ -166,22 +159,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.runner }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
 
-      - name: Setup DuckDBex NIF
-        run: |
-          mkdir -p ~/Library/Caches
-          if [ "${{ matrix.runner }}" = "macos-13" ]; then
-            curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-x86_64-darwin-${DUCKDBEX_VERSION}.tar.gz -o ~/Library/Caches/duckdbex-nif-${DUCKDB_VERSION}-x86_64-darwin-${DUCKDBEX_VERSION}.tar.gz
-          else
-            curl -L https://github.com/AlexR2D2/duckdbex/releases/latest/download/duckdbex-nif-${DUCKDB_VERSION}-aarch64-darwin-${DUCKDBEX_VERSION}.tar.gz -o ~/Library/Caches/duckdbex-nif-${DUCKDB_VERSION}-aarch64-darwin-${DUCKDBEX_VERSION}.tar.gz
-          fi
-          ls -la ~/Library/Caches/
-
       - name: Get Dependencies
         run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
           mix deps.get
-          # Wait a moment to ensure NIF is available
-          sleep 5
-          ls -la ~/Library/Caches/
 
       - name: Install libomp
         run: |
@@ -205,6 +186,7 @@ jobs:
 
       - name: Mix Test
         run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
           MIX_ENV=test mix test
 
       - uses: softprops/action-gh-release@v1
