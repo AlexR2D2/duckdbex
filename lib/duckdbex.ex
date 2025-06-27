@@ -57,7 +57,7 @@ defmodule Duckdbex do
   """
   @spec open(binary() | Duckdbex.Config.t()) :: {:ok, db()} | {:error, reason()}
   def open(path) when is_binary(path),
-    do: Duckdbex.NIF.open(path, nil)
+    do: Duckdbex.NIF.open(path, %Duckdbex.Config{})
 
   def open(%Duckdbex.Config{} = config),
     do: Duckdbex.NIF.open(":memory:", config)
@@ -71,7 +71,7 @@ defmodule Duckdbex do
   """
   @spec open() :: {:ok, db()} | {:error, reason()}
   def open(),
-    do: Duckdbex.NIF.open(":memory:", nil)
+    do: Duckdbex.NIF.open(":memory:", %Duckdbex.Config{})
 
   @doc """
   Creates connection object to work with database.

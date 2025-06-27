@@ -12,9 +12,7 @@ The library uses `amalgamation` of the DuckDB sources, which combine all sources
 
 All NIF functions implemented as [**Dirty NIF**](https://www.erlang.org/doc/man/erl_nif.html)
 
-**DuckDB is in the active development phase, and new version of library may not open the database created by the old version.**
-
-[HexDocs](https://hexdocs.pm/duckdbex/)
+Online [HexDocs](https://hexdocs.pm/duckdbex/)
 
 ## Installation
 
@@ -24,7 +22,7 @@ by adding `duckdbex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:duckdbex, "~> 0.3.0"}
+    {:duckdbex, "~> 0.3.9"}
   ]
 end
 ```
@@ -123,6 +121,41 @@ Duckdbex.fetch_chunk(result_ref)
 Duckdbex.fetch_chunk(result_ref)
 # => []
 ```
+
+## Closing connection, database and releasing resources
+
+All opened database/connecions/results refs will be closed/released automatically as soon as the ref for an object (db, conn, result_ref) will be thrown away. For example:
+
+Lets open the database:
+
+```elixir
+# Open an existing database file
+{:ok, db} = Duckdbex.open("exis_movies.duckdb")
+#Reference<0.1076596279.3008626690.232411>
+```
+
+Now the `db` holds the reference `#Reference<0.1076596279.3008626690.232411>` to the underline database object. If you throw away the 'db' ref to the underline database object the database will be closed automatically. Lets simulate this via 'assignment' to `db` some stub value
+
+
+```elixir
+# throw away the ref to the database
+db = "forcing closing the database"
+```
+
+Now the `db` holds the `"forcing closing the database"` binary and there is no any 'variable' in out code what holds the ref `#Reference<0.1076596279.3008626690.232411>` to the database. So, technically speaking, ref count to underline database object is 0. Erlang automatically calls the destructor for database object and it will be closed correctly. So, if, for example, you holds the db ref in GenServer state the db will be closed automatically if GenServer will be terminated/crashed. You don't need to call some function to close database.
+
+But what if you need to close the database/connection/result_ref explicitdly, for example, you want close database (flush all underline db buffers to disk) and when archive the db file. To prevent using the strange code like `db = "forcing closing the database"` there is `Duckdbex.release(resource)` function to explicitly closing any underline DuckDB resource:
+
+```elixir
+iex> {:ok, db} = Duckdbex.open("my_database.duckdb", %Duckdbex.Config{})
+iex> {:ok, conn} = Duckdbex.connection(db)
+iex> {:ok, res} = Duckdbex.query(conn, "SELECT 1 WHERE $1 = 1;", [1])
+iex> :ok = Duckdbex.release(res)
+iex> :ok = Duckdbex.release(conn)
+iex> :ok = Duckdbex.release(db)
+```
+
+Now, all are explicitly closed.
 
 ## Prepared statement
 
@@ -401,3 +434,27 @@ conf = %Duckdbex.Config{allow_unsigned_extensions: true}
 ```
 
 Documentation generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
+
+## Huge numbers (hugeint)
+
+The BIGINT and HUGEINT types are designed to be used when the range of the integer type is insufficient. Hugeint in DuckDB is 128bit integer. Because max native integer in C++ is 64bit integer, HUGEINT is represented as combination of two 64bit integers. There is no efficient way to pass HUGEINT from DuckDB(C++) to Elixir(Erlang) than to pass it as is - combination of two 64bit integers. But in Elixir there is no restrictions to integers, so if you will get instead of integer a tuple of two integers you should conver it to integet via `DuckDB.hugeint_to_integer({upper_int, lower_int})`.
+
+```elixir
+> {:ok, r} = Duckdbex.query(conn, "SELECT SUM(1);")
+> Duckdbex.fetch_all(r)
+[[{0, 1}]]
+> Duckdbex.hugeint_to_integer({0, 1})
+1
+```
+
+And vice versa, if you should pass HUGEINT as argument to sql query, you should convert this argument to 'native' representation
+
+```elixir
+> hi = Duckdbex.integer_to_hugeint(123456789123456789123456789)
+{6692605, 17502027875430457109}
+> {:ok, r} = Duckdbex.query(conn, "SELECT SUM(1234567891234567891234567891) > $1;", [hi])
+> Duckdbex.fetch_all(r)
+[[true]]
+```
+
+Currently Duckdbex lib didn't convert automatically `hugeint_to_integer` for you because this is additional extra pass through your collection of rows which will be executed inside the library.

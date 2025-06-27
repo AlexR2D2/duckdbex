@@ -1,7 +1,7 @@
 # Duckdbex sandbox
 
 ```elixir
-Mix.install([{:duckdbex, "~> 0.2.5"}])
+Mix.install([{:duckdbex, "~> 0.3.9"}])
 ```
 
 ## Starting with DuckDB

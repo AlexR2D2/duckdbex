@@ -115,7 +115,37 @@ connection(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 }
 
 static ERL_NIF_TERM
-query(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+query_without_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 2)
+    return enif_make_badarg(env);
+
+  auto connres = get_resource<duckdb::Connection>(env, argv[0]);
+  if (!connres)
+    return enif_make_badarg(env);
+
+  ErlNifBinary sql_stmt;
+  if (!enif_inspect_binary(env, argv[1], &sql_stmt))
+    return enif_make_badarg(env);
+
+  duckdb::unique_ptr<duckdb::QueryResult> result = connres->data->Query(std::string((const char*)sql_stmt.data, sql_stmt.size));
+
+  if (result->HasError())
+    return nif::make_error_tuple(env, result->GetErrorObject().Message());
+
+  ErlangResourceBuilder<duckdb::QueryResult> resource_builder(
+    query_result_nif_type,
+    std::move(result));
+
+  return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
+}
+
+//
+// This is trying to execute multiple statements sql with parameters
+// looks like this is not possible yet.
+// returns 'Cannot prepare multiple statements at once'
+//
+static ERL_NIF_TERM
+query_with_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   auto connres = get_resource<duckdb::Connection>(env, argv[0]);
   if (!connres)
     return enif_make_badarg(env);
@@ -483,7 +513,7 @@ appender_add_row(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!enif_is_list(env, argv[1]))
     return enif_make_badarg(env);
 
-  duckdb::vector<duckdb::LogicalType> types = apres->data->GetTypes();
+  const duckdb::vector<duckdb::LogicalType>& types = apres->data->GetActiveTypes();
 
   unsigned row_size = 0;
   if(!enif_get_list_length(env, argv[1], &row_size) || row_size != types.size())
@@ -520,7 +550,7 @@ appender_add_rows(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (!enif_is_list(env, argv[1]))
     return enif_make_badarg(env);
 
-  duckdb::vector<duckdb::LogicalType> types = apres->data->GetTypes();
+  const duckdb::vector<duckdb::LogicalType>& types = apres->data->GetActiveTypes();
 
   ERL_NIF_TERM item, row, rows;
   rows = argv[1];
@@ -722,8 +752,8 @@ static ErlNifFunc nif_funcs[] = {
   {"extension_is_loaded", 2, extension_is_loaded, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"open", 2, open, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"connection", 1, connection, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"query", 2, query, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"query", 3, query, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"query", 2, query_without_parameters, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"query", 3, query_with_parameters, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"prepare_statement", 2, prepare_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 1, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 2, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},

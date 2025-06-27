@@ -1,5 +1,13 @@
 # Changelog
 
+0.3.10
+  - [DuckDB 1.2.1 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.2.1)
+
+0.3.9
+- [DuckDB 1.2.0 release](https://github.com/duckdb/duckdb/releases/tag/v1.2.0). Please, read the [Announcing DuckDB 1.2.0](https://duckdb.org/2025/02/05/announcing-duckdb-120)
+- Fixed the isinf/isnan build error on Linux
+- `DuckDB.query(sql)` without parameters can execute multiple SQL statements at onсe.
+
 0.3.8
 - Added transaction managing functions: begin_transaction, commit, rollback, set_auto_commit, is_auto_commit, has_active_transaction
 

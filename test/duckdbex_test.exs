@@ -263,4 +263,21 @@ defmodule DuckdbexTest do
     assert {:error, "invalid type of parameter #1"} =
              Duckdbex.query(conn, "SELECT 1 WHERE 10 <= $1;", [10.0])
   end
+
+  test "multiple statement query without parameters" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+
+    assert {:ok, res} = Duckdbex.query(conn, "SELECT 3; SELECT 2; SELECT 1;")
+
+    assert [[3]] = Duckdbex.fetch_all(res)
+  end
+
+  test "multiple statement query with parameters" do
+    assert {:ok, db} = Duckdbex.open()
+    assert {:ok, conn} = Duckdbex.connection(db)
+
+    assert {:error, "Invalid Input Error: Cannot prepare multiple statements at once!"} =
+             Duckdbex.query(conn, "SELECT 1 WHERE 1 = $1; SELECT 2;", [1])
+  end
 end
