@@ -86,16 +86,16 @@ jobs:
           sed -i 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
           sed -i 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
 
-      - name: Mix Test
-        run: |
-          MIX_ENV=test mix test
-
       - name: Create precompiled library
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
           export CXXFLAGS="-D_GNU_SOURCE -std=c++11"
           mix elixir_make.precompile
+
+      - name: Mix Test
+        run: |
+          MIX_ENV=test mix test
 
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
@@ -196,16 +196,16 @@ jobs:
           sed -i '' 's/std::isinf/std::isfinite/g' c_src/value_to_term.cpp
           sed -i '' 's/std::isnan/std::isfinite/g' c_src/value_to_term.cpp
 
-      - name: Mix Test
-        run: |
-          MIX_ENV=test mix test
-
       - name: Create precompiled library
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
           export CXXFLAGS="-std=c++11"
           mix elixir_make.precompile
+
+      - name: Mix Test
+        run: |
+          MIX_ENV=test mix test
 
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
