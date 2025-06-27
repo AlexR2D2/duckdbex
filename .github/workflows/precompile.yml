@@ -66,7 +66,7 @@ jobs:
           sudo apt-get install -y build-essential automake autoconf pkg-config bc m4 unzip zip \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
-            libstdc++-10-dev erlang-dev
+            libstdc++-10-dev erlang-dev ccache
 
       - name: Patch source code
         run: |
@@ -82,7 +82,10 @@ jobs:
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          export CC="ccache gcc"
+          export CXX="ccache g++"
           export CXXFLAGS="-D_GNU_SOURCE -std=c++11"
+          export MAKEFLAGS="-j$(nproc)"
           mix elixir_make.precompile
 
       - name: Mix Test
@@ -108,32 +111,14 @@ jobs:
             otp: "26.0"
             elixir: "1.16.3"
           - runner: "macos-13"
-            otp: "26.0"
-            elixir: "1.17.3"
-          - runner: "macos-13"
-            otp: "27.0"
-            elixir: "1.17.3"
-          - runner: "macos-13"
             otp: "27.0"
             elixir: "1.18.2"
-          - runner: "macos-13"
-            otp: "28.0"
-            elixir: "1.18.4"
           - runner: "macos-14"
             otp: "26.0"
             elixir: "1.16.3"
           - runner: "macos-14"
-            otp: "26.0"
-            elixir: "1.17.3"
-          - runner: "macos-14"
-            otp: "27.0"
-            elixir: "1.17.3"
-          - runner: "macos-14"
             otp: "27.0"
             elixir: "1.18.2"
-          - runner: "macos-14"
-            otp: "28.0"
-            elixir: "1.18.4"
     steps:
       - uses: actions/checkout@v3
 
@@ -164,9 +149,10 @@ jobs:
           export ELIXIR_MAKE_FORCE_BUILD=1
           mix deps.get
 
-      - name: Install libomp
+      - name: Install libomp and ccache
         run: |
-          brew install libomp
+          brew install libomp ccache
+          echo "$(brew --prefix)/bin" >> $GITHUB_PATH
 
       - name: Patch source code
         run: |
@@ -181,7 +167,10 @@ jobs:
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          export CC="ccache clang"
+          export CXX="ccache clang++"
           export CXXFLAGS="-std=c++11"
+          export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
           mix elixir_make.precompile
 
       - name: Mix Test
