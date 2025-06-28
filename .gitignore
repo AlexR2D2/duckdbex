@@ -31,3 +31,4 @@ duckdbex-*.tar
 .claude/
 .elixir_ls/
 CLAUDE.md
+notes/
