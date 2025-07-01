@@ -3,10 +3,14 @@ name: precompile
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
+
+env:
+  DUCKDBEX_VERSION: "0.3.12"
+  DUCKDB_VERSION: "1.3.1"
 
 jobs:
   linux:
@@ -16,71 +20,163 @@ jobs:
       MIX_ENV: "prod"
     strategy:
       matrix:
-        # Elixir 1.14.5 is first version compatible with OTP 26
-        # NIF versions change according to
-        # https://github.com/erlang/otp/blob/dd57c853a324a9572a9e5ce227d8675ff004c6fe/erts/emulator/beam/erl_nif.h#L33
-        otp: ["25.0", "26.0"]
-        elixir: ["1.14.5"]
+        include:
+          - otp: "26.0"
+            elixir: "1.16.3"
+          - otp: "26.0"
+            elixir: "1.17.3"
+          - otp: "27.0"
+            elixir: "1.17.3"
+          - otp: "27.0"
+            elixir: "1.18.2"
+          - otp: "28.0"
+            elixir: "1.18.4"
     steps:
       - uses: actions/checkout@v3
+
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
-      - name: Install system dependecies
+
+      - name: Setup Mix
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+
+      - name: Cache mix deps
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+            ~/.cache/duckdbex-nif-*
+          key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
+
+      - name: Get Dependencies
+        run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
+          mix deps.get
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential automake autoconf pkg-config bc m4 unzip zip \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
-      - name: Mix Test
+            gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
+            libstdc++-10-dev erlang-dev ccache
+
+      - name: Patch source code
         run: |
-          mix deps.get
-          MIX_ENV=test mix test
+          echo '#define _GLIBCXX_USE_C99_MATH 1' > temp_header.hpp
+          echo '#include <cmath>' >> temp_header.hpp
+          echo '#include <math.h>' >> temp_header.hpp
+          cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
+          mv value_to_term_new.cpp c_src/value_to_term.cpp
+
       - name: Create precompiled library
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          export CXXFLAGS="-D_GNU_SOURCE -std=c++11"
+          export MAKEFLAGS="-j$(nproc)"
           mix elixir_make.precompile
+
+      - name: Mix Test
+        run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
+          MIX_ENV=test mix test
+
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             cache/*.tar.gz
+
   macos:
     runs-on: ${{matrix.runner}}
-    # Homebrew supports versioned Erlang/OTP but not Elixir
-    # It's a deliberate design decision from Homebrew to
-    # only support versioned distrinutions for certin packages
     name: Mac (${{ matrix.runner == 'macos-13' && 'Intel' || 'ARM' }}) Erlang/OTP ${{matrix.otp}} / Elixir
     env:
       MIX_ENV: "prod"
     strategy:
       matrix:
-        runner: ["macos-13", "macos-14"]
-        otp: ["25.0", "26.0"]
-        elixir: ["1.14.5"]
+        include:
+          - runner: "macos-13"
+            otp: "26.0"
+            elixir: "1.16.3"
+          - runner: "macos-13"
+            otp: "27.0"
+            elixir: "1.18.2"
+          - runner: "macos-14"
+            otp: "26.0"
+            elixir: "1.16.3"
+          - runner: "macos-14"
+            otp: "27.0"
+            elixir: "1.18.2"
+          - runner: "macos-14"
+            otp: "28.0"
+            elixir: "1.18.4"
     steps:
       - uses: actions/checkout@v3
+
       - uses: asdf-vm/actions/install@v2
         with:
           tool_versions: |
             erlang ${{matrix.otp}}
             elixir ${{matrix.elixir}}
-      - name: Install libomp
+
+      - name: Setup Mix
         run: |
-          brew install libomp
           mix local.hex --force
           mix local.rebar --force
-      - name: Mix Test
+
+      - name: Cache mix deps
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+            ~/Library/Caches/duckdbex-nif-*
+          key: ${{ runner.os }}-${{ matrix.runner }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.runner }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
+
+      - name: Get Dependencies
         run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
           mix deps.get
-          MIX_ENV=test mix test
+
+      - name: Install libomp and ccache
+        run: |
+          brew install libomp ccache
+          echo "$(brew --prefix)/bin" >> $GITHUB_PATH
+
+      - name: Patch source code
+        run: |
+          echo '#include <cmath>' > temp_header.hpp
+          echo '#include <math.h>' >> temp_header.hpp
+          cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
+          mv value_to_term_new.cpp c_src/value_to_term.cpp
+
       - name: Create precompiled library
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          export CC="ccache clang"
+          export CXX="ccache clang++"
+          export CXXFLAGS="-std=c++11"
+          export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
           mix elixir_make.precompile
+
+      - name: Mix Test
+        run: |
+          export ELIXIR_MAKE_FORCE_BUILD=1
+          MIX_ENV=test mix test
+
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:

@@ -28,3 +28,7 @@ duckdbex-*.tar
 
 # Temporary files for e.g. tests
 /tmp
+.claude/
+.elixir_ls/
+CLAUDE.md
+notes/
