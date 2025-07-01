@@ -2,8 +2,14 @@ defmodule Duckdbex.IssuesTest do
   use ExUnit.Case
 
   setup ctx do
-    {:ok, db} = Duckdbex.open(":memory:", nil)
+    assert {:ok, db} =
+             Duckdbex.open(":memory:", %Duckdbex.Config{allow_unsigned_extensions: true})
+
     {:ok, conn} = Duckdbex.connection(db)
+
+    assert {:ok, _res} = Duckdbex.query(conn, "INSTALL core_functions;")
+    assert {:ok, _res} = Duckdbex.query(conn, "LOAD core_functions;")
+
     Map.put(ctx, :conn, conn)
   end
 
@@ -193,6 +199,19 @@ defmodule Duckdbex.IssuesTest do
       assert {:error,
               "Invalid Input Error: Values were not provided for the following prepared statement parameters: 1"} =
                Duckdbex.execute_statement(stmt, ["test_value"])
+    end
+  end
+
+  describe "https://github.com/AlexR2D2/duckdbex/issues/42" do
+    test "DuckDB did't return expected parameters for table functions", %{conn: conn} do
+      {:ok, _} = Duckdbex.query(conn, "SELECT bin('goose');")
+
+      {:error,
+       "Invalid Input Error: Values were not provided for the following prepared statement parameters: 1"} =
+        Duckdbex.query(conn, "SELECT bin($1);", ["goose"])
+
+      {:ok, _} =
+        Duckdbex.query(conn, "SELECT bin(CAST($1 AS VARCHAR));", ["goose"])
     end
   end
 end
