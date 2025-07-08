@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 env:
-  DUCKDBEX_VERSION: "0.3.12"
-  DUCKDB_VERSION: "1.3.1"
+  DUCKDBEX_VERSION: "0.3.13"
+  DUCKDB_VERSION: "1.3.2"
 
 jobs:
   linux:

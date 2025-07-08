@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "2063dda3e6"
-#define DUCKDB_VERSION "v1.3.1"
+#define DUCKDB_SOURCE_ID "0b83e5d2f6"
+#define DUCKDB_VERSION "v1.3.2"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 3
-#define DUCKDB_PATCH_VERSION "1"
+#define DUCKDB_PATCH_VERSION "2"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -36284,7 +36284,7 @@ struct EnableFSSTVectorsSetting {
 struct EnableHTTPLoggingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_http_logging";
-	static constexpr const char *Description = "Enables HTTP logging";
+	static constexpr const char *Description = "(deprecated) Enables HTTP logging";
 	static constexpr const char *InputType = "BOOLEAN";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -36474,7 +36474,7 @@ struct HTTPLoggingOutputSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_logging_output";
 	static constexpr const char *Description =
-	    "The file to which HTTP logging output should be saved, or empty to print to the terminal";
+	    "(deprecated) The file to which HTTP logging output should be saved, or empty to print to the terminal";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -48345,7 +48345,7 @@ public:
 			error += StringUtil::Format("Node %lld: Start %lld, Count %lld", i, nodes[i].row_start,
 			                            nodes[i].node->count.load());
 		}
-		throw InternalException("Could not find node in column segment tree!\n%s%s", error, Exception::GetStackTrace());
+		throw InternalException("Could not find node in column segment tree!\n%s", error);
 	}
 
 	bool TryGetSegmentIndex(SegmentLock &l, idx_t row_number, idx_t &result) {
