@@ -12,7 +12,7 @@ defmodule Duckdbex.NIF do
   @type reason() :: :atom | binary()
 
   def init() do
-    :erlang.load_nif(Path.join(:code.priv_dir(:duckdbex), "duckdb_nif"), 0)
+    :erlang.load_nif(String.to_charlist(Path.join(:code.priv_dir(:duckdbex), "duckdb_nif")), 0)
   end
 
   @spec release(db() | connection() | statement() | query_result() | appender()) :: :ok
@@ -81,7 +81,7 @@ defmodule Duckdbex.NIF do
   @spec appender_flush(appender()) :: :ok | {:error, reason()}
   def appender_flush(_appender), do: :erlang.nif_error(:not_loaded)
 
-  @spec appender_flush(appender()) :: :ok | {:error, reason()}
+  @spec appender_close(appender()) :: :ok | {:error, reason()}
   def appender_close(_appender), do: :erlang.nif_error(:not_loaded)
 
   @spec library_version() :: binary()
