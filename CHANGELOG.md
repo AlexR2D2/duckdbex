@@ -1,5 +1,8 @@
 # Changelog
 
+0.3.14
+- Added dialyzer
+
 0.3.10
   - [DuckDB 1.2.1 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.2.1)
 
