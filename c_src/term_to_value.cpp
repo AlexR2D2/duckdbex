@@ -11,7 +11,7 @@ namespace {
     if (!duckdb::Hugeint::TryConvert(value, result))
       return false;
 
-    sink = move(duckdb::Value::HUGEINT(result));
+    sink = std::move(duckdb::Value::HUGEINT(result));
     return true;
   }
 
@@ -21,7 +21,7 @@ namespace {
     if (!duckdb::Uhugeint::TryConvert(value, result))
       return false;
 
-    sink = move(duckdb::Value::UHUGEINT(result));
+    sink = std::move(duckdb::Value::UHUGEINT(result));
     return true;
   }
 
@@ -110,7 +110,7 @@ bool nif::term_to_null(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
     return false;
 
   if (!std::strcmp(&atom[0], "nil")) {
-    sink = move(duckdb::Value(duckdb::LogicalType::SQLNULL));
+    sink = std::move(duckdb::Value(duckdb::LogicalType::SQLNULL));
     return true;
   }
 
@@ -127,12 +127,12 @@ bool nif::term_to_boolean(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
     return false;
 
   if (!std::strcmp(&atom[0], "true")) {
-    sink = move(duckdb::Value::BOOLEAN(true));
+    sink = std::move(duckdb::Value::BOOLEAN(true));
     return true;
   }
 
   if (!std::strcmp(&atom[0], "false")) {
-    sink = move(duckdb::Value::BOOLEAN(false));
+    sink = std::move(duckdb::Value::BOOLEAN(false));
     return true;
   }
 
@@ -142,7 +142,7 @@ bool nif::term_to_boolean(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 bool nif::term_to_string(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   ErlNifBinary bin;
   if (enif_inspect_binary(env, term, &bin)) {
-    sink = move(duckdb::Value(std::string((const char*)bin.data, bin.size)));
+    sink = std::move(duckdb::Value(std::string((const char*)bin.data, bin.size)));
     return true;
   }
   return false;
@@ -155,13 +155,13 @@ bool nif::term_to_enum(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 bool nif::term_to_float(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   double a_double;
   if(enif_get_double(env, term, &a_double)) {
-    sink = move(duckdb::Value::FLOAT(static_cast<float>(a_double)));
+    sink = std::move(duckdb::Value::FLOAT(static_cast<float>(a_double)));
     return true;
   }
 
   ErlNifSInt64 an_int64;
   if (enif_get_int64(env, term, &an_int64)) {
-    sink = move(duckdb::Value::FLOAT(static_cast<float>(an_int64)));
+    sink = std::move(duckdb::Value::FLOAT(static_cast<float>(an_int64)));
     return true;
   }
 
@@ -171,13 +171,13 @@ bool nif::term_to_float(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) 
 bool nif::term_to_double(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   double a_double;
   if(enif_get_double(env, term, &a_double)) {
-    sink = move(duckdb::Value::DOUBLE(a_double));
+    sink = std::move(duckdb::Value::DOUBLE(a_double));
     return true;
   }
 
   ErlNifSInt64 an_int64;
   if (enif_get_int64(env, term, &an_int64)) {
-    sink = move(duckdb::Value::DOUBLE(static_cast<double>(an_int64)));
+    sink = std::move(duckdb::Value::DOUBLE(static_cast<double>(an_int64)));
     return true;
   }
 
@@ -187,7 +187,7 @@ bool nif::term_to_double(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink)
 bool nif::term_to_integer(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   int an_int;
   if(enif_get_int(env, term, &an_int)) {
-    sink = move(duckdb::Value::INTEGER(an_int));
+    sink = std::move(duckdb::Value::INTEGER(an_int));
     return true;
   }
 
@@ -197,7 +197,7 @@ bool nif::term_to_integer(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 bool nif::term_to_uinteger(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   unsigned int an_uint;
   if(enif_get_uint(env, term, &an_uint)) {
-    sink = move(duckdb::Value::UINTEGER(an_uint));
+    sink = std::move(duckdb::Value::UINTEGER(an_uint));
     return true;
   }
 
@@ -207,7 +207,7 @@ bool nif::term_to_uinteger(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
 bool nif::term_to_smallint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   int an_int;
   if(enif_get_int(env, term, &an_int)) {
-    sink = move(duckdb::Value::SMALLINT(an_int));
+    sink = std::move(duckdb::Value::SMALLINT(an_int));
     return true;
   }
 
@@ -217,7 +217,7 @@ bool nif::term_to_smallint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
 bool nif::term_to_usmallint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   unsigned int an_uint;
   if(enif_get_uint(env, term, &an_uint)) {
-    sink = move(duckdb::Value::USMALLINT(an_uint));
+    sink = std::move(duckdb::Value::USMALLINT(an_uint));
     return true;
   }
 
@@ -227,7 +227,7 @@ bool nif::term_to_usmallint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& si
 bool nif::term_to_tinyint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   int an_int;
   if(enif_get_int(env, term, &an_int)) {
-    sink = move(duckdb::Value::TINYINT(an_int));
+    sink = std::move(duckdb::Value::TINYINT(an_int));
     return true;
   }
   return false;
@@ -236,13 +236,13 @@ bool nif::term_to_tinyint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 bool nif::term_to_bigint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   ErlNifSInt64 an_int64;
   if (enif_get_int64(env, term, &an_int64)) {
-    sink = move(duckdb::Value::BIGINT(static_cast<int64_t>(an_int64)));
+    sink = std::move(duckdb::Value::BIGINT(static_cast<int64_t>(an_int64)));
     return true;
   }
 
   long int a_long_int;
   if(enif_get_long(env, term, &a_long_int)) {
-    sink = move(duckdb::Value::BIGINT(static_cast<int64_t>(a_long_int)));
+    sink = std::move(duckdb::Value::BIGINT(static_cast<int64_t>(a_long_int)));
     return true;
   }
 
@@ -252,13 +252,13 @@ bool nif::term_to_bigint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink)
 bool nif::term_to_ubigint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   ErlNifUInt64 an_uint64;
   if (enif_get_uint64(env, term, &an_uint64)) {
-    sink = move(duckdb::Value::UBIGINT(an_uint64));
+    sink = std::move(duckdb::Value::UBIGINT(an_uint64));
     return true;
   }
 
   unsigned long a_ulong_int;
   if(enif_get_ulong(env, term, &a_ulong_int)) {
-    sink = move(duckdb::Value::UBIGINT(static_cast<int64_t>(a_ulong_int)));
+    sink = std::move(duckdb::Value::UBIGINT(static_cast<int64_t>(a_ulong_int)));
     return true;
   }
   return false;
@@ -267,7 +267,7 @@ bool nif::term_to_ubigint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 bool nif::term_to_utinyint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   unsigned int an_uint;
   if(enif_get_uint(env, term, &an_uint)) {
-    sink = move(duckdb::Value::UTINYINT(an_uint));
+    sink = std::move(duckdb::Value::UTINYINT(an_uint));
     return true;
   }
   return false;
@@ -296,7 +296,7 @@ bool nif::term_to_hugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
     if (!duckdb::Hugeint::TryConvert(hugeint, result))
       return false;
 
-    sink = move(duckdb::Value::HUGEINT(result));
+    sink = std::move(duckdb::Value::HUGEINT(result));
     return true;
   }
 
@@ -350,7 +350,7 @@ bool nif::term_to_uhugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
     if (!duckdb::Uhugeint::TryConvert(uhugeint, result))
       return false;
 
-    sink = move(duckdb::Value::UHUGEINT(result));
+    sink = std::move(duckdb::Value::UHUGEINT(result));
     return true;
   }
 
@@ -397,7 +397,7 @@ bool nif::term_to_decimal(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
     if(!enif_get_uint(env, decimal_tuple[2], &scale))
       return false;
 
-    sink = move(duckdb::Value::DECIMAL((int64_t)value, width, scale));
+    sink = std::move(duckdb::Value::DECIMAL((int64_t)value, width, scale));
 
     return true;
   }
@@ -422,7 +422,7 @@ bool nif::term_to_uuid(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
       if(!duckdb::UUID::FromCString((const char*)bin.data, bin.size, result))
         return false;
 
-      sink = move(duckdb::Value::UUID(result));
+      sink = std::move(duckdb::Value::UUID(result));
       return true;
     }
   }
@@ -431,7 +431,7 @@ bool nif::term_to_uuid(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   if (nif::term_to_uhugeint(env, term, uhugeint_val)) {
     duckdb::uhugeint_t uhugeint = duckdb::HugeIntValue::Get(uhugeint_val);
     duckdb::hugeint_t hugeint = duckdb::UUID::FromUHugeint(uhugeint);
-    sink = move(duckdb::Value::UUID(hugeint));
+    sink = std::move(duckdb::Value::UUID(hugeint));
     return true;
   }
 
@@ -448,7 +448,7 @@ bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
     if (!duckdb::Date::TryFromDate((int32_t)year, (int32_t)month, (int32_t)day, date))
       return false;
 
-    sink = move(duckdb::Value::DATE(date));
+    sink = std::move(duckdb::Value::DATE(date));
     return true;
   }
 
@@ -461,7 +461,7 @@ bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 
     duckdb::DateCastResult result = duckdb::Date::TryConvertDate((const char*)bin.data, bin.size, pos, date, special, strict);
     if (result == duckdb::DateCastResult::SUCCESS) {
-      sink = move(duckdb::Value::DATE(date));
+      sink = std::move(duckdb::Value::DATE(date));
       return true;
     } else {
       // TODO: Forward cast error to the client
@@ -479,7 +479,7 @@ bool nif::term_to_time(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
     if (!enif_get_time(env, term, hour, minute, second, micros))
       return false;
 
-    sink = move(duckdb::Value::TIME((int32_t)hour, (int32_t)minute, (int32_t)second, (int32_t)micros));
+    sink = std::move(duckdb::Value::TIME((int32_t)hour, (int32_t)minute, (int32_t)second, (int32_t)micros));
 
     return true;
   }
@@ -492,7 +492,7 @@ bool nif::term_to_time(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
     if (!duckdb::Time::TryConvertTime((const char*)bin.data, bin.size, pos, time, special))
       return false;
 
-    sink = move(duckdb::Value::TIME(time));
+    sink = std::move(duckdb::Value::TIME(time));
     return true;
   }
 
@@ -515,7 +515,7 @@ bool nif::term_to_time_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
       (std::abs(offset_hour) * duckdb::Interval::SECS_PER_HOUR +
       offset_minute * duckdb::Interval::SECS_PER_MINUTE) * (offset_hour < 0 ? -1 : 1);
 
-    sink = move(duckdb::Value::TIMETZ(duckdb::dtime_tz_t(duckdb::dtime_t(time_in_microseconds), offset)));
+    sink = std::move(duckdb::Value::TIMETZ(duckdb::dtime_tz_t(duckdb::dtime_t(time_in_microseconds), offset)));
 
     return true;
   }
@@ -528,7 +528,7 @@ bool nif::term_to_time_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
     if (!duckdb::Time::TryConvertTimeTZ((const char*)bin.data, bin.size, pos, result, has_offset))
       return false;
 
-    sink = move(duckdb::Value::TIMETZ(result));
+    sink = std::move(duckdb::Value::TIMETZ(result));
     return true;
   }
 
@@ -543,13 +543,13 @@ bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& si
     if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, micros))
       return false;
 
-    sink = move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
+    sink = std::move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
 
     return true;
   } else if(enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_t result;
-    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result)) {
-      sink = move(duckdb::Value::TIMESTAMP(result));
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, false)) {
+      sink = std::move(duckdb::Value::TIMESTAMP(result));
       return true;
     }
   }
@@ -585,7 +585,7 @@ bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
     if (!duckdb::Timestamp::TryFromDatetime(date, timez, timestamp))
       return false;
 
-    sink = move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
+    sink = std::move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
     return true;
   }
 
@@ -595,9 +595,9 @@ bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
     duckdb::string_t tz;
     duckdb::timestamp_t timestamp;
 
-    duckdb::TimestampCastResult result = duckdb::Timestamp::TryConvertTimestampTZ((const char*)bin.data, bin.size, timestamp, has_offset, tz);
+    duckdb::TimestampCastResult result = duckdb::Timestamp::TryConvertTimestampTZ((const char*)bin.data, bin.size, timestamp, true, has_offset, tz);
     if (result == duckdb::TimestampCastResult::SUCCESS) {
-      sink = move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
+      sink = std::move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
       return true;
     } else {
       // TODO: Return the cast result to client
@@ -628,13 +628,13 @@ bool nif::term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
     if (!duckdb::Timestamp::TryFromTimestampNanos(timestamp, nanos, timestamp_ns))
       return false;
 
-    sink = move(duckdb::Value::CreateValue(timestamp_ns));
+    sink = std::move(duckdb::Value::CreateValue(timestamp_ns));
 
     return true;
   } else if(enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_ns_t result;
     if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result)) {
-      sink = move(duckdb::Value::CreateValue(result));
+      sink = std::move(duckdb::Value::CreateValue(result));
       return true;
     }
   }
@@ -652,13 +652,13 @@ bool nif::term_to_timestamp_ms(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 
     int32_t micros = (int32_t)(milliseconds * duckdb::Interval::MICROS_PER_MSEC);
 
-    sink = move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
+    sink = std::move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
 
     return true;
   } else if(enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_t result;
-    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result)) {
-      sink = move(duckdb::Value::TIMESTAMP(result));
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, false)) {
+      sink = std::move(duckdb::Value::TIMESTAMP(result));
       return true;
     }
   }
@@ -674,13 +674,13 @@ bool nif::term_to_timestamp_sec(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value
     if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, precision))
       return false;
 
-    sink = move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, 0));
+    sink = std::move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, 0));
 
     return true;
   } else if(enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_t timestamp;
-    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, timestamp)) {
-      sink = move(duckdb::Value::TIMESTAMP(timestamp));
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, timestamp, false)) {
+      sink = std::move(duckdb::Value::TIMESTAMP(timestamp));
       return true;
     }
   }
@@ -695,12 +695,12 @@ bool nif::term_to_blob(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   ErlNifBinary bin;
 
   if (enif_inspect_iolist_as_binary(env, term, &bin)) {
-    sink = move(duckdb::Value::BLOB(static_cast<duckdb::const_data_ptr_t>(bin.data), bin.size));
+    sink = std::move(duckdb::Value::BLOB(static_cast<duckdb::const_data_ptr_t>(bin.data), bin.size));
     return true;
   }
 
   if (enif_inspect_binary(env, term, &bin)) {
-    sink = move(duckdb::Value::BLOB(static_cast<duckdb::const_data_ptr_t>(bin.data), bin.size));
+    sink = std::move(duckdb::Value::BLOB(static_cast<duckdb::const_data_ptr_t>(bin.data), bin.size));
     return true;
   }
 
@@ -721,7 +721,7 @@ bool nif::term_to_interval(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
         !enif_get_int64(env, interval_parts[2], &micros))
       return false;
 
-    sink = move(duckdb::Value::INTERVAL(months, days, micros));
+    sink = std::move(duckdb::Value::INTERVAL(months, days, micros));
     return true;
   }
 
@@ -730,7 +730,7 @@ bool nif::term_to_interval(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
     if (!enif_get_int64(env, term, &micros))
       return false;
 
-    sink = move(duckdb::Value::INTERVAL(duckdb::Interval::FromMicro(micros)));
+    sink = std::move(duckdb::Value::INTERVAL(duckdb::Interval::FromMicro(micros)));
     return true;
   }
 
@@ -745,7 +745,7 @@ bool nif::term_to_interval(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
     if (!duckdb::Interval::FromCString((const char*)bin.data, bin.size, result, &error_message, strict))
       return false;
 
-    sink = move(duckdb::Value::INTERVAL(result));
+    sink = std::move(duckdb::Value::INTERVAL(result));
     return true;
   }
 
@@ -763,7 +763,7 @@ bool nif::term_to_list(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalT
     return false;
 
   if (list_length == 0) {
-    sink = move(duckdb::Value::LIST(child_type, std::vector<duckdb::Value>()));
+    sink = std::move(duckdb::Value::LIST(child_type, std::vector<duckdb::Value>()));
     return true;
   }
 
@@ -777,11 +777,11 @@ bool nif::term_to_list(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalT
         !nif::term_to_value(env, head, child_type, child))
       return false;
 
-    values[i] = (move(child));
+    values[i] = (std::move(child));
     list = tail;
   }
 
-  sink = move(duckdb::Value::LIST(child_type, values));
+  sink = std::move(duckdb::Value::LIST(child_type, values));
 
   return true;
 }
@@ -797,7 +797,7 @@ bool nif::term_to_array(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
     return false;
 
   if (list_length == 0) {
-    sink = move(duckdb::Value::ARRAY(child_type, duckdb::vector<duckdb::Value>(0)));
+    sink = std::move(duckdb::Value::ARRAY(child_type, duckdb::vector<duckdb::Value>(0)));
     return true;
   }
 
@@ -811,11 +811,11 @@ bool nif::term_to_array(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
         !nif::term_to_value(env, head, child_type, child))
       return false;
 
-    values[i] = (move(child));
+    values[i] = (std::move(child));
     list = tail;
   }
 
-  sink = move(duckdb::Value::ARRAY(child_type, values));
+  sink = std::move(duckdb::Value::ARRAY(child_type, values));
 
   return true;
 }
@@ -832,7 +832,7 @@ bool nif::term_to_map(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalTy
   auto &value_type = duckdb::MapType::ValueType(map_type);
 
   if (list_length == 0) {
-    sink = move(duckdb::Value::MAP(key_type, value_type, std::vector<duckdb::Value>(), std::vector<duckdb::Value>()));
+    sink = std::move(duckdb::Value::MAP(key_type, value_type, std::vector<duckdb::Value>(), std::vector<duckdb::Value>()));
     return true;
   }
 
@@ -852,13 +852,13 @@ bool nif::term_to_map(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalTy
         !term_to_value(env, pair[1], value_type, value))
       return false;
 
-    keys[i] = move(key);
-    values[i] = move(value);
+    keys[i] = std::move(key);
+    values[i] = std::move(value);
 
     list = tail;
   }
 
-  sink = move(duckdb::Value::MAP(key_type, value_type, keys, values));
+  sink = std::move(duckdb::Value::MAP(key_type, value_type, keys, values));
 
   return true;
 }
@@ -881,10 +881,10 @@ bool nif::term_to_struct(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logica
     if (!term_to_value(env, value_term, duckdb::StructType::GetChildType(map_type, child_idx), value_sink))
       return false;
 
-    children.push_back(make_pair(field_name, move(value_sink)));
+    children.push_back(make_pair(field_name, std::move(value_sink)));
   }
 
-  sink = duckdb::Value::STRUCT(move(children));
+  sink = duckdb::Value::STRUCT(std::move(children));
 
   return true;
 }

@@ -86,6 +86,32 @@ namespace {
     return false;
   }
 
+  bool set_database_path(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    ErlNifBinary bin;
+    if (!enif_inspect_binary(env, term, &bin))
+      return false;
+
+    sink.options.database_path = std::string((const char*)bin.data, bin.size);
+
+    return true;
+  }
+
+  bool set_database_type(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    ErlNifBinary bin;
+    if (!enif_inspect_binary(env, term, &bin))
+      return false;
+
+    sink.options.database_type = std::string((const char*)bin.data, bin.size);
+
+    return true;
+  }
+
   bool set_access_mode(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     if (nif::is_atom(env, term, "automatic")) {
       sink.options.access_mode = duckdb::AccessMode::AUTOMATIC;
@@ -241,45 +267,8 @@ namespace {
     return set_boolean(env, term, sink.options.allow_unredacted_secrets);
   }
 
-  bool set_collation(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "nil"))
-      return true;
-
-    ErlNifBinary bin;
-    if (!enif_inspect_binary(env, term, &bin))
-      return false;
-
-    sink.options.collation = std::string((const char*)bin.data, bin.size);
-
-    return true;
-  }
-
-  bool set_default_order_type(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "asc")) {
-      sink.options.default_order_type = duckdb::OrderType::ASCENDING;
-      return true;
-    }
-
-    if (nif::is_atom(env, term, "desc")) {
-      sink.options.default_order_type = duckdb::OrderType::DESCENDING;
-      return true;
-    }
-
-    return false;
-  }
-
-  bool set_default_null_order(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "nulls_first")) {
-      sink.options.default_null_order = duckdb::DefaultOrderByNullType::NULLS_FIRST;
-      return true;
-    }
-
-    if (nif::is_atom(env, term, "nulls_last")) {
-      sink.options.default_null_order = duckdb::DefaultOrderByNullType::NULLS_LAST;
-      return true;
-    }
-
-    return false;
+  bool set_disable_database_invalidation(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    return set_boolean(env, term, sink.options.disable_database_invalidation);
   }
 
   bool set_enable_external_access(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -349,6 +338,10 @@ namespace {
       duckdb::SerializationCompatibility::FromString(std::string((const char*)bin.data, bin.size));
 
     return true;
+  }
+
+  bool set_initialize_default_database(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    return set_boolean(env, term, sink.options.initialize_default_database);
   }
 
   bool set_disabled_optimizers(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -616,36 +609,6 @@ namespace {
     return false;
   }
 
-  bool set_preserve_insertion_order(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.preserve_insertion_order);
-  }
-
-  bool set_arrow_offset_size(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "regular")) {
-      sink.options.arrow_offset_size = duckdb::ArrowOffsetSize::REGULAR;
-      return true;
-    }
-
-    if (nif::is_atom(env, term, "large")) {
-      sink.options.arrow_offset_size = duckdb::ArrowOffsetSize::LARGE;
-      return true;
-    }
-
-    return false;
-  }
-
-  bool set_arrow_use_list_view(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.arrow_use_list_view);
-  }
-
-  bool set_arrow_arrow_lossless_conversion(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.arrow_lossless_conversion);
-  }
-
-  bool set_produce_arrow_string_views(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.produce_arrow_string_views);
-  }
-
   bool set_extension_directory(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     if (nif::is_atom(env, term, "nil"))
       return true;
@@ -665,22 +628,6 @@ namespace {
 
   bool set_allow_community_extensions(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     return set_boolean(env, term, sink.options.allow_community_extensions);
-  }
-
-  bool set_allow_extensions_metadata_mismatch(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.allow_extensions_metadata_mismatch);
-  }
-
-  bool set_enable_fsst_vectors(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.enable_fsst_vectors);
-  }
-
-  bool set_enable_view_dependencies(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.enable_view_dependencies);
-  }
-
-  bool set_enable_macro_dependencies(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.enable_macro_dependencies);
   }
 
   bool set_user_options(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -703,10 +650,6 @@ namespace {
     sink.options.unrecognized_options = options;
 
     return true;
-  }
-
-  bool set_immediate_transaction_mode(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    return set_boolean(env, term, sink.options.immediate_transaction_mode);
   }
 
   bool set_lock_configuration(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -769,6 +712,10 @@ namespace {
     return true;
   }
 
+  bool set_temp_file_encryption(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    return set_boolean(env, term, sink.options.temp_file_encryption);
+  }
+
   bool set_default_block_alloc_size(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     if (nif::is_atom(env, term, "nil"))
       return true;
@@ -782,60 +729,21 @@ namespace {
     return true;
   }
 
+  bool set_default_block_header_size(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    ErlNifUInt64 default_block_header_size;
+    if (!enif_get_uint64(env, term, &default_block_header_size))
+      return false;
+
+    sink.options.default_block_header_size = default_block_header_size;
+
+    return true;
+  }
+
   bool set_abort_on_wal_failure(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
     return set_boolean(env, term, sink.options.abort_on_wal_failure);
-  }
-
-  bool set_index_scan_percentage(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "nil"))
-      return true;
-
-    double index_scan_percentage;
-    if(!enif_get_double(env, term, &index_scan_percentage))
-      return false;
-
-    sink.options.index_scan_percentage = index_scan_percentage;
-
-    return true;
-  }
-
-  bool set_index_scan_max_count(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "nil"))
-      return true;
-
-    ErlNifUInt64 index_scan_max_count;
-    if (!enif_get_uint64(env, term, &index_scan_max_count))
-      return false;
-
-    sink.options.index_scan_max_count = index_scan_max_count;
-
-    return true;
-  }
-
-  bool set_catalog_error_max_schemas(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "nil"))
-      return true;
-
-    ErlNifUInt64 catalog_error_max_schemas;
-    if (!enif_get_uint64(env, term, &catalog_error_max_schemas))
-      return false;
-
-    sink.options.catalog_error_max_schemas = catalog_error_max_schemas;
-
-    return true;
-  }
-
-  bool set_max_vacuum_tasks(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
-    if (nif::is_atom(env, term, "nil"))
-      return true;
-
-    ErlNifUInt64 max_vacuum_tasks;
-    if (!enif_get_uint64(env, term, &max_vacuum_tasks))
-      return false;
-
-    sink.options.max_vacuum_tasks = max_vacuum_tasks;
-
-    return true;
   }
 
   bool set_memory_allocator(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
@@ -852,6 +760,12 @@ namespace {
   }
 
   bool set_option(ErlNifEnv* env, ERL_NIF_TERM name, ERL_NIF_TERM value, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, name, "database_path"))
+      return set_database_path(env, value, sink);
+
+    if (nif::is_atom(env, name, "database_type"))
+      return set_database_type(env, value, sink);
+
     if (nif::is_atom(env, name, "access_mode"))
       return set_access_mode(env, value, sink);
 
@@ -903,14 +817,8 @@ namespace {
     if (nif::is_atom(env, name, "allow_unredacted_secrets"))
       return set_allow_unredacted_secrets(env, value, sink);
 
-    if (nif::is_atom(env, name, "collation"))
-      return set_collation(env, value, sink);
-
-    if (nif::is_atom(env, name, "default_order_type"))
-      return set_default_order_type(env, value, sink);
-
-    if (nif::is_atom(env, name, "default_null_order"))
-      return set_default_null_order(env, value, sink);
+    if (nif::is_atom(env, name, "disable_database_invalidation"))
+      return set_disable_database_invalidation(env, value, sink);
 
     if (nif::is_atom(env, name, "enable_external_access"))
       return set_enable_external_access(env, value, sink);
@@ -936,6 +844,9 @@ namespace {
     if (nif::is_atom(env, name, "serialization_compatibility"))
       return set_serialization_compatibility(env, value, sink);
 
+    if (nif::is_atom(env, name, "initialize_default_database"))
+      return set_initialize_default_database(env, value, sink);
+
     if (nif::is_atom(env, name, "disabled_optimizers"))
       return set_disabled_optimizers(env, value, sink);
 
@@ -951,21 +862,6 @@ namespace {
     if (nif::is_atom(env, name, "force_bitpacking_mode"))
       return set_force_bitpacking_mode(env, value, sink);
 
-    if (nif::is_atom(env, name, "preserve_insertion_order"))
-      return set_preserve_insertion_order(env, value, sink);
-
-    if (nif::is_atom(env, name, "arrow_offset_size"))
-      return set_arrow_offset_size(env, value, sink);
-
-    if (nif::is_atom(env, name, "arrow_use_list_view"))
-      return set_arrow_use_list_view(env, value, sink);
-
-    if (nif::is_atom(env, name, "arrow_arrow_lossless_conversion"))
-      return set_arrow_arrow_lossless_conversion(env, value, sink);
-
-    if (nif::is_atom(env, name, "produce_arrow_string_views"))
-      return set_produce_arrow_string_views(env, value, sink);
-
     if (nif::is_atom(env, name, "extension_directory"))
       return set_extension_directory(env, value, sink);
 
@@ -975,26 +871,11 @@ namespace {
     if (nif::is_atom(env, name, "allow_community_extensions"))
       return set_allow_community_extensions(env, value, sink);
 
-    if (nif::is_atom(env, name, "allow_extensions_metadata_mismatch"))
-      return set_allow_extensions_metadata_mismatch(env, value, sink);
-
-    if (nif::is_atom(env, name, "enable_fsst_vectors"))
-      return set_enable_fsst_vectors(env, value, sink);
-
-    if (nif::is_atom(env, name, "enable_view_dependencies"))
-      return set_enable_view_dependencies(env, value, sink);
-
-    if (nif::is_atom(env, name, "enable_macro_dependencies"))
-      return set_enable_macro_dependencies(env, value, sink);
-
     if (nif::is_atom(env, name, "user_options"))
       return set_user_options(env, value, sink);
 
     if (nif::is_atom(env, name, "unrecognized_options"))
       return set_unrecognized_options(env, value, sink);
-
-    if (nif::is_atom(env, name, "immediate_transaction_mode"))
-      return set_immediate_transaction_mode(env, value, sink);
 
     if (nif::is_atom(env, name, "lock_configuration"))
       return set_lock_configuration(env, value, sink);
@@ -1014,23 +895,17 @@ namespace {
     if (nif::is_atom(env, name, "custom_user_agent"))
       return set_custom_user_agent(env, value, sink);
 
+    if (nif::is_atom(env, name, "temp_file_encryption"))
+      return set_temp_file_encryption(env, value, sink);
+
     if (nif::is_atom(env, name, "default_block_alloc_size"))
       return set_default_block_alloc_size(env, value, sink);
 
+    if (nif::is_atom(env, name, "default_block_header_size"))
+      return set_default_block_header_size(env, value, sink);
+
     if (nif::is_atom(env, name, "abort_on_wal_failure"))
       return set_abort_on_wal_failure(env, value, sink);
-
-    if (nif::is_atom(env, name, "index_scan_percentage"))
-      return set_index_scan_percentage(env, value, sink);
-
-    if (nif::is_atom(env, name, "index_scan_max_count"))
-      return set_index_scan_max_count(env, value, sink);
-
-    if (nif::is_atom(env, name, "catalog_error_max_schemas"))
-      return set_catalog_error_max_schemas(env, value, sink);
-
-    if (nif::is_atom(env, name, "max_vacuum_tasks"))
-      return set_max_vacuum_tasks(env, value, sink);
 
     if (nif::is_atom(env, name, "memory_allocator"))
       return set_memory_allocator(env, value, sink);

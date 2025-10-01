@@ -51,6 +51,12 @@ defmodule Duckdbex.Config do
           | :compression_count
 
   defstruct [
+    # Database file path. May be empty for in-memory mode
+    database_path: nil,
+
+    # Database type. If empty, automatically extracted from `database_path`, where a `type:path` syntax is expected
+    database_type: nil,
+
     # Access mode of the database
     access_mode: :automatic,
 
@@ -64,10 +70,10 @@ defmodule Duckdbex.Config do
     load_extensions: true,
 
     # Whether known extensions are allowed to be automatically loaded when a query depends on them
-    autoload_known_extensions: false,
+    autoload_known_extensions: true,
 
     # Whether known extensions are allowed to be automatically installed when a query depends on them
-    autoinstall_known_extensions: false,
+    autoinstall_known_extensions: true,
 
     # Override for the default extension repository
     custom_extension_repo: nil,
@@ -78,7 +84,7 @@ defmodule Duckdbex.Config do
     # The maximum memory used by the database system (in bytes). Default: 80% of System available memory
     maximum_memory: nil,
 
-    # The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.
+    # The maximum size of the `temp_directory` folder when set (in bytes). Default: 90% of available disk space.
     maximum_swap_space: nil,
 
     # The maximum amount of native CPU threads used by the database system. Default: all available.
@@ -104,14 +110,8 @@ defmodule Duckdbex.Config do
     # Whether or not to allow printing unredacted secrets
     allow_unredacted_secrets: false,
 
-    # The collation type of the database
-    collation: nil,
-
-    # The order type used when none is specified
-    default_order_type: :asc,
-
-    # Null ordering used when none is specified (default: NULLS LAST)
-    default_null_order: :nulls_last,
+    # Disables invalidating the database instance when encountering a fatal error.
+    disable_database_invalidation: false,
 
     # Enable COPY and related commands
     enable_external_access: true,
@@ -119,7 +119,7 @@ defmodule Duckdbex.Config do
     # Whether or not the global http metadata cache is used
     http_metadata_cache_enable: false,
 
-    # HTTP Proxy config as 'hostname:port'
+    # HTTP Proxy config as `hostname:port`
     http_proxy: nil,
 
     # HTTP Proxy username for basic auth
@@ -137,6 +137,10 @@ defmodule Duckdbex.Config do
     # Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
     serialization_compatibility: nil,
 
+    # Initialize the database with the standard set of DuckDB functions
+    # You should probably not touch this unless you know what you are doing
+    initialize_default_database: true,
+
     # The set(elixir list) of disabled optimizers (default empty)
     disabled_optimizers: nil,
 
@@ -152,22 +156,6 @@ defmodule Duckdbex.Config do
     # Force a specific bitpacking mode to be used when using the bitpacking compression method
     force_bitpacking_mode: :auto,
 
-    # Whether or not preserving insertion order should be preserved
-    preserve_insertion_order: true,
-
-    # Whether Arrow Arrays use Large or Regular buffers
-    arrow_offset_size: :regular,
-
-    # Whether LISTs should produce Arrow ListViews
-    arrow_use_list_view: false,
-
-    # Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types
-    # with a duckdb.type_name extension name
-    arrow_arrow_lossless_conversion: false,
-
-    # Whether when producing arrow objects we produce string_views or regular strings
-    produce_arrow_string_views: false,
-
     # Directory to store extension binaries in
     extension_directory: nil,
 
@@ -176,21 +164,6 @@ defmodule Duckdbex.Config do
 
     # Whether community extensions should be loaded
     allow_community_extensions: true,
-
-    # Whether extensions with missing metadata should be loaded
-    allow_extensions_metadata_mismatch: false,
-
-    # Enable emitting FSST Vectors
-    enable_fsst_vectors: false,
-
-    # Enable VIEWs to create dependencies
-    enable_view_dependencies: false,
-
-    # Enable macros to create dependencies
-    enable_macro_dependencies: false,
-
-    # Start transactions immediately in all attached databases - instead of lazily when a database is referenced
-    immediate_transaction_mode: false,
 
     # The set of user-provided options
     user_options: nil,
@@ -216,6 +189,9 @@ defmodule Duckdbex.Config do
     # Metadata from DuckDB callers
     custom_user_agent: nil,
 
+    # Encrypt the temp files
+    temp_file_encryption: false,
+
     # TODO : DEPRECATED?
     # Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
     # old_implicit_casting = false;
@@ -223,39 +199,42 @@ defmodule Duckdbex.Config do
     # The default block allocation size for new duckdb database files (new as-in, they do not yet exist). In bytes.
     default_block_alloc_size: nil,
 
+    # The default block header size for new duckdb database files. In bytes.
+    default_block_header_size: nil,
+
     # Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
     abort_on_wal_failure: false,
 
-    # The index_scan_percentage sets a threshold for index scans.
-    # If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-    # rows match, we perform an index scan instead of a table scan.
-    index_scan_percentage: nil,
+    # TODO: Paths that are explicitly allowed, even if enable_external_access is false
+    # allowed_paths: nil,
 
-    # The index_scan_max_count sets a threshold for index scans.
-    # If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count)
-    # rows match, we perform an index scan instead of a table scan.
-    index_scan_max_count: nil,
+    # TODO: Directories that are explicitly allowed, even if enable_external_access is false
+    # allowed_directories: nil,
 
-    # The maximum number of schemas we will look through for "did you mean..." style errors in the catalog
-    catalog_error_max_schemas: nil,
+    # TODO: The log configuration
+    # LogConfig log_config = LogConfig();
 
-    # The maximum amount of vacuum tasks to schedule during a checkpoint
-    max_vacuum_tasks: nil,
+    # TODO: Whether to enable external file caching using CachingFileSystem
+    # enable_external_file_cache: true,
 
-    # Paths that are explicitly allowed, even if enable_external_access is false
-    # TODO: allowed_paths: nil,
+    # TODO: Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
+    # scheduler_process_partial: false,
 
-    # Directories that are explicitly allowed, even if enable_external_access is false
-    # TODO: allowed_directories: nil,
+    # TODO: Whether to pin threads to cores (linux only, default AUTOMATIC: on when there are more than 64 cores)
+    # ThreadPinMode pin_threads = ThreadPinMode::AUTO;
 
     # The memory allocator used by the database system
     #  :duckdb - native DuckDB allocator,
-    #  :erlang - erlang 'void *enif_alloc(size_t size)' allocator
+    #  :erlang - erlang `void *enif_alloc(size_t size)` allocator
     memory_allocator: :duckdb
   ]
 
   @typedoc """
   DuckDB database instance configuration type.
+
+  `:database_path`: Database file path. May be empty for in-memory mode. Default: `nil`.
+
+  `:database_type`: Database type. If empty, automatically extracted from `database_path`, where a `type:path` syntax is expected. Default: `nil`.
 
   `:access_mode`: Access mode of the database. Maybe `:automatic`, `:read_only` or `:read_write`. Default: `:automatic`.
 
@@ -265,17 +244,17 @@ defmodule Duckdbex.Config do
 
   `:load_extensions`: Whether extensions should be loaded on start-up. Default: `true`.
 
-  `:autoload_known_extensions`: Whether known extensions are allowed to be automatically loaded when a query depends on them. Default: `false`.
+  `:autoload_known_extensions`: Whether known extensions are allowed to be automatically loaded when a query depends on them. Default: `true`.
 
-  `:autoinstall_known_extensions`: Whether known extensions are allowed to be automatically installed when a query depends on them. , Default: `false`.
+  `:autoinstall_known_extensions`: Whether known extensions are allowed to be automatically installed when a query depends on them. , Default: `true`.
 
-  `:custom_extension_repo`: Override for the default extension repository. Default: 'nil'.
+  `:custom_extension_repo`: Override for the default extension repository. Default: `nil`.
 
-  `:autoinstall_extension_repo`: Override for the default autoload extension repository. Default: 'nil'.
+  `:autoinstall_extension_repo`: Override for the default autoload extension repository. Default: `nil`.
 
   `:maximum_memory`: The maximum memory used by the database system (in bytes). Default: `nil` (80% of System available memory)
 
-  `:maximum_swap_space`: The maximum size of the 'temp_directory' folder when set (in bytes). Default: nil (90% of available disk space).
+  `:maximum_swap_space`: The maximum size of the `temp_directory` folder when set (in bytes). Default: `nil` (90% of available disk space).
 
   `:maximum_threads`: The maximum amount of native CPU threads used by the database system. Default: `nil` (all available).
 
@@ -291,17 +270,13 @@ defmodule Duckdbex.Config do
 
   `:allow_unredacted_secrets`: Whether or not to allow printing unredacted secrets. Default: `false`.
 
-  `:collation`: The collation type of the database. Default: `nil`
-
-  `:default_order_type`: The order type used when none is specified. Maybe `:asc`, `:desc`. Deafult: `:asc`.
-
-  `:default_null_order`: Null ordering used when none is specified. Maybe `:nulls_first`, `:nulls_last`. Default: `:nulls_last`.
+  `:disable_database_invalidation`: Disables invalidating the database instance when encountering a fatal error. Default: `false`.
 
   `:enable_external_access`: Enable COPY and related commands. Default: `true`.
 
   `:http_metadata_cache_enable`: Whether or not the global http metadata cache is used. Default: `false`.
 
-  `:http_proxy`: HTTP Proxy config as 'hostname:port'. Default: `nil`.
+  `:http_proxy`: HTTP Proxy config as `hostname:port`. Default: `nil`.
 
   `:http_proxy_username`: HTTP Proxy username for basic auth. Default: `nil`.
 
@@ -313,6 +288,8 @@ defmodule Duckdbex.Config do
 
   `:serialization_compatibility`: Serialize the metadata on checkpoint with compatibility for a given DuckDB version. Default: `nil` (latest version of DuckDB).
 
+  `:initialize_default_database`: Initialize the database with the standard set of DuckDB functions. You should probably not touch this unless you know what you are doing. Default: `true`.
+
   `:disabled_optimizers`: The set(elixir list) of disabled optimizers. Default: `nil`.
 
   `:zstd_min_string_length`: The average string length required to use ZSTD compression. Default: 4096.
@@ -323,35 +300,15 @@ defmodule Duckdbex.Config do
 
   `:force_bitpacking_mode`: Force a specific bitpacking mode to be used when using the bitpacking compression method. Maybe `:auto`, `:constant`, `:constant_delta`, `:delta_for`, `:for`. Default: `:auto`.
 
-  `:preserve_insertion_order`: Whether or not preserving insertion order should be preserved. Default: `true`.
-
-  `:arrow_offset_size`: Whether Arrow Arrays use Large or Regular buffers. Default `:regular`.
-
-  `:arrow_use_list_view`: Whether LISTs should produce Arrow ListViews. Default: `false`.
-
-  `:arrow_arrow_lossless_conversion`: Whenever a DuckDB type does not have a clear native or canonical extension match in Arrow, export the types with a duckdb.type_name extension name. Default: `false`.
-
-  `:produce_arrow_string_views`: Whether when producing arrow objects we produce string_views or regular strings. Default: `false`.
-
   `:extension_directory`: Directory to store extension binaries in. Default: `nil`.
 
   `:allow_unsigned_extensions`: Whether unsigned extensions should be loaded. Default: `false`.
 
   `:allow_community_extensions`: Whether community extensions should be loaded. Default: `true`.
 
-  `:allow_extensions_metadata_mismatch`: Whether extensions with missing metadata should be loaded. Default: `false`.
-
-  `:enable_fsst_vectors`: Enable emitting FSST Vectors. Default: `false`.
-
-  `:enable_view_dependencies`: Enable VIEWs to create dependencies. Default: `false`.
-
-  `:enable_macro_dependencies`: Enable macros to create dependencies. Default: `false`.
-
   `:user_options`: Default: The set of user-provided options. `nil`.
 
   `:unrecognized_options`: The set of unrecognized (other) options. Default: `nil`.
-
-  `:immediate_transaction_mode`: Start transactions immediately in all attached databases - instead of lazily when a database is referenced. Default: `false`.
 
   `:lock_configuration`: Whether or not the configuration settings can be altered. Default: `false`.
 
@@ -365,21 +322,19 @@ defmodule Duckdbex.Config do
 
   `:custom_user_agent`: Metadata from DuckDB callers. Default: `nil`.
 
+  `:temp_file_encryption`: Encrypt the temp files. Default: `false`.
+
   `:default_block_alloc_size`: The default block allocation size for new duckdb database files (new as-in, they do not yet exist). In bytes. Default: `nil` (DUCKDB_BLOCK_ALLOC_SIZE = 262144 ULL)
+
+  `:default_block_header_size`: The default block header size for new duckdb database files.. In bytes. Default: `nil` (DUCKDB_BLOCK_HEADER_STORAGE_SIZE = 8ULL ULL)
 
   `:abort_on_wal_failure`: Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL). Default: `false`.
 
-  `:index_scan_percentage`: The index_scan_percentage sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan. Default: `nil` (0.001).
-
-  `:index_scan_max_count`: The index_scan_max_count sets a threshold for index scans. If fewer than MAX(index_scan_max_count, index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan. Default: `nil` (STANDARD_VECTOR_SIZE = 2048).
-
-  `:catalog_error_max_schemas`: The maximum number of schemas we will look through for "did you mean..." style errors in the catalog. Default: `nil` (100).
-
-  `:max_vacuum_tasks`: The maximum amount of vacuum tasks to schedule during a checkpoint. Default: `nil` (100).
-
-  `:memory_allocator`: The memory allocator used by the database system. Maybe `:duckdb` - native DuckDB allocator or `:erlang` - erlang 'void *enif_alloc(size_t size)' allocator. Default: `:duckdb`.
+  `:memory_allocator`: The memory allocator used by the database system. Maybe `:duckdb` - native DuckDB allocator or `:erlang` - erlang `void *enif_alloc(size_t size)` allocator. Default: `:duckdb`.
   """
   @type t :: %__MODULE__{
+          database_path: binary() | nil,
+          database_type: binary() | nil,
           access_mode: :automatic | :read_only | :read_write,
           checkpoint_wal_size: pos_integer() | nil,
           use_direct_io: boolean(),
@@ -397,9 +352,7 @@ defmodule Duckdbex.Config do
           trim_free_blocks: boolean(),
           buffer_manager_track_eviction_timestamps: boolean(),
           allow_unredacted_secrets: boolean(),
-          collation: binary() | nil,
-          default_order_type: :asc | :desc,
-          default_null_order: :nulls_last | :nulls_first,
+          disable_database_invalidation: boolean(),
           enable_external_access: boolean(),
           http_metadata_cache_enable: boolean(),
           http_proxy: binary() | nil,
@@ -408,38 +361,27 @@ defmodule Duckdbex.Config do
           force_checkpoint: boolean(),
           checkpoint_on_shutdown: boolean(),
           serialization_compatibility: binary() | nil,
+          initialize_default_database: boolean(),
           disabled_optimizers: list(Duckdbex.Config.optimizer_type()) | [] | nil,
           zstd_min_string_length: pos_integer() | nil,
           force_compression: Duckdbex.Config.compressionType() | nil,
           disabled_compression_methods: list(Duckdbex.Config.compressionType()) | [] | nil,
           force_bitpacking_mode: :auto | :constant | :constant_delta | :delta_for | :for,
-          preserve_insertion_order: boolean(),
-          arrow_offset_size: :regular | :large,
-          arrow_use_list_view: boolean(),
-          arrow_arrow_lossless_conversion: boolean(),
-          produce_arrow_string_views: boolean(),
           extension_directory: binary() | nil,
           allow_unsigned_extensions: boolean(),
           allow_community_extensions: boolean(),
-          allow_extensions_metadata_mismatch: boolean(),
-          enable_fsst_vectors: boolean(),
-          enable_view_dependencies: boolean(),
-          enable_macro_dependencies: boolean(),
           user_options: list({binary(), any()}),
           unrecognized_options: list({binary(), any()}),
-          immediate_transaction_mode: boolean(),
           lock_configuration: boolean(),
           allocator_flush_threshold: pos_integer() | nil,
           allocator_bulk_deallocation_flush_threshold: pos_integer() | nil,
           allocator_background_threads: boolean(),
           duckdb_api: binary() | nil,
           custom_user_agent: binary() | nil,
+          temp_file_encryption: boolean(),
           default_block_alloc_size: pos_integer() | nil,
+          default_block_header_size: pos_integer() | nil,
           abort_on_wal_failure: boolean(),
-          index_scan_percentage: number() | nil,
-          index_scan_max_count: pos_integer() | nil,
-          catalog_error_max_schemas: pos_integer() | nil,
-          max_vacuum_tasks: pos_integer() | nil,
           memory_allocator: :duckdb | :erlang
         }
 end
