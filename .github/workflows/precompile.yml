@@ -141,6 +141,7 @@ jobs:
           - runner: "macos-14"
             otp: "27.0.1"
             elixir: "1.17.2"
+
     name: Mac ${{ matrix.arch }} - OTP ${{ matrix.job.otp }} - Elixir ${{ matrix.job.elixir }}
     steps:
       - name: Checkout
