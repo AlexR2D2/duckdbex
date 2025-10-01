@@ -38,9 +38,8 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          alias sudo=`which sudo`
-          $sudo apt-get update
-          $sudo apt-get install -y build-essential automake autoconf pkg-config bc m4 unzip zip wget curl ca-certificates libssl-dev \
+          sudo apt-get update
+          sudo apt-get install -y build-essential automake autoconf pkg-config bc m4 unzip zip wget curl ca-certificates libssl-dev \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
             libstdc++-10-dev erlang-dev ccache
@@ -48,22 +47,19 @@ jobs:
       - name: Install x86_64 specific deps
         if: matrix.arch == 'x86_64'
         run: |
-          alias sudo=`which sudo`
-          $sudo apt-get install -y gcc-i686-linux-gnu g++-i686-linux-gnu \
+          sudo apt-get install -y gcc-i686-linux-gnu g++-i686-linux-gnu \
             gcc-powerpc64le-linux-gnu g++-powerpc64le-linux-gnu \
             gcc-s390x-linux-gnu g++-s390x-linux-gnu
 
       - name: Install aarch64 specific deps
         if: matrix.arch == 'aarch64'
         run: |
-          alias sudo=`which sudo`
-          $sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Install riscv64 specific deps
         if: matrix.arch == 'riscv64'
         run: |
-          alias sudo=`which sudo`
-          $sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
+          sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
 
       - name: Get musl ${{ matrix.arch }} cross-compilers
         run: |
