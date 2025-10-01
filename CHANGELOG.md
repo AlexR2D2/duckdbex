@@ -1,8 +1,11 @@
 # Changelog
 
-0.3.14
+0.3.15
   - [DuckDB 1.4.0 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.0)
   - Autoload and install extension by default.
+
+0.3.14
+- Added dialyzer
 
 0.3.10
   - [DuckDB 1.2.1 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.2.1)
