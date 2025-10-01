@@ -14,59 +14,71 @@ env:
 
 jobs:
   linux:
-    name: Linux Erlang/OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     runs-on: ubuntu-22.04
     env:
-      MIX_ENV: "prod"
+      ImageOS: ubuntu22
+      LANG: en_US.UTF-8
+      LANGUAGE: en_US:en
+      LC_ALL: en_US.UTF-8
+      DEBIAN_FRONTEND: noninteractive
+      MIX_ENV: prod
     strategy:
       matrix:
-        include:
-          - otp: "26.0"
-            elixir: "1.16.3"
-          - otp: "26.0"
-            elixir: "1.17.3"
-          - otp: "27.0"
-            elixir: "1.17.3"
-          - otp: "27.0"
-            elixir: "1.18.2"
-          - otp: "28.0"
-            elixir: "1.18.4"
+        arch:
+          - x86_64
+          - aarch64
+          - riscv64
+        job:
+          - {otp: "27.0", elixir: "1.17.3"}
+          - {otp: "25.0", elixir: "1.16"}
+    name: Linux ${{ matrix.arch }} - OTP ${{ matrix.job.otp }} - Elixir ${{ matrix.job.elixir }}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          alias sudo=`which sudo`
+          $sudo apt-get update
+          $sudo apt-get install -y build-essential automake autoconf pkg-config bc m4 unzip zip wget curl ca-certificates libssl-dev \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
+            libstdc++-10-dev erlang-dev ccache
+
+      - name: Install x86_64 specific deps
+        if: matrix.arch == 'x86_64'
+        run: |
+          alias sudo=`which sudo`
+          $sudo apt-get install -y gcc-i686-linux-gnu g++-i686-linux-gnu \
+            gcc-powerpc64le-linux-gnu g++-powerpc64le-linux-gnu \
+            gcc-s390x-linux-gnu g++-s390x-linux-gnu
+
+      - name: Install aarch64 specific deps
+        if: matrix.arch == 'aarch64'
+        run: |
+          alias sudo=`which sudo`
+          $sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Install riscv64 specific deps
+        if: matrix.arch == 'riscv64'
+        run: |
+          alias sudo=`which sudo`
+          $sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu
+
+      - name: Get musl ${{ matrix.arch }} cross-compilers
+        run: |
+          wget "https://musl.cc.timfish.dev/${{matrix.arch}}-linux-musl-cross.tgz" -O "${{matrix.arch}}-linux-musl-cross.tgz"
+          tar -xf "${{matrix.arch}}-linux-musl-cross.tgz"
 
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: ${{matrix.otp}}
-          elixir-version: ${{matrix.elixir}}
+          otp-version: ${{ matrix.job.otp }}
+          elixir-version: ${{ matrix.job.elixir }}
 
       - name: Setup Mix
         run: |
           mix local.hex --force
           mix local.rebar --force
-
-      - name: Cache mix deps
-        uses: actions/cache@v3
-        with:
-          path: |
-            deps
-            _build
-            ~/.cache/duckdbex-nif-*
-          key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
-
-      - name: Get Dependencies
-        run: |
-          export ELIXIR_MAKE_FORCE_BUILD=1
-          mix deps.get
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential automake autoconf pkg-config bc m4 unzip zip \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            gcc-riscv64-linux-gnu g++-riscv64-linux-gnu \
-            libstdc++-10-dev erlang-dev ccache
 
       - name: Patch source code
         run: |
@@ -76,14 +88,16 @@ jobs:
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
 
-      - name: Create precompiled library
+      - name: Create precompiled ${{ matrix.arch }} library
         run: |
+          export PATH="$(pwd)/${{ matrix.arch }}-linux-musl-cross/bin:${PATH}"
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
           export CC="ccache gcc"
           export CXX="ccache g++"
           export CXXFLAGS="-D_GNU_SOURCE -std=c++11"
           export MAKEFLAGS="-j$(nproc)"
+          mix deps.get
           mix elixir_make.precompile
 
       - name: Mix Test
@@ -92,6 +106,17 @@ jobs:
           MIX_ENV=test mix test
 
       - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') && matrix.arch == 'x86_64'
+        with:
+          files: |
+            cache/*.tar.gz
+
+      - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') && matrix.arch != 'x86_64'
+        with:
+          files: |
+            cache/*${{ matrix.arch }}*.tar.gz
+
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
@@ -99,61 +124,67 @@ jobs:
 
   macos:
     runs-on: ${{matrix.runner}}
-    name: Mac (${{ matrix.runner == 'macos-13' && 'Intel' || 'ARM' }}) Erlang/OTP ${{matrix.otp}} / Elixir
     env:
-      MIX_ENV: "prod"
+      MIX_ENV: prod
+      CC_PRECOMPILER_PRECOMPILE_ONLY_LOCAL: "true"
     strategy:
       matrix:
+        arch:
+          - x86_64-apple-darwin
+          - arm64-apple-darwin
         include:
-          - runner: "macos-13"
-            otp: "26.0"
-            elixir: "1.16.3"
-          - runner: "macos-13"
-            otp: "27.0"
-            elixir: "1.18.2"
           - runner: "macos-14"
-            otp: "26.0"
+            otp: "25.3.2.13"
             elixir: "1.16.3"
           - runner: "macos-14"
-            otp: "27.0"
-            elixir: "1.18.2"
-          - runner: "macos-14"
-            otp: "28.0"
-            elixir: "1.18.4"
+            otp: "27.0.1"
+            elixir: "1.17.2"
+    name: Mac ${{ matrix.arch }} - OTP ${{ matrix.job.otp }} - Elixir ${{ matrix.job.elixir }}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+      - uses: actions/checkout@v4
 
-      - uses: asdf-vm/actions/install@v2
+      - name: Install asdf
+        uses: asdf-vm/actions/setup@v4
+
+      - name: Cache asdf
+        id: asdf-cache
+        uses: actions/cache@v4
         with:
-          tool_versions: |
-            erlang ${{matrix.otp}}
-            elixir ${{matrix.elixir}}
+          path: ~/.asdf
+          key: asdf-${{ runner.os }}-build-${{ matrix.job.otp }}-${{ matrix.job.elixir }}
 
-      - name: Setup Mix
+      - if: ${{ steps.asdf-cache.outputs.cache-hit != 'true' }}
+        name: Install Erlang & Elixir
+        env:
+          ELIXIR_VERSION: ${{ matrix.job.elixir }}
+          OTP_VERSION: ${{ matrix.job.otp }}
         run: |
-          mix local.hex --force
-          mix local.rebar --force
+          asdf plugin add erlang
+          asdf install erlang ${OTP_VERSION}
 
-      - name: Cache mix deps
-        uses: actions/cache@v3
-        with:
-          path: |
-            deps
-            _build
-            ~/Library/Caches/duckdbex-nif-*
-          key: ${{ runner.os }}-${{ matrix.runner }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.runner }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-
+          ELIXIR_OTP_VERSION=$(echo $OTP_VERSION | cut -d. -f1)
+          asdf plugin add elixir
+          asdf install elixir ${ELIXIR_VERSION}-otp-${ELIXIR_OTP_VERSION}
 
-      - name: Get Dependencies
+      - name: Setup Erlang & Elixir
+        env:
+          ELIXIR_VERSION: ${{ matrix.job.elixir }}
+          OTP_VERSION: ${{ matrix.job.otp }}
         run: |
-          export ELIXIR_MAKE_FORCE_BUILD=1
-          mix deps.get
+          asdf set erlang ${OTP_VERSION}
+          ELIXIR_OTP_VERSION=$(echo $OTP_VERSION | cut -d. -f1)
+          asdf set elixir ${ELIXIR_VERSION}-otp-${ELIXIR_OTP_VERSION}
 
       - name: Install libomp and ccache
         run: |
           brew install libomp ccache
           echo "$(brew --prefix)/bin" >> $GITHUB_PATH
+
+      - name: Install hex & rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
 
       - name: Patch source code
         run: |
@@ -162,10 +193,11 @@ jobs:
           cat temp_header.hpp c_src/value_to_term.cpp > value_to_term_new.cpp
           mv value_to_term_new.cpp c_src/value_to_term.cpp
 
-      - name: Create precompiled library
+      - name: Pre-compile NIF library
         run: |
           export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
           mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
+          mix deps.get
           export CC="ccache clang"
           export CXX="ccache clang++"
           export CXXFLAGS="-std=c++11"
@@ -174,11 +206,10 @@ jobs:
 
       - name: Mix Test
         run: |
-          export ELIXIR_MAKE_FORCE_BUILD=1
           MIX_ENV=test mix test
 
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            ${{ matrix.runner == 'macos-13' && 'cache/*x86_64*.tar.gz' || 'cache/*aarch64*.tar.gz' }}
+            cache/*.tar.gz
