@@ -121,7 +121,7 @@ jobs:
 
 
   macos:
-    runs-on: ${{matrix.runner}}
+    runs-on: macos-14
     env:
       MIX_ENV: prod
       CC_PRECOMPILER_PRECOMPILE_ONLY_LOCAL: "true"
@@ -130,13 +130,9 @@ jobs:
         arch:
           - x86_64-apple-darwin
           - arm64-apple-darwin
-        include:
-          - runner: "macos-14"
-            otp: "25.3.2.13"
-            elixir: "1.16.3"
-          - runner: "macos-14"
-            otp: "27.0.1"
-            elixir: "1.17.2"
+        job:
+          - {otp: "27.0.1", elixir: "1.17.2"}
+          - {otp: "25.3.2.13", elixir: "1.16.3"}
 
     name: Mac ${{ matrix.arch }} - OTP ${{ matrix.job.otp }} - Elixir ${{ matrix.job.elixir }}
     steps:
