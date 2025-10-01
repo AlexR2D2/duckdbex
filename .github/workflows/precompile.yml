@@ -112,15 +112,17 @@ jobs:
             cache/*.tar.gz
 
       - uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') && matrix.arch == 'x86_64'
+        with:
+          files: |
+            cache/*.tar.gz
+
+      - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/') && matrix.arch != 'x86_64'
         with:
           files: |
             cache/*${{ matrix.arch }}*.tar.gz
 
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: |
-            cache/*.tar.gz
 
   macos:
     runs-on: ${{matrix.runner}}
