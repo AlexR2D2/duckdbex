@@ -145,7 +145,7 @@ jobs:
     name: Mac ${{ matrix.arch }} - OTP ${{ matrix.job.otp }} - Elixir ${{ matrix.job.elixir }}
     steps:
       - name: Checkout
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Install asdf
         uses: asdf-vm/actions/setup@v4
