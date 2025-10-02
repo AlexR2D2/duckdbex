@@ -89,9 +89,9 @@ defmodule Duckdbex.MixProject do
       compilers: %{
         {:unix, :linux} => %{
           :include_default_ones => true,
-          "x86_64-linux-musl" => "x86_64-linux-musl-",
-          "aarch64-linux-musl" => "aarch64-linux-musl-",
-          "riscv64-linux-musl" => "riscv64-linux-musl-"
+          "x86_64-linux-gnu" => "x86_64-linux-gnu-",
+          "aarch64-linux-gnu" => "aarch64-linux-gnu-",
+          "riscv64-linux-gnu" => "riscv64-linux-gnu-"
         },
         {:unix, :darwin} => %{
           :include_default_ones => true
