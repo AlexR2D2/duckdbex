@@ -759,6 +759,72 @@ namespace {
     return false;
   }
 
+  bool set_allowed_paths(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    if (!enif_is_list(env, term))
+      return false;
+
+    unsigned list_length = 0;
+    if (!enif_get_list_length(env, term, &list_length))
+      return false;
+
+    std::unordered_set<std::string> allowed_paths;
+
+    ERL_NIF_TERM list = term;
+    for (size_t i = 0; i < list_length; i++) {
+      ERL_NIF_TERM head, tail;
+      if (!enif_get_list_cell(env, list, &head, &tail))
+        return false;
+
+      ErlNifBinary bin;
+      if (!enif_inspect_binary(env, head, &bin))
+        return false;
+
+      allowed_paths.insert(std::string((const char*)bin.data, bin.size));
+
+      list = tail;
+    }
+
+    sink.options.allowed_paths = allowed_paths;
+
+    return true;
+  }
+
+  bool set_allowed_directories(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::DBConfig& sink) {
+    if (nif::is_atom(env, term, "nil"))
+      return true;
+
+    if (!enif_is_list(env, term))
+      return false;
+
+    unsigned list_length = 0;
+    if (!enif_get_list_length(env, term, &list_length))
+      return false;
+
+    std::set<std::string> allowed_directories;
+
+    ERL_NIF_TERM list = term;
+    for (size_t i = 0; i < list_length; i++) {
+      ERL_NIF_TERM head, tail;
+      if (!enif_get_list_cell(env, list, &head, &tail))
+        return false;
+
+      ErlNifBinary bin;
+      if (!enif_inspect_binary(env, head, &bin))
+        return false;
+
+      allowed_directories.insert(std::string((const char*)bin.data, bin.size));
+
+      list = tail;
+    }
+
+    sink.options.allowed_directories = allowed_directories;
+
+    return true;
+  }
+
   bool set_option(ErlNifEnv* env, ERL_NIF_TERM name, ERL_NIF_TERM value, duckdb::DBConfig& sink) {
     if (nif::is_atom(env, name, "database_path"))
       return set_database_path(env, value, sink);
@@ -906,6 +972,12 @@ namespace {
 
     if (nif::is_atom(env, name, "abort_on_wal_failure"))
       return set_abort_on_wal_failure(env, value, sink);
+
+    if (nif::is_atom(env, name, "allowed_paths"))
+      return set_allowed_paths(env, value, sink);
+
+    if (nif::is_atom(env, name, "allowed_directories"))
+      return set_allowed_directories(env, value, sink);
 
     if (nif::is_atom(env, name, "memory_allocator"))
       return set_memory_allocator(env, value, sink);

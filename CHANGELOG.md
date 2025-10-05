@@ -1,5 +1,10 @@
 # Changelog
 
+0.3.16
+  - Fixed issue with invalid checksums in HEX release.
+  - Added `allowed_paths` config parameter.
+  - Added `allowed_directories` config parameter.
+
 0.3.15
   - [DuckDB 1.4.0 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.0)
   - Autoload and install extension by default.

@@ -205,11 +205,11 @@ defmodule Duckdbex.Config do
     # Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
     abort_on_wal_failure: false,
 
-    # TODO: Paths that are explicitly allowed, even if enable_external_access is false
-    # allowed_paths: nil,
+    # Paths that are explicitly allowed, even if enable_external_access is false
+    allowed_paths: nil,
 
-    # TODO: Directories that are explicitly allowed, even if enable_external_access is false
-    # allowed_directories: nil,
+    # Directories that are explicitly allowed, even if enable_external_access is false
+    allowed_directories: nil,
 
     # TODO: The log configuration
     # LogConfig log_config = LogConfig();
@@ -330,6 +330,10 @@ defmodule Duckdbex.Config do
 
   `:abort_on_wal_failure`: Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL). Default: `false`.
 
+  `:allowed_paths`: Paths that are explicitly allowed, even if enable_external_access is false. Default: `nil`.
+
+  `:allowed_directories`: Directories that are explicitly allowed, even if enable_external_access is false. Default: `nil`.
+
   `:memory_allocator`: The memory allocator used by the database system. Maybe `:duckdb` - native DuckDB allocator or `:erlang` - erlang `void *enif_alloc(size_t size)` allocator. Default: `:duckdb`.
   """
   @type t :: %__MODULE__{
@@ -382,6 +386,8 @@ defmodule Duckdbex.Config do
           default_block_alloc_size: pos_integer() | nil,
           default_block_header_size: pos_integer() | nil,
           abort_on_wal_failure: boolean(),
+          allowed_paths: list(binary()) | nil,
+          allowed_directories: list(binary()) | nil,
           memory_allocator: :duckdb | :erlang
         }
 end
