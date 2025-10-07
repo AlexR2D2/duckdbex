@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "b8a06e4a22"
-#define DUCKDB_VERSION "v1.4.0"
+#define DUCKDB_SOURCE_ID "b390a7c376"
+#define DUCKDB_VERSION "v1.4.1"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 4
-#define DUCKDB_PATCH_VERSION "0"
+#define DUCKDB_PATCH_VERSION "1"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -3840,6 +3840,8 @@ public:
 	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
 	//! Transforms an complex JSON to a JSON string
 	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
+
+	DUCKDB_API static string ValidateJSON(const char *data, const idx_t &len);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);
@@ -14442,6 +14444,8 @@ struct StringStats {
 	                                                     ExpressionType comparison_type, const string &value);
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void SetMin(BaseStatistics &stats, const string_t &value);
+	DUCKDB_API static void SetMax(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 
@@ -22510,6 +22514,8 @@ enum class LogLevel : uint8_t;
 
 enum class LogMode : uint8_t;
 
+enum class LoggingTargetTable : uint8_t;
+
 enum class LogicalOperatorType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
@@ -23023,6 +23029,9 @@ const char* EnumUtil::ToChars<LogLevel>(LogLevel value);
 
 template<>
 const char* EnumUtil::ToChars<LogMode>(LogMode value);
+
+template<>
+const char* EnumUtil::ToChars<LoggingTargetTable>(LoggingTargetTable value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
@@ -23642,6 +23651,9 @@ LogLevel EnumUtil::FromString<LogLevel>(const char *value);
 
 template<>
 LogMode EnumUtil::FromString<LogMode>(const char *value);
+
+template<>
+LoggingTargetTable EnumUtil::FromString<LoggingTargetTable>(const char *value);
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
@@ -34701,6 +34713,65 @@ struct CorrelatedColumnInfo {
 	}
 };
 
+struct CorrelatedColumns {
+private:
+	using container_type = vector<CorrelatedColumnInfo>;
+
+public:
+	CorrelatedColumns() : delim_index(1ULL << 63) {
+	}
+
+	void AddColumn(container_type::value_type info) {
+		// Add to beginning
+		correlated_columns.insert(correlated_columns.begin(), std::move(info));
+		delim_index++;
+	}
+
+	void SetDelimIndexToZero() {
+		delim_index = 0;
+	}
+
+	idx_t GetDelimIndex() const {
+		return delim_index;
+	}
+
+	const container_type::value_type &operator[](const idx_t &index) const {
+		return correlated_columns.at(index);
+	}
+
+	idx_t size() const { // NOLINT: match stl case
+		return correlated_columns.size();
+	}
+
+	bool empty() const { // NOLINT: match stl case
+		return correlated_columns.empty();
+	}
+
+	void clear() { // NOLINT: match stl case
+		correlated_columns.clear();
+	}
+
+	container_type::iterator begin() { // NOLINT: match stl case
+		return correlated_columns.begin();
+	}
+
+	container_type::iterator end() { // NOLINT: match stl case
+		return correlated_columns.end();
+	}
+
+	container_type::const_iterator begin() const { // NOLINT: match stl case
+		return correlated_columns.begin();
+	}
+
+	container_type::const_iterator end() const { // NOLINT: match stl case
+		return correlated_columns.end();
+	}
+
+private:
+	container_type correlated_columns;
+	idx_t delim_index;
+};
+
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
   The binder is responsible for binding tables and columns to actual physical
@@ -34725,7 +34796,7 @@ public:
 	BindContext bind_context;
 	//! The set of correlated columns bound by this binder (FIXME: this should probably be an unordered_set and not a
 	//! vector)
-	vector<CorrelatedColumnInfo> correlated_columns;
+	CorrelatedColumns correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
 	//! The alias for the currently processing subquery, if it exists
@@ -34801,7 +34872,7 @@ public:
 
 	vector<reference<ExpressionBinder>> &GetActiveBinders();
 
-	void MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other);
+	void MergeCorrelatedColumns(CorrelatedColumns &other);
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
@@ -35029,7 +35100,7 @@ private:
 	void PlanSubqueries(unique_ptr<Expression> &expr, unique_ptr<LogicalOperator> &root);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
 	unique_ptr<LogicalOperator> PlanLateralJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
-	                                            vector<CorrelatedColumnInfo> &correlated_columns,
+	                                            CorrelatedColumns &correlated_columns,
 	                                            JoinType join_type = JoinType::INNER,
 	                                            unique_ptr<Expression> condition = nullptr);
 
@@ -35899,12 +35970,12 @@ public:
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
-	void Update(TransactionData transaction, DataChunk &updates, row_t *ids, idx_t offset, idx_t count,
-	            const vector<PhysicalIndex> &column_ids);
+	void Update(TransactionData transaction, DataTable &data_table, DataChunk &updates, row_t *ids, idx_t offset,
+	            idx_t count, const vector<PhysicalIndex> &column_ids);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
-	void UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids, idx_t offset, idx_t count,
-	                  const vector<column_t> &column_path);
+	void UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
+	                  idx_t offset, idx_t count, const vector<column_t> &column_path);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
@@ -36355,6 +36426,9 @@ struct FileHandle;
 struct BaseRequest;
 struct HTTPResponse;
 class PhysicalOperator;
+class AttachedDatabase;
+class RowGroup;
+struct DataTableInfo;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
@@ -36392,9 +36466,7 @@ public:
 
 	QueryLogType() : LogType(NAME, LEVEL) {};
 
-	static string ConstructLogMessage(const string &str) {
-		return str;
-	}
+	static string ConstructLogMessage(const string &str);
 };
 
 class FileSystemLogType : public LogType {
@@ -36441,6 +36513,28 @@ public:
 
 	static string ConstructLogMessage(const PhysicalOperator &op, const string &class_p, const string &event,
 	                                  const vector<pair<string, string>> &info);
+};
+
+class CheckpointLogType : public LogType {
+public:
+	static constexpr const char *NAME = "Checkpoint";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	//! Construct the log type
+	CheckpointLogType();
+
+	static LogicalType GetLogType();
+
+	//! Vacuum
+	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
+	                                  idx_t merge_count, idx_t target_count, idx_t merge_rows, idx_t row_start);
+	//! Checkpoint
+	static string ConstructLogMessage(const AttachedDatabase &db, DataTableInfo &table, idx_t segment_idx,
+	                                  RowGroup &row_group);
+
+private:
+	static string CreateLog(const AttachedDatabase &db, DataTableInfo &table, const char *op, vector<Value> map_keys,
+	                        vector<Value> map_values);
 };
 
 } // namespace duckdb
@@ -36704,7 +36798,7 @@ struct CSVReaderOptions;
 
 //! Logging storage can store entries normalized or denormalized. This enum describes what a single table/file/etc
 //! contains
-enum class LoggingTargetTable {
+enum class LoggingTargetTable : uint8_t {
 	ALL_LOGS,     // Denormalized: log entries consisting of both the full log entry and the context
 	LOG_ENTRIES,  // Normalized: contains only the log entries and a context_id
 	LOG_CONTEXTS, // Normalized: contains only the log contexts
@@ -36836,7 +36930,7 @@ private:
 	//! Debug option for testing buffering behaviour
 	bool only_flush_on_full_buffer = false;
 	//! The buffers used for each table
-	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
+	map<LoggingTargetTable, unique_ptr<DataChunk>> buffers;
 	//! This flag is set whenever a new context_is written to the entry buffer. It means that the next flush of
 	//! LoggingTargetTable::LOG_ENTRIES also requires a flush of LoggingTargetTable::LOG_CONTEXTS
 	bool flush_contexts_on_next_entry_flush = false;
@@ -36889,9 +36983,9 @@ private:
 	void InitializeCastChunk(LoggingTargetTable table);
 
 	//! The cast buffers used to cast from the original types to the VARCHAR types ready to write to CSV format
-	unordered_map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
+	map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
 	//! The writers to be registered by child classes
-	unordered_map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
+	map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
 
 	//! CSV Options to initialize the CSVWriters with. TODO: cleanup, this is now a little bit of a mixed bag of
 	//! settings
@@ -36973,7 +37067,7 @@ private:
 	};
 
 	//! The table info per table
-	unordered_map<LoggingTargetTable, TableWriter> tables;
+	map<LoggingTargetTable, TableWriter> tables;
 
 	//! Base path to generate the file paths from
 	string base_path;
@@ -37020,7 +37114,7 @@ private:
 	//! Helper function to get the buffer
 	ColumnDataCollection &GetBuffer(LoggingTargetTable table) const;
 
-	unordered_map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> log_storage_buffers;
+	map<LoggingTargetTable, unique_ptr<ColumnDataCollection>> log_storage_buffers;
 };
 
 } // namespace duckdb
@@ -37771,13 +37865,24 @@ struct AttachOptions;
 
 enum class InsertDatabasePathResult { SUCCESS, ALREADY_EXISTS };
 
+struct DatabasePathInfo {
+	explicit DatabasePathInfo(string name_p) : name(std::move(name_p)), is_attached(true) {
+	}
+
+	string name;
+	bool is_attached;
+};
+
 //! The DatabaseFilePathManager is used to ensure we only ever open a single database file once
 class DatabaseFilePathManager {
 public:
 	idx_t ApproxDatabaseCount() const;
 	InsertDatabasePathResult InsertDatabasePath(const string &path, const string &name, OnCreateConflict on_conflict,
 	                                            AttachOptions &options);
+	//! Erase a database path - indicating we are done with using it
 	void EraseDatabasePath(const string &path);
+	//! Called when a database is detached, but before it is fully finished being used
+	void DetachDatabase(const string &path);
 
 private:
 	//! The lock to add entries to the database path map
@@ -37785,7 +37890,7 @@ private:
 	//! A set containing all attached database path
 	//! This allows to attach many databases efficiently, and to avoid attaching the
 	//! same file path twice
-	case_insensitive_map_t<string> db_paths_to_name;
+	case_insensitive_map_t<DatabasePathInfo> db_paths;
 };
 
 } // namespace duckdb
@@ -37820,6 +37925,7 @@ public:
 	void FinalizeStartup();
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
+	shared_ptr<AttachedDatabase> GetDatabase(const string &name);
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
@@ -37874,6 +37980,8 @@ public:
 	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
+
+	shared_ptr<AttachedDatabase> GetDatabaseInternal(const lock_guard<mutex> &, const string &name);
 
 private:
 	//! The system database is a special database that holds system entries (e.g. functions)
@@ -38681,6 +38789,8 @@ private:
 	CreatePreparedStatementInternal(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
 	                                optional_ptr<case_insensitive_map_t<BoundParameterData>> values);
 
+	SettingLookupResult TryGetCurrentSettingInternal(const string &key, Value &result) const;
+
 private:
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
@@ -38979,7 +39089,8 @@ public:
 
 public:
 	DUCKDB_API virtual const vector<ColumnDefinition> &Columns() = 0;
-	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode();
+	DUCKDB_API virtual unique_ptr<QueryNode> GetQueryNode() = 0;
+	DUCKDB_API virtual string GetQuery();
 	DUCKDB_API virtual BoundStatement Bind(Binder &binder);
 	DUCKDB_API virtual string GetAlias();
 
@@ -39164,7 +39275,6 @@ public:
 	DUCKDB_API ~Connection();
 
 	shared_ptr<ClientContext> context;
-	warning_callback_t warning_cb;
 
 public:
 	//! Returns query profiling information for the current query
@@ -45990,17 +46100,19 @@ public:
 protected:
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
+	mutable mutex block_lock;
 	unordered_map<block_id_t, MetadataBlock> blocks;
 	unordered_map<block_id_t, idx_t> modified_blocks;
 
 protected:
-	block_id_t AllocateNewBlock();
-	block_id_t PeekNextBlockId();
-	block_id_t GetNextBlockId();
+	block_id_t AllocateNewBlock(unique_lock<mutex> &block_lock);
+	block_id_t PeekNextBlockId() const;
+	block_id_t GetNextBlockId() const;
 
-	void AddBlock(MetadataBlock new_block, bool if_exists = false);
-	void AddAndRegisterBlock(MetadataBlock block);
-	void ConvertToTransient(MetadataBlock &block);
+	void AddBlock(unique_lock<mutex> &block_lock, MetadataBlock new_block, bool if_exists = false);
+	void AddAndRegisterBlock(unique_lock<mutex> &block_lock, MetadataBlock block);
+	void ConvertToTransient(unique_lock<mutex> &block_lock, MetadataBlock &block);
+	MetadataPointer FromDiskPointerInternal(unique_lock<mutex> &block_lock, MetaBlockPointer pointer);
 };
 
 } // namespace duckdb
@@ -46482,6 +46594,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class DataTable;
 
 class RowGroupCollection {
 public:
@@ -46545,9 +46658,10 @@ public:
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
-	                  DataChunk &updates);
+	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
+	            DataChunk &updates);
+	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids,
+	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
@@ -49330,7 +49444,9 @@ public:
 		Value result;
 		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
 		if (lookup_result) {
-			value_out = result.GetValue<TYPE>();
+			if (!result.IsNull()) {
+				value_out = result.GetValue<TYPE>();
+			}
 		}
 		return lookup_result;
 	}
@@ -52410,7 +52526,6 @@ private:
 	mutex connections_lock;
 	reference_map_t<ClientContext, weak_ptr<ClientContext>> connections;
 	atomic<idx_t> connection_count;
-
 	atomic<connection_t> current_connection_id;
 };
 
