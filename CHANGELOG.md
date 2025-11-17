@@ -1,5 +1,11 @@
 # Changelog
 
+0.3.18
+  - [DuckDB 1.4.2 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.2)
+
+0.3.17
+  - [DuckDB 1.4.1 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.1)
+
 0.3.16
   - Fixed issue with invalid checksums in HEX release.
   - Added `allowed_paths` config parameter.
