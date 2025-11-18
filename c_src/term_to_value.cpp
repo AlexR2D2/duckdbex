@@ -429,7 +429,7 @@ bool nif::term_to_uuid(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 
   duckdb::Value uhugeint_val;
   if (nif::term_to_uhugeint(env, term, uhugeint_val)) {
-    duckdb::uhugeint_t uhugeint = duckdb::HugeIntValue::Get(uhugeint_val);
+    duckdb::uhugeint_t uhugeint = duckdb::UhugeIntValue::Get(uhugeint_val);
     duckdb::hugeint_t hugeint = duckdb::UUID::FromUHugeint(uhugeint);
     sink = std::move(duckdb::Value::UUID(hugeint));
     return true;
