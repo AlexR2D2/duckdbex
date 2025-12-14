@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "68d7555f68"
-#define DUCKDB_VERSION "v1.4.2"
+#define DUCKDB_SOURCE_ID "d1dc88f950"
+#define DUCKDB_VERSION "v1.4.3"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 4
-#define DUCKDB_PATCH_VERSION "2"
+#define DUCKDB_PATCH_VERSION "3"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -3118,10 +3118,12 @@ namespace duckdb {
 template <class T>
 struct NumericLimits {
 	static constexpr T Minimum() {
-		return std::numeric_limits<T>::lowest();
+		return std::numeric_limits<T>::has_infinity ? -std::numeric_limits<T>::infinity()
+		                                            : std::numeric_limits<T>::lowest();
 	}
 	static constexpr T Maximum() {
-		return std::numeric_limits<T>::max();
+		return std::numeric_limits<T>::has_infinity ? std::numeric_limits<T>::infinity()
+		                                            : std::numeric_limits<T>::max();
 	}
 	static constexpr bool IsSigned() {
 		return std::is_signed<T>::value;
@@ -15596,6 +15598,45 @@ public:
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
+// duckdb/parser/group_by_node.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+
+namespace duckdb {
+
+using GroupingSet = set<idx_t>;
+
+class GroupByNode {
+public:
+	//! The total set of all group expressions
+	vector<unique_ptr<ParsedExpression>> group_expressions;
+	//! The different grouping sets as they map to the group expressions
+	vector<GroupingSet> grouping_sets;
+
+public:
+	GroupByNode Copy() {
+		GroupByNode node;
+		node.group_expressions.reserve(group_expressions.size());
+		for (auto &expr : group_expressions) {
+			node.group_expressions.push_back(expr->Copy());
+		}
+		node.grouping_sets = grouping_sets;
+		return node;
+	}
+};
+
+} // namespace duckdb
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
 // duckdb/parser/result_modifier.hpp
 //
 //
@@ -16036,8 +16077,9 @@ public:
 
 	//! Remove unneeded/duplicate order elements.
 	//! Returns true of orders is not empty.
-	static bool Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups);
-	bool Simplify(const vector<unique_ptr<Expression>> &groups);
+	static bool Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups,
+	                     optional_ptr<vector<GroupingSet>> grouping_sets);
+	bool Simplify(const vector<unique_ptr<Expression>> &groups, optional_ptr<vector<GroupingSet>> grouping_sets);
 };
 
 enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };
@@ -19576,10 +19618,10 @@ public:
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
-	void AddUnnestRelation(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
-	                       optional_ptr<LogicalOperator> parent, RelationStats &child_stats,
-	                       optional_ptr<LogicalOperator> limit_op,
-	                       vector<reference<LogicalOperator>> &datasource_filters);
+	void AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,
+	                             optional_ptr<LogicalOperator> parent, RelationStats &child_stats,
+	                             optional_ptr<LogicalOperator> limit_op,
+	                             vector<reference<LogicalOperator>> &datasource_filters);
 	void AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
 	                                  const RelationStats &stats, LogicalOperatorType op_type);
 	vector<unique_ptr<SingleJoinRelation>> GetRelations();
@@ -20868,6 +20910,8 @@ public:
 	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
+	DUCKDB_API bool operator==(const TableFunction &rhs) const;
+	DUCKDB_API bool operator!=(const TableFunction &rhs) const;
 };
 
 } // namespace duckdb
@@ -32196,6 +32240,7 @@ enum class SetScope : uint8_t {
 
 
 
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -32399,7 +32444,8 @@ protected:
 	PhysicalOperator &PlanComparisonJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &PlanDelimJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &ExtractAggregateExpressions(PhysicalOperator &child, vector<unique_ptr<Expression>> &expressions,
-	                                              vector<unique_ptr<Expression>> &groups);
+	                                              vector<unique_ptr<Expression>> &groups,
+	                                              optional_ptr<vector<GroupingSet>> grouping_sets);
 
 private:
 	ClientContext &context;
@@ -33191,6 +33237,9 @@ enum class SampleMethod : uint8_t { SYSTEM_SAMPLE = 0, BERNOULLI_SAMPLE = 1, RES
 string SampleMethodToString(SampleMethod method);
 
 class SampleOptions {
+public:
+	// 1 billion rows should be enough.
+	static constexpr idx_t MAX_SAMPLE_ROWS = 1000000000;
 
 public:
 	explicit SampleOptions(int64_t seed_ = -1);
@@ -33588,7 +33637,6 @@ private:
 };
 
 } // namespace duckdb
-
 
 
 
@@ -35070,7 +35118,7 @@ private:
 
 	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
 
-	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map);
+	unique_ptr<BoundCTENode> BindMaterializedCTE(CommonTableExpressionMap &cte_map, unique_ptr<CTENode> &cte_root);
 	unique_ptr<BoundCTENode> BindCTE(CTENode &statement);
 
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
@@ -35439,7 +35487,7 @@ public:
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
-	virtual bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const;
+	virtual bool Cleanup(transaction_t lowest_transaction) const;
 
 	virtual bool HasDeletes() const = 0;
 
@@ -35481,7 +35529,7 @@ public:
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
-	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
+	bool Cleanup(transaction_t lowest_transaction) const override;
 
 	bool HasDeletes() const override;
 
@@ -35518,7 +35566,7 @@ public:
 	                            SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
-	bool Cleanup(transaction_t lowest_transaction, unique_ptr<ChunkInfo> &result) const override;
+	bool Cleanup(transaction_t lowest_transaction) const override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
@@ -35970,10 +36018,6 @@ public:
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 
-	//! Returns the list of meta block pointers used by the deletes
-	const vector<MetaBlockPointer> &GetDeletesPointers() const {
-		return deletes_pointers;
-	}
 	BlockManager &GetBlockManager();
 	DataTableInfo &GetTableInfo();
 
@@ -36069,6 +36113,8 @@ public:
 
 	static FilterPropagateResult CheckRowIdFilter(const TableFilter &filter, idx_t beg_row, idx_t end_row);
 
+	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
+
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
@@ -36084,8 +36130,6 @@ private:
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-
-	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 	bool HasUnloadedDeletes() const;
 
@@ -45348,11 +45392,43 @@ class ColumnDataCollection;
 
 enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
 
-struct BufferedIndexData {
+struct ReplayRange {
 	BufferedIndexReplay type;
-	unique_ptr<ColumnDataCollection> data;
+	// [start, end) - start is inclusive, end is exclusive for the range within the ColumnDataCollection
+	// buffer for operations to replay for this range.
+	idx_t start;
+	idx_t end;
+	explicit ReplayRange(const BufferedIndexReplay replay_type, const idx_t start_p, const idx_t end_p)
+	    : type(replay_type), start(start_p), end(end_p) {
+	}
+};
 
-	BufferedIndexData(BufferedIndexReplay replay_type, unique_ptr<ColumnDataCollection> data_p);
+// All inserts and deletes to be replayed are stored in their respective buffers.
+// Since the inserts and deletes may be interleaved, however, ranges stores the ordering of operations
+// and their offsets in the respective buffer.
+// Simple example:
+// ranges[0] - INSERT_ENTRY, [0,6)
+// ranges[1] - DEL_ENTRY,    [0,3)
+// ranges[2] - INSERT_ENTRY  [6,12)
+// So even though the buffered_inserts has all the insert data from [0,12), ranges gives us the intervals for
+// replaying the index operations in the right order.
+struct BufferedIndexReplays {
+	vector<ReplayRange> ranges;
+	unique_ptr<ColumnDataCollection> buffered_inserts;
+	unique_ptr<ColumnDataCollection> buffered_deletes;
+
+	BufferedIndexReplays() = default;
+
+	unique_ptr<ColumnDataCollection> &GetBuffer(const BufferedIndexReplay replay_type) {
+		if (replay_type == BufferedIndexReplay::INSERT_ENTRY) {
+			return buffered_inserts;
+		}
+		return buffered_deletes;
+	}
+
+	bool HasBufferedReplays() const {
+		return !ranges.empty();
+	}
 };
 
 class UnboundIndex final : public Index {
@@ -45361,8 +45437,9 @@ private:
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
 	IndexStorageInfo storage_info;
-	//! Buffer for WAL replays.
-	vector<BufferedIndexData> buffered_replays;
+
+	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
+	BufferedIndexReplays buffered_replays;
 
 	//! Maps the column IDs in the buffered replays to a physical table offset.
 	//! For example, column [i] in a buffered ColumnDataCollection is the data for an Indexed column with
@@ -45408,12 +45485,13 @@ public:
 	void BufferChunk(DataChunk &index_column_chunk, Vector &row_ids, const vector<StorageIndex> &mapped_column_ids_p,
 	                 BufferedIndexReplay replay_type);
 	bool HasBufferedReplays() const {
-		return !buffered_replays.empty();
+		return buffered_replays.HasBufferedReplays();
 	}
 
-	vector<BufferedIndexData> &GetBufferedReplays() {
+	BufferedIndexReplays &GetBufferedReplays() {
 		return buffered_replays;
 	}
+
 	const vector<StorageIndex> &GetMappedColumnIds() const {
 		return mapped_column_ids;
 	}
@@ -45581,7 +45659,7 @@ public:
 	//! Replay index insert and delete operations buffered during WAL replay.
 	//! table_types has the physical types of the table in the order they appear, not logical (no generated columns).
 	//! mapped_column_ids contains the sorted order of Indexed physical column ID's (see unbound_index.hpp comments).
-	void ApplyBufferedReplays(const vector<LogicalType> &table_types, vector<BufferedIndexData> &buffered_replays,
+	void ApplyBufferedReplays(const vector<LogicalType> &table_types, BufferedIndexReplays &buffered_replays,
 	                          const vector<StorageIndex> &mapped_column_ids);
 
 protected:
@@ -47600,6 +47678,7 @@ public:
 	//! If this returns true - this sorts "in_list" as a side-effect
 	static bool IsDenseRange(vector<Value> &in_list);
 	static bool ContainsNull(vector<Value> &in_list);
+	static bool FindNextLegalUTF8(string &prefix_string);
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
@@ -52824,6 +52903,8 @@ struct DatabaseCacheEntry {
 	mutex update_database_mutex;
 };
 
+enum class CacheBehavior { AUTOMATIC, ALWAYS_CACHE, NEVER_CACHE };
+
 class DBInstanceCache {
 public:
 	DBInstanceCache();
@@ -52838,6 +52919,9 @@ public:
 
 	//! Either returns an existing entry, or creates and caches a new DB Instance
 	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict, bool cache_instance,
+	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
+	shared_ptr<DuckDB> GetOrCreateInstance(const string &database, DBConfig &config_dict,
+	                                       CacheBehavior cache_behavior = CacheBehavior::AUTOMATIC,
 	                                       const std::function<void(DuckDB &)> &on_create = nullptr);
 
 private:
