@@ -69,18 +69,18 @@ Now we are preparing the huge amount of books data. `MAPs` must have a single ty
 a_looot_of_books_list = [
   [
     1,
-    %{
-      "title" => "Computer Architecture: A Quantitative Approach",
-      "paperback pages" => "856",
-      "dimensions" => "7.5 x 1.75 x 9 inches"
-    }
+    [
+      {"title", "Computer Architecture: A Quantitative Approach"},
+      {"paperback pages", "856"},
+      {"dimensions", "7.5 x 1.75 x 9 inches"}
+    ]
   ],
   [
     2,
-    %{
-      "title" => "The Pragmatic Programmer",
-      "publicher" => "David Thomas"
-    }
+    [
+      {"title", "The Pragmatic Programmer"},
+      {"publicher", "David Thomas"}
+    ]
   ]
 ]
 ```
