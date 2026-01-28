@@ -1,5 +1,13 @@
 # Changelog
 
+0.3.20
+  - [DuckDB 1.4.4 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.4)
+  - Added the `DUCKDBEX_EXTENSION_DIRECTORY` env var to set default value of extensions directory in %DBConfig{}.
+  - Added the `DUCKDBEX_TEMPORARY_DIRECTORY` env var to set default value of temporary directory in %DBConfig{}.
+
+0.3.19
+  - [DuckDB 1.4.3 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.3)
+
 0.3.18
   - [DuckDB 1.4.2 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.2)
 

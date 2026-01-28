@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "d1dc88f950"
-#define DUCKDB_VERSION "v1.4.3"
+#define DUCKDB_SOURCE_ID "6ddac802ff"
+#define DUCKDB_VERSION "v1.4.4"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 4
-#define DUCKDB_PATCH_VERSION "3"
+#define DUCKDB_PATCH_VERSION "4"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -7438,6 +7438,7 @@ public:
 	static constexpr idx_t FILE_FLAGS_NULL_IF_EXISTS = idx_t(1 << 10);
 	static constexpr idx_t FILE_FLAGS_MULTI_CLIENT_ACCESS = idx_t(1 << 11);
 	static constexpr idx_t FILE_FLAGS_DISABLE_LOGGING = idx_t(1 << 12);
+	static constexpr idx_t FILE_FLAGS_ENABLE_EXTENSION_INSTALL = idx_t(1 << 13);
 
 public:
 	FileOpenFlags() = default;
@@ -7523,6 +7524,9 @@ public:
 	inline bool DisableLogging() const {
 		return flags & FILE_FLAGS_DISABLE_LOGGING;
 	}
+	inline bool EnableExtensionInstall() const {
+		return flags & FILE_FLAGS_ENABLE_EXTENSION_INSTALL;
+	}
 	inline idx_t GetFlagsInternal() const {
 		return flags;
 	}
@@ -7567,6 +7571,9 @@ public:
 	//! Disables logging to avoid infinite loops when using FileHandle-backed log storage
 	static constexpr FileOpenFlags FILE_FLAGS_DISABLE_LOGGING =
 	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_DISABLE_LOGGING);
+	//! Opened file is allowed to be a duckdb_extension
+	static constexpr FileOpenFlags FILE_FLAGS_ENABLE_EXTENSION_INSTALL =
+	    FileOpenFlags(FileOpenFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
 };
 
 } // namespace duckdb
@@ -7654,6 +7661,7 @@ public:
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Read(QueryContext context, void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	DUCKDB_API int64_t Write(QueryContext context, void *buffer, idx_t nr_bytes);
 	// Read at [nr_bytes] bytes into [buffer].
 	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
@@ -13528,6 +13536,9 @@ public:
 
 	void Verify(ExpressionExecutorState &root);
 
+	//! Reset any cached dictionary expression states in this expression state and its children
+	virtual void ResetDictionaryStates();
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -13553,6 +13564,8 @@ public:
 
 	bool TryExecuteDictionaryExpression(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
 	                                    Vector &result);
+
+	void ResetDictionaryStates() override;
 
 public:
 	unique_ptr<FunctionLocalState> local_state;
@@ -28669,7 +28682,8 @@ This allows NULL values to be written to the vector, regardless of whether a val
 DUCKDB_C_API void duckdb_vector_ensure_validity_writable(duckdb_vector vector);
 
 /*!
-Assigns a string element in the vector at the specified location.
+Assigns a string element in the vector at the specified location. The vector type must be VARCHAR and the input must be
+valid UTF-8. Otherwise, undefined behavior is expected at later stages.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -28678,7 +28692,8 @@ Assigns a string element in the vector at the specified location.
 DUCKDB_C_API void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str);
 
 /*!
-Assigns a string element in the vector at the specified location. You may also use this function to assign BLOBs.
+Assigns a string element in the vector at the specified location. The vector type can be VARCHAR or BLOB. In the case of
+VARCHAR, you must pass valid UTF-8. Otherwise, undefined behavior is expected at later stages.
 
 * @param vector The vector to alter
 * @param index The row position in the vector to assign the string to
@@ -33800,7 +33815,7 @@ public:
 	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type);
 	DUCKDB_API void Reset();
 
-	DUCKDB_API const vector<CatalogSearchEntry> &Get() const;
+	DUCKDB_API vector<CatalogSearchEntry> Get() const;
 	const vector<CatalogSearchEntry> &GetSetPaths() const {
 		return set_paths;
 	}
@@ -46481,6 +46496,7 @@ public:
 	~PersistentTableData();
 
 	MetaBlockPointer base_table_pointer;
+	vector<MetaBlockPointer> read_metadata_pointers;
 	TableStatistics table_stats;
 	idx_t total_rows;
 	idx_t row_group_count;
@@ -46964,7 +46980,7 @@ public:
 	void Initialize(PersistentCollectionData &data);
 	void Initialize(PersistentTableData &data);
 	void InitializeEmpty();
-	void FinalizeCheckpoint(MetaBlockPointer pointer);
+	void FinalizeCheckpoint(MetaBlockPointer pointer, const vector<MetaBlockPointer> &existing_pointers);
 
 	bool IsEmpty() const;
 
@@ -47087,6 +47103,8 @@ private:
 	atomic<idx_t> allocation_size;
 	//! Root metadata pointer, if the collection is loaded from disk
 	MetaBlockPointer metadata_pointer;
+	//! Other metadata pointers
+	vector<MetaBlockPointer> metadata_pointers;
 	//! Whether or not we need to append a new row group prior to appending
 	bool requires_new_row_group;
 };
@@ -49755,7 +49773,7 @@ public:
 class KeyValueSecretReader {
 public:
 	//! Manually pass in a secret reference
-	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {};
+	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p);
 
 	//! Initializes the KeyValueSecretReader by fetching the secret automatically
 	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,
@@ -52977,6 +52995,7 @@ struct PreparedStatementWrapper {
 	unique_ptr<PreparedStatement> statement;
 	bool success = true;
 	ErrorData error_data;
+	unordered_map<idx_t, string> param_index_to_name;
 };
 
 struct ExtractStatementsWrapper {

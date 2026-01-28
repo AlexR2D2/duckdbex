@@ -375,7 +375,17 @@ The ENUM type represents a dictionary data structure with all possible unique va
 
 ## Extensions
 
-DuckDB allows to load and use extensions. By default extensions are downloaded from the remote source. These extensions are verified and signed. Also you can use you own unsigned extensions.
+DuckDB allows to load and use extensions. By default extensions are downloaded from the remote source. These extensions are verified and signed. Also you can use you own unsigned extensions. By default, extensions are installed under the user's home directory:
+```
+~/.duckdb/extensions/duckdb_version/platform_name/
+```
+
+To change the default location where DuckDB stores its extensions, use the extension_directory configuration option:
+```
+SET extension_directory = '/path/to/your/extension/directory';
+```
+
+To set extensions directory via environment variable use the `DUCKDB_EXTENSION DIRECTORY` env var. It used as default value for `extension_directory` field of `%Duckdbex.Config{}` structure.
 
 ### Remote installation
 
@@ -458,3 +468,11 @@ And vice versa, if you should pass HUGEINT as argument to sql query, you should 
 ```
 
 Currently Duckdbex lib didn't convert automatically `hugeint_to_integer` for you because this is additional extra pass through your collection of rows which will be executed inside the library.
+
+## Default config
+
+If yuo
+DUCKDBEX_TEMPORARY_DIRECTORY
+DUCKDBEX_EXTENSION_DIRECTORY
+
+
