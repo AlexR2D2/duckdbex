@@ -98,6 +98,7 @@ defmodule Duckdbex.Config do
     use_temporary_directory: true,
 
     # Directory to store temporary structures that do not fit in memory. Default, current
+    # Note: assigned at compile time!
     temporary_directory: System.get_env("DUCKDBEX_TEMPORARY_DIRECTORY"),
 
     # Whether or not to invoke filesystem trim on free blocks after checkpoint. This will reclaim
@@ -157,6 +158,7 @@ defmodule Duckdbex.Config do
     force_bitpacking_mode: :auto,
 
     # Directory to store extension binaries in
+    # Note: assigned at compile time!
     extension_directory: System.get_env("DUCKDBEX_EXTENSION_DIRECTORY"),
 
     # Whether unsigned extensions should be loaded

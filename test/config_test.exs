@@ -1,12 +1,6 @@
 defmodule Duckdbex.Nif.ConfigTest do
   use ExUnit.Case
 
-  test "config defaults" do
-    config = %Duckdbex.Config{}
-    assert config.extension_directory == System.get_env("DUCKDBEX_EXTENSION_DIRECTORY")
-    assert config.temporary_directory == System.get_env("DUCKDBEX_TEMPORARY_DIRECTORY")
-  end
-
   test "explicit nil config" do
     assert {:ok, _db} = Duckdbex.open(":memory:", nil)
   end

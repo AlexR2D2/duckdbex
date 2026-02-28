@@ -1,5 +1,8 @@
 # Changelog
 
+0.3.21
+  - merged the @karvla PR: [handle special float cases #52](https://github.com/AlexR2D2/duckdbex/pull/52)
+
 0.3.20
   - [DuckDB 1.4.4 bugfix release](https://github.com/duckdb/duckdb/releases/tag/v1.4.4)
   - Added the `DUCKDBEX_EXTENSION_DIRECTORY` env var to set default value of extensions directory in %DBConfig{}.
