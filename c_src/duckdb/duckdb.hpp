@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "7dbb2e646f"
-#define DUCKDB_VERSION "v1.5.1"
+#define DUCKDB_SOURCE_ID "14eca11bd9"
+#define DUCKDB_VERSION "v1.5.3"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 5
-#define DUCKDB_PATCH_VERSION "1"
+#define DUCKDB_PATCH_VERSION "3"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -447,6 +447,11 @@ public:
 	static ExceptionFormatValue CreateFormatValue(const T &value) {
 		return int64_t(value);
 	}
+	template <size_t N>
+	static ExceptionFormatValue CreateFormatValue(const char (&value)[N]) {
+		const char *ptr = value;
+		return CreateFormatValue<const char *>(ptr);
+	}
 	static string Format(const string &msg, std::vector<ExceptionFormatValue> &values);
 };
 
@@ -619,7 +624,7 @@ public:
 	template <class T, typename... ARGS>
 	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values,
 	                                        const T &param, ARGS &&...params) {
-		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
+		values.push_back(ExceptionFormatValue::CreateFormatValue(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
@@ -4280,7 +4285,7 @@ public:
 	//! Is the character a valid part of a time zone name?
 	static inline bool CharacterIsTimeZone(char c) {
 		return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/' || c == '+' ||
-		       c == '-';
+		       c == '-' || c == ':';
 	}
 
 	//! True, if the timestamp is finite, else false.
@@ -8063,6 +8068,8 @@ public:
 		return FromString(input).ToString();
 	}
 
+	static string AddSuffixToPath(const string &path, const string &suffix);
+
 private:
 	string scheme;
 	string authority;
@@ -8207,6 +8214,7 @@ public:
 public:
 	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
+	DUCKDB_API static FileSystem &GetLocal(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
@@ -8362,6 +8370,9 @@ public:
 
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
+
+	//! Whether this is a LocalFileSystem instance.
+	DUCKDB_API virtual bool IsLocalFileSystem() const;
 
 	//! Return the name of the filesytem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
@@ -15628,6 +15639,8 @@ public:
 
 	//! Convert from WKT
 	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict);
+	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict,
+	                                  optional_idx query_location);
 
 	//! Convert to WKT
 	DUCKDB_API static string_t ToString(Vector &result, const string_t &geom);
@@ -23217,7 +23230,6 @@ struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	bool reuse_existing_metadata_blocks = false;
-	bool should_checkpoint = true;
 	vector<idx_t> existing_extra_metadata_blocks;
 	optional_idx write_count;
 };
@@ -23280,8 +23292,6 @@ public:
 	void Scan(ScanOptions options, CollectionScanState &state, DataChunk &result);
 	void Scan(CollectionScanState &state, DataChunk &result, TableScanType type);
 
-	//! Whether or not this RowGroup should be
-	bool ShouldCheckpointRowGroup(transaction_t checkpoint_id) const;
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
@@ -23309,6 +23319,7 @@ public:
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info) const;
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
+	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
 	                           idx_t row_group_start);
@@ -23355,6 +23366,10 @@ public:
 	idx_t GetColumnCount() const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
+
+	//! Direct accessors, fall outside of general use but can be useful to some extensions
+	ColumnData &GetRawColumnData(const StorageIndex &c) const;
+	ColumnData &GetRawColumnData(storage_t c) const;
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
@@ -24071,6 +24086,231 @@ private:
 
 
 //===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// duckdb/common/enums/metric_type.hpp
+//
+// This file is automatically generated by scripts/generate_metric_enums.py
+// Do not edit this file manually, your changes will be overwritten
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/enums/optimizer_type.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+namespace duckdb {
+
+enum class OptimizerType : uint32_t {
+	INVALID = 0,
+	EXPRESSION_REWRITER = 1,
+	FILTER_PULLUP = 2,
+	FILTER_PUSHDOWN = 3,
+	EMPTY_RESULT_PULLUP = 4,
+	CTE_FILTER_PUSHER = 5,
+	REGEX_RANGE = 6,
+	IN_CLAUSE = 7,
+	JOIN_ORDER = 8,
+	DELIMINATOR = 9,
+	UNNEST_REWRITER = 10,
+	UNUSED_COLUMNS = 11,
+	STATISTICS_PROPAGATION = 12,
+	COMMON_SUBEXPRESSIONS = 13,
+	COMMON_AGGREGATE = 14,
+	COLUMN_LIFETIME = 15,
+	BUILD_SIDE_PROBE_SIDE = 16,
+	LIMIT_PUSHDOWN = 17,
+	TOP_N = 18,
+	COMPRESSED_MATERIALIZATION = 19,
+	DUPLICATE_GROUPS = 20,
+	REORDER_FILTER = 21,
+	SAMPLING_PUSHDOWN = 22,
+	JOIN_FILTER_PUSHDOWN = 23,
+	EXTENSION = 24,
+	MATERIALIZED_CTE = 25,
+	SUM_REWRITER = 26,
+	LATE_MATERIALIZATION = 27,
+	CTE_INLINING = 28,
+	ROW_GROUP_PRUNER = 29,
+	TOP_N_WINDOW_ELIMINATION = 30,
+	COMMON_SUBPLAN = 31,
+	JOIN_ELIMINATION = 32,
+	WINDOW_SELF_JOIN = 33
+};
+
+string OptimizerTypeToString(OptimizerType type);
+OptimizerType OptimizerTypeFromString(const string &str);
+vector<string> ListAllOptimizers();
+
+} // namespace duckdb
+
+
+namespace duckdb {
+
+enum class MetricGroup : uint8_t {
+	ALL,
+	CORE,
+	DEFAULT,
+	EXECUTION,
+	FILE,
+	OPERATOR,
+	OPTIMIZER,
+	PHASE_TIMING,
+	INVALID,
+};
+
+enum class MetricType : uint8_t {
+	// Core metrics
+	CPU_TIME = 2,
+	CUMULATIVE_CARDINALITY = 4,
+	CUMULATIVE_ROWS_SCANNED = 7,
+	CUMULATIVE_ROW_GROUPS_SCANNED = 101,
+	CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN = 102,
+	EXTRA_INFO = 3,
+	LATENCY = 11,
+	QUERY_NAME = 0,
+	RESULT_SET_SIZE = 10,
+	ROWS_RETURNED = 12,
+	// Execution metrics
+	BLOCKED_THREAD_TIME = 1,
+	SYSTEM_PEAK_BUFFER_MEMORY = 14,
+	SYSTEM_PEAK_TEMP_DIR_SIZE = 15,
+	TOTAL_MEMORY_ALLOCATED = 91,
+	// File metrics
+	ATTACH_LOAD_STORAGE_LATENCY = 92,
+	ATTACH_REPLAY_WAL_LATENCY = 93,
+	CHECKPOINT_LATENCY = 94,
+	COMMIT_LOCAL_STORAGE_LATENCY = 95,
+	CUMULATIVE_VACUUM_TIME = 103,
+	TOTAL_BYTES_READ = 16,
+	TOTAL_BYTES_WRITTEN = 17,
+	WAITING_TO_ATTACH_LATENCY = 96,
+	WAL_REPLAY_ENTRY_COUNT = 97,
+	WRITE_TO_WAL_LATENCY = 98,
+	// Operator metrics
+	OPERATOR_CARDINALITY = 6,
+	OPERATOR_NAME = 13,
+	OPERATOR_ROWS_SCANNED = 8,
+	OPERATOR_ROW_GROUPS_SCANNED = 99,
+	OPERATOR_TIMING = 9,
+	OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN = 100,
+	OPERATOR_TYPE = 5,
+	// Optimizer metrics
+	OPTIMIZER_EXPRESSION_REWRITER = 26,
+	OPTIMIZER_FILTER_PULLUP = 27,
+	OPTIMIZER_FILTER_PUSHDOWN = 28,
+	OPTIMIZER_EMPTY_RESULT_PULLUP = 29,
+	OPTIMIZER_CTE_FILTER_PUSHER = 30,
+	OPTIMIZER_REGEX_RANGE = 31,
+	OPTIMIZER_IN_CLAUSE = 32,
+	OPTIMIZER_JOIN_ORDER = 33,
+	OPTIMIZER_DELIMINATOR = 34,
+	OPTIMIZER_UNNEST_REWRITER = 35,
+	OPTIMIZER_UNUSED_COLUMNS = 36,
+	OPTIMIZER_STATISTICS_PROPAGATION = 37,
+	OPTIMIZER_COMMON_SUBEXPRESSIONS = 38,
+	OPTIMIZER_COMMON_AGGREGATE = 39,
+	OPTIMIZER_COLUMN_LIFETIME = 40,
+	OPTIMIZER_BUILD_SIDE_PROBE_SIDE = 41,
+	OPTIMIZER_LIMIT_PUSHDOWN = 42,
+	OPTIMIZER_TOP_N = 43,
+	OPTIMIZER_COMPRESSED_MATERIALIZATION = 44,
+	OPTIMIZER_DUPLICATE_GROUPS = 45,
+	OPTIMIZER_REORDER_FILTER = 46,
+	OPTIMIZER_SAMPLING_PUSHDOWN = 47,
+	OPTIMIZER_JOIN_FILTER_PUSHDOWN = 48,
+	OPTIMIZER_EXTENSION = 49,
+	OPTIMIZER_MATERIALIZED_CTE = 50,
+	OPTIMIZER_SUM_REWRITER = 51,
+	OPTIMIZER_LATE_MATERIALIZATION = 52,
+	OPTIMIZER_CTE_INLINING = 53,
+	OPTIMIZER_ROW_GROUP_PRUNER = 54,
+	OPTIMIZER_TOP_N_WINDOW_ELIMINATION = 55,
+	OPTIMIZER_COMMON_SUBPLAN = 56,
+	OPTIMIZER_JOIN_ELIMINATION = 57,
+	OPTIMIZER_WINDOW_SELF_JOIN = 58,
+	// PhaseTiming metrics
+	ALL_OPTIMIZERS = 18,
+	CUMULATIVE_OPTIMIZER_TIMING = 19,
+	PHYSICAL_PLANNER = 22,
+	PHYSICAL_PLANNER_COLUMN_BINDING = 23,
+	PHYSICAL_PLANNER_CREATE_PLAN = 25,
+	PHYSICAL_PLANNER_RESOLVE_TYPES = 24,
+	PLANNER = 20,
+	PLANNER_BINDING = 21,
+};
+
+struct MetricTypeHashFunction {
+    uint64_t operator()(const MetricType &index) const {
+        return std::hash<uint8_t>()(static_cast<uint8_t>(index));
+    }
+};
+
+typedef unordered_set<MetricType, MetricTypeHashFunction> profiler_settings_t;
+typedef unordered_map<MetricType, Value, MetricTypeHashFunction> profiler_metrics_t;
+
+class MetricsUtils {
+public:
+	static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER);
+	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_WINDOW_SELF_JOIN);
+
+public:
+
+	// All metrics
+	static profiler_settings_t GetAllMetrics();
+	static profiler_settings_t GetMetricsByGroupType(MetricGroup type);
+
+	// Core metrics
+	static profiler_settings_t GetCoreMetrics();
+	static bool IsCoreMetric(MetricType type);
+
+	// Default metrics
+	static profiler_settings_t GetDefaultMetrics();
+	static bool IsDefaultMetric(MetricType type);
+
+	// Execution metrics
+	static profiler_settings_t GetExecutionMetrics();
+	static bool IsExecutionMetric(MetricType type);
+
+	// File metrics
+	static profiler_settings_t GetFileMetrics();
+	static bool IsFileMetric(MetricType type);
+
+	// Operator metrics
+	static profiler_settings_t GetOperatorMetrics();
+	static bool IsOperatorMetric(MetricType type);
+
+	// Optimizer metrics
+	static profiler_settings_t GetOptimizerMetrics();
+	static bool IsOptimizerMetric(MetricType type);
+	static MetricType GetOptimizerMetricByType(OptimizerType type);
+	static OptimizerType GetOptimizerTypeByMetric(MetricType type);
+
+	// PhaseTiming metrics
+	static profiler_settings_t GetPhaseTimingMetrics();
+	static bool IsPhaseTimingMetric(MetricType type);
+
+	// RootScope metrics
+	static profiler_settings_t GetRootScopeMetrics();
+	static bool IsRootScopeMetric(MetricType type);
+};
+} // namespace duckdb
+
+//===----------------------------------------------------------------------===//
 //                         DuckDB
 //
 // duckdb/common/table_column.hpp
@@ -24491,6 +24731,8 @@ enum class RequestType : uint8_t;
 
 enum class ResultModifierType : uint8_t;
 
+enum class RowGroupAppendMode : uint8_t;
+
 enum class SampleMethod : uint8_t;
 
 enum class SampleType : uint8_t;
@@ -24570,6 +24812,8 @@ enum class TemporaryCompressionLevel : int;
 enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
+
+enum class TransactionInvalidationPolicy : uint8_t;
 
 enum class TransactionModifierType : uint8_t;
 
@@ -25136,6 +25380,9 @@ template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
 
 template<>
+const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
+
+template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
 
 template<>
@@ -25254,6 +25501,9 @@ const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
+
+template<>
+const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
@@ -25842,6 +26092,9 @@ template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
 
 template<>
+RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
+
+template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
 
 template<>
@@ -25960,6 +26213,9 @@ ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);
 
 template<>
 TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
@@ -26456,6 +26712,10 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
                                                                    const FunctionData *bind_data);
 typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
                                                LocalTableFunctionState &local_state);
+typedef void (*table_function_get_metrics_t)(ClientContext &context, const FunctionData *bind_data,
+                                             GlobalTableFunctionState &global_state,
+                                             LocalTableFunctionState &local_state,
+                                             const profiler_settings_t &requested_metrics, profiler_metrics_t &metrics);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
@@ -26570,8 +26830,10 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows that have benn scanned
+	//! (Optional) deprecated compatibility callback; prefer get_metrics for new table scan metrics
 	table_function_rows_scanned_t rows_scanned;
+	//! (Optional) returns profiling metrics for this table scan operator
+	table_function_get_metrics_t get_metrics;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
@@ -26987,6 +27249,7 @@ public:
 	static Executor &Get(ClientContext &context);
 
 	void Initialize(PhysicalOperator &physical_plan);
+	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask(bool dry_run = false);
@@ -27082,6 +27345,7 @@ private:
 
 private:
 	optional_ptr<PhysicalOperator> physical_plan;
+	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
 	//! All pipelines of the query plan
@@ -28256,6 +28520,7 @@ public:
 
 
 
+
 namespace duckdb {
 
 enum class AlterType : uint8_t {
@@ -28304,6 +28569,8 @@ public:
 	string name;
 	//! Allow altering internal entries
 	bool allow_internal;
+	//! New dependencies for the altered entry (set during binding)
+	unique_ptr<LogicalDependencyList> new_dependencies;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;
@@ -29705,6 +29972,10 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 	// duckdb_time_ns (nanoseconds)
 	DUCKDB_TYPE_TIME_NS = 39,
+	// GEOMETRY type, WKB blob
+	DUCKDB_TYPE_GEOMETRY = 40,
+	// VARIANT type
+	DUCKDB_TYPE_VARIANT = 41,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.
@@ -35821,6 +36092,29 @@ Registers a custom log storage for the logger.
 */
 DUCKDB_C_API duckdb_state duckdb_register_log_storage(duckdb_database database, duckdb_log_storage log_storage);
 
+//----------------------------------------------------------------------------------------------------------------------
+// Geometry Helpers
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to operate on GEOMETRY types`.
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+Gets the CRS (Coordinate Reference System) of a GEOMETRY type.
+Result must be freed with `duckdb_free`.
+
+* @param type The GEOMETRY type.
+* @return The CRS of the GEOMETRY type, or NULL if the type is not a GEOMETRY type.
+*/
+DUCKDB_C_API char *duckdb_geometry_type_get_crs(duckdb_logical_type type);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Variant Helpers
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to operate on VARIANT types.
+//----------------------------------------------------------------------------------------------------------------------
+
 #endif
 
 #ifdef __cplusplus
@@ -35985,7 +36279,7 @@ public:
 
 	explicit ProgressBar(
 	    Executor &executor, idx_t show_progress_after,
-	    progress_bar_display_create_func_t create_display_func = ProgressBar::DefaultProgressBarDisplay);
+	    const progress_bar_display_create_func_t &create_display_func = ProgressBar::DefaultProgressBarDisplay);
 
 	//! Starts the thread
 	void Start();
@@ -36033,225 +36327,6 @@ private:
 
 
 
-//===----------------------------------------------------------------------===//
-//
-//                         DuckDB
-//
-// duckdb/common/enums/metric_type.hpp
-//
-// This file is automatically generated by scripts/generate_metric_enums.py
-// Do not edit this file manually, your changes will be overwritten
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/common/enums/optimizer_type.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-namespace duckdb {
-
-enum class OptimizerType : uint32_t {
-	INVALID = 0,
-	EXPRESSION_REWRITER = 1,
-	FILTER_PULLUP = 2,
-	FILTER_PUSHDOWN = 3,
-	EMPTY_RESULT_PULLUP = 4,
-	CTE_FILTER_PUSHER = 5,
-	REGEX_RANGE = 6,
-	IN_CLAUSE = 7,
-	JOIN_ORDER = 8,
-	DELIMINATOR = 9,
-	UNNEST_REWRITER = 10,
-	UNUSED_COLUMNS = 11,
-	STATISTICS_PROPAGATION = 12,
-	COMMON_SUBEXPRESSIONS = 13,
-	COMMON_AGGREGATE = 14,
-	COLUMN_LIFETIME = 15,
-	BUILD_SIDE_PROBE_SIDE = 16,
-	LIMIT_PUSHDOWN = 17,
-	TOP_N = 18,
-	COMPRESSED_MATERIALIZATION = 19,
-	DUPLICATE_GROUPS = 20,
-	REORDER_FILTER = 21,
-	SAMPLING_PUSHDOWN = 22,
-	JOIN_FILTER_PUSHDOWN = 23,
-	EXTENSION = 24,
-	MATERIALIZED_CTE = 25,
-	SUM_REWRITER = 26,
-	LATE_MATERIALIZATION = 27,
-	CTE_INLINING = 28,
-	ROW_GROUP_PRUNER = 29,
-	TOP_N_WINDOW_ELIMINATION = 30,
-	COMMON_SUBPLAN = 31,
-	JOIN_ELIMINATION = 32,
-	WINDOW_SELF_JOIN = 33
-};
-
-string OptimizerTypeToString(OptimizerType type);
-OptimizerType OptimizerTypeFromString(const string &str);
-vector<string> ListAllOptimizers();
-
-} // namespace duckdb
-
-
-namespace duckdb {
-
-enum class MetricGroup : uint8_t {
-	ALL,
-	CORE,
-	DEFAULT,
-	EXECUTION,
-	FILE,
-	OPERATOR,
-	OPTIMIZER,
-	PHASE_TIMING,
-	INVALID,
-};
-
-enum class MetricType : uint8_t {
-	// Core metrics
-	CPU_TIME = 2,
-	CUMULATIVE_CARDINALITY = 4,
-	CUMULATIVE_ROWS_SCANNED = 7,
-	EXTRA_INFO = 3,
-	LATENCY = 11,
-	QUERY_NAME = 0,
-	RESULT_SET_SIZE = 10,
-	ROWS_RETURNED = 12,
-	// Execution metrics
-	BLOCKED_THREAD_TIME = 1,
-	SYSTEM_PEAK_BUFFER_MEMORY = 14,
-	SYSTEM_PEAK_TEMP_DIR_SIZE = 15,
-	TOTAL_MEMORY_ALLOCATED = 91,
-	// File metrics
-	ATTACH_LOAD_STORAGE_LATENCY = 92,
-	ATTACH_REPLAY_WAL_LATENCY = 93,
-	CHECKPOINT_LATENCY = 94,
-	COMMIT_LOCAL_STORAGE_LATENCY = 95,
-	TOTAL_BYTES_READ = 16,
-	TOTAL_BYTES_WRITTEN = 17,
-	WAITING_TO_ATTACH_LATENCY = 96,
-	WAL_REPLAY_ENTRY_COUNT = 97,
-	WRITE_TO_WAL_LATENCY = 98,
-	// Operator metrics
-	OPERATOR_CARDINALITY = 6,
-	OPERATOR_NAME = 13,
-	OPERATOR_ROWS_SCANNED = 8,
-	OPERATOR_TIMING = 9,
-	OPERATOR_TYPE = 5,
-	// Optimizer metrics
-	OPTIMIZER_EXPRESSION_REWRITER = 26,
-	OPTIMIZER_FILTER_PULLUP = 27,
-	OPTIMIZER_FILTER_PUSHDOWN = 28,
-	OPTIMIZER_EMPTY_RESULT_PULLUP = 29,
-	OPTIMIZER_CTE_FILTER_PUSHER = 30,
-	OPTIMIZER_REGEX_RANGE = 31,
-	OPTIMIZER_IN_CLAUSE = 32,
-	OPTIMIZER_JOIN_ORDER = 33,
-	OPTIMIZER_DELIMINATOR = 34,
-	OPTIMIZER_UNNEST_REWRITER = 35,
-	OPTIMIZER_UNUSED_COLUMNS = 36,
-	OPTIMIZER_STATISTICS_PROPAGATION = 37,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS = 38,
-	OPTIMIZER_COMMON_AGGREGATE = 39,
-	OPTIMIZER_COLUMN_LIFETIME = 40,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE = 41,
-	OPTIMIZER_LIMIT_PUSHDOWN = 42,
-	OPTIMIZER_TOP_N = 43,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION = 44,
-	OPTIMIZER_DUPLICATE_GROUPS = 45,
-	OPTIMIZER_REORDER_FILTER = 46,
-	OPTIMIZER_SAMPLING_PUSHDOWN = 47,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN = 48,
-	OPTIMIZER_EXTENSION = 49,
-	OPTIMIZER_MATERIALIZED_CTE = 50,
-	OPTIMIZER_SUM_REWRITER = 51,
-	OPTIMIZER_LATE_MATERIALIZATION = 52,
-	OPTIMIZER_CTE_INLINING = 53,
-	OPTIMIZER_ROW_GROUP_PRUNER = 54,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION = 55,
-	OPTIMIZER_COMMON_SUBPLAN = 56,
-	OPTIMIZER_JOIN_ELIMINATION = 57,
-	OPTIMIZER_WINDOW_SELF_JOIN = 58,
-	// PhaseTiming metrics
-	ALL_OPTIMIZERS = 18,
-	CUMULATIVE_OPTIMIZER_TIMING = 19,
-	PHYSICAL_PLANNER = 22,
-	PHYSICAL_PLANNER_COLUMN_BINDING = 23,
-	PHYSICAL_PLANNER_CREATE_PLAN = 25,
-	PHYSICAL_PLANNER_RESOLVE_TYPES = 24,
-	PLANNER = 20,
-	PLANNER_BINDING = 21,
-};
-
-struct MetricTypeHashFunction {
-    uint64_t operator()(const MetricType &index) const {
-        return std::hash<uint8_t>()(static_cast<uint8_t>(index));
-    }
-};
-
-typedef unordered_set<MetricType, MetricTypeHashFunction> profiler_settings_t;
-typedef unordered_map<MetricType, Value, MetricTypeHashFunction> profiler_metrics_t;
-
-class MetricsUtils {
-public:
-	static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER);
-	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_WINDOW_SELF_JOIN);
-
-public:
-
-	// All metrics
-	static profiler_settings_t GetAllMetrics();
-	static profiler_settings_t GetMetricsByGroupType(MetricGroup type);
-
-	// Core metrics
-	static profiler_settings_t GetCoreMetrics();
-	static bool IsCoreMetric(MetricType type);
-
-	// Default metrics
-	static profiler_settings_t GetDefaultMetrics();
-	static bool IsDefaultMetric(MetricType type);
-
-	// Execution metrics
-	static profiler_settings_t GetExecutionMetrics();
-	static bool IsExecutionMetric(MetricType type);
-
-	// File metrics
-	static profiler_settings_t GetFileMetrics();
-	static bool IsFileMetric(MetricType type);
-
-	// Operator metrics
-	static profiler_settings_t GetOperatorMetrics();
-	static bool IsOperatorMetric(MetricType type);
-
-	// Optimizer metrics
-	static profiler_settings_t GetOptimizerMetrics();
-	static bool IsOptimizerMetric(MetricType type);
-	static MetricType GetOptimizerMetricByType(OptimizerType type);
-	static OptimizerType GetOptimizerTypeByMetric(MetricType type);
-
-	// PhaseTiming metrics
-	static profiler_settings_t GetPhaseTimingMetrics();
-	static bool IsPhaseTimingMetric(MetricType type);
-
-	// RootScope metrics
-	static profiler_settings_t GetRootScopeMetrics();
-	static bool IsRootScopeMetric(MetricType type);
-};
-} // namespace duckdb
 
 
 namespace duckdb_yyjson {
@@ -36464,6 +36539,7 @@ private:
 
 
 
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -36597,20 +36673,21 @@ public:
 		case MetricType::ATTACH_REPLAY_WAL_LATENCY: return 1;
 		case MetricType::CHECKPOINT_LATENCY: return 2;
 		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY: return 3;
-		case MetricType::LATENCY: return 4;
-		case MetricType::WAITING_TO_ATTACH_LATENCY: return 5;
-		case MetricType::WRITE_TO_WAL_LATENCY: return 6;
-		case MetricType::TOTAL_BYTES_READ: return 7;
-		case MetricType::TOTAL_BYTES_WRITTEN: return 8;
-		case MetricType::TOTAL_MEMORY_ALLOCATED: return 9;
-		case MetricType::WAL_REPLAY_ENTRY_COUNT: return 10;
+		case MetricType::CUMULATIVE_VACUUM_TIME: return 4;
+		case MetricType::LATENCY: return 5;
+		case MetricType::WAITING_TO_ATTACH_LATENCY: return 6;
+		case MetricType::WRITE_TO_WAL_LATENCY: return 7;
+		case MetricType::TOTAL_BYTES_READ: return 8;
+		case MetricType::TOTAL_BYTES_WRITTEN: return 9;
+		case MetricType::TOTAL_MEMORY_ALLOCATED: return 10;
+		case MetricType::WAL_REPLAY_ENTRY_COUNT: return 11;
 		default:
 			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
 		}
 	}
 
 private:
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 11;
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 12;
 
 	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
 };
@@ -36709,6 +36786,8 @@ struct OperatorInformation {
 	idx_t system_peak_buffer_manager_memory = 0;
 	idx_t system_peak_temp_directory_size = 0;
 	idx_t rows_scanned = 0;
+	idx_t row_groups_scanned = 0;
+	optional_idx total_row_groups_to_scan;
 
 	InsertionOrderPreservingMap<string> extra_info;
 
@@ -36739,6 +36818,12 @@ struct OperatorInformation {
 		case MetricType::OPERATOR_ROWS_SCANNED:
 			rows_scanned = LossyNumericCast<idx_t>(metric);
 			break;
+		case MetricType::OPERATOR_ROW_GROUPS_SCANNED:
+			row_groups_scanned = LossyNumericCast<idx_t>(metric);
+			break;
+		case MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN:
+			total_row_groups_to_scan = optional_idx(LossyNumericCast<idx_t>(metric));
+			break;
 		default:
 			throw InternalException("OperatorProfiler: Unknown metric type");
 		}
@@ -36758,7 +36843,8 @@ public:
 public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
-	DUCKDB_API void FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate);
+	DUCKDB_API void FinalizeSourceProfiling(GlobalSourceState &gstate, LocalSourceState &lstate,
+	                                        const PhysicalOperator &phys_op, bool source_exhausted);
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
@@ -37171,7 +37257,8 @@ class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
 
-typedef std::function<PhysicalOperator &(ClientContext &context, PreparedStatementData &data)> get_result_collector_t;
+typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, PreparedStatementData &data)>
+    get_result_collector_t;
 
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
@@ -40009,8 +40096,12 @@ struct DBConfigOptions {
 	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
 	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
+	//! Delta Only! - Fall back to recognizing Variant columns structurally
+	bool variant_legacy_encoding = false;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
+	//! HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)
+	string http_proxy;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
@@ -40025,6 +40116,9 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
+	//! The maximum data to buffer in row groups (in bytes) to buffer prior to flushing.
+	//! When inserting large chunks of data we
+	optional_idx write_buffer_row_group_memory_limit;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -41358,6 +41452,62 @@ public:
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/parser/parsed_data/transaction_info.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+namespace duckdb {
+
+enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK };
+
+enum class TransactionModifierType : uint8_t {
+	TRANSACTION_DEFAULT_MODIFIER,
+	TRANSACTION_READ_ONLY,
+	TRANSACTION_READ_WRITE
+};
+
+enum class TransactionInvalidationPolicy : uint8_t { STANDARD_POLICY, ALL_ERRORS_INVALIDATE_TRANSACTION };
+
+struct TransactionInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::TRANSACTION_INFO;
+
+public:
+	explicit TransactionInfo(
+	    TransactionType type,
+	    TransactionInvalidationPolicy invalidation_policy = TransactionInvalidationPolicy::STANDARD_POLICY,
+	    bool auto_rollback = false);
+
+	//! The type of transaction statement
+	TransactionType type;
+	//! Whether or not a transaction can make modifications to the database
+	TransactionModifierType modifier;
+	//! Which types of exceptions invalidate the database
+	TransactionInvalidationPolicy invalidation_policy;
+	//! If transaction fails, automatically do a ROLLBACK;
+	bool auto_rollback;
+
+public:
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
+	string ToString() const;
+	unique_ptr<TransactionInfo> Copy() const;
+
+private:
+	TransactionInfo();
+};
+
+} // namespace duckdb
+
 
 namespace duckdb {
 
@@ -41400,9 +41550,24 @@ public:
 	void ResetActiveQuery();
 	void SetActiveQuery(transaction_t query_number);
 
+	void SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy) {
+		invalidation_policy = new_invalidation_policy;
+	};
+	TransactionInvalidationPolicy GetInvalidationPolicy() {
+		return invalidation_policy;
+	};
+	void SetAutoRollback(bool new_auto_rollback) {
+		auto_rollback = new_auto_rollback;
+	};
+	bool GetAutoRollback() {
+		return auto_rollback;
+	};
+
 private:
 	ClientContext &context;
 	bool auto_commit;
+	TransactionInvalidationPolicy invalidation_policy;
+	bool auto_rollback;
 
 	unique_ptr<MetaTransaction> current_transaction;
 
@@ -41569,7 +41734,7 @@ public:
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
-	DUCKDB_API void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
+	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
 	//! commit mode.
@@ -41693,6 +41858,8 @@ private:
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock, const string &query,
 	                                                                  unique_ptr<SQLStatement> statement,
 	                                                                  PendingQueryParameters parameters);
+
+	bool ErrorInvalidatesTransaction(ExceptionType type);
 
 private:
 	//! Lock on using the ClientContext in parallel
@@ -43015,6 +43182,9 @@ typedef struct {
 	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
 	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
+	// API to operate on GEOMETRY types.
+
+	char *(*duckdb_geometry_type_get_crs)(duckdb_logical_type type);
 	// API to register a custom log storage.
 
 	duckdb_log_storage (*duckdb_create_log_storage)();
@@ -43597,6 +43767,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_file_handle_tell = duckdb_file_handle_tell;
 	result.duckdb_file_handle_sync = duckdb_file_handle_sync;
 	result.duckdb_file_handle_size = duckdb_file_handle_size;
+	result.duckdb_geometry_type_get_crs = duckdb_geometry_type_get_crs;
 	result.duckdb_create_log_storage = duckdb_create_log_storage;
 	result.duckdb_destroy_log_storage = duckdb_destroy_log_storage;
 	result.duckdb_log_storage_set_write_log_entry = duckdb_log_storage_set_write_log_entry;
@@ -46290,7 +46461,7 @@ struct CSVStateMachineOptions {
 	//! Quote used for columns that contain reserved characters, e.g '
 	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
-	CSVOption<char> escape = '\0';
+	CSVOption<char> escape = '\"';
 	//! Comment character to skip a line
 	CSVOption<char> comment = '\0';
 	//! New Line separator
@@ -49964,7 +50135,9 @@ public:
 
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
+
 	//! Deletes all data from the index
+	// FIXME: we can rename this to ResetStorage().
 	void CommitDrop() override;
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
 	//! Returns the amount of rows successfully deleted from the index.
@@ -50154,6 +50327,8 @@ public:
 		lock_guard<mutex> lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns the set of distinct index types across all bound indexes.
+	unordered_set<string> DistinctIndexTypes() const;
 	//! Overwrite this list with the other list.
 	void Move(TableIndexList &other) {
 		D_ASSERT(index_entries.empty());
@@ -50264,6 +50439,7 @@ public:
 		return checkpoint_lock.GetSharedLock();
 	}
 	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
+	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
 	void VerifyIndexBuffers();
 
 	string GetSchemaName();
@@ -50335,6 +50511,33 @@ enum class IndexRemovalType {
 	REVERT_MAIN_INDEX_ONLY,
 	//! Remove from deleted_rows_in_use
 	DELETED_ROWS_IN_USE
+};
+
+} // namespace duckdb
+
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/enums/row_group_append_mode.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+#include <cstdint>
+
+namespace duckdb {
+
+//! Controls whether an append creates a new row group or reuses an existing one.
+//! Values are ordered so that higher values take priority (ratchet semantics).
+enum class RowGroupAppendMode : uint8_t {
+	//! Append to the last existing row group if possible (default)
+	APPEND_TO_EXISTING = 0,
+	//! Suggest creating a new row group — may be ignored for tables with indexes
+	SUGGEST_NEW = 1,
+	//! Require creating a new row group — cannot be ignored
+	REQUIRE_NEW = 2
 };
 
 } // namespace duckdb
@@ -50441,7 +50644,8 @@ public:
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state);
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+	                           optional_idx checkpoint_row_group_count);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
@@ -50482,15 +50686,17 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
-	void SetAppendRequiresNewRowGroup();
+	void SetRowGroupAppendMode(RowGroupAppendMode mode);
 	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
 	idx_t GetSegmentCount();
+
+	//! Get a ptr to the raw segment tree. This can be useful for some extensions to have directly exposed.
+	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
 
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
 	                                                       idx_t count) const;
 
-	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
 	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
 
 private:
@@ -50516,8 +50722,8 @@ private:
 	MetaBlockPointer metadata_pointer;
 	//! Other metadata pointers
 	vector<MetaBlockPointer> metadata_pointers;
-	//! Whether or not we need to append a new row group prior to appending
-	bool requires_new_row_group;
+	//! Controls whether the next append creates a new row group or reuses the existing one
+	RowGroupAppendMode row_group_append_mode;
 };
 
 class RowGroupIterationHelper {
@@ -50592,6 +50798,8 @@ struct OptimisticWriteCollection {
 
 	shared_ptr<RowGroupCollection> collection;
 	set<idx_t> unflushed_row_groups;
+	idx_t unflushed_data_size = 0;
+	idx_t prev_allocated_size = 0;
 	idx_t complete_row_groups = 0;
 	vector<unique_ptr<PartialBlockManager>> partial_block_managers;
 
@@ -50815,7 +51023,7 @@ public:
 	                const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 
 	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
-	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
+	void FetchChunk(DataTable &table, const Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	//! Returns true, if the local storage contains the row id.
 	bool CanFetch(DataTable &table, const row_t row_id);
@@ -51054,6 +51262,8 @@ public:
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
+	idx_t GetRowGroupCount() const;
+	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 
@@ -51071,6 +51281,12 @@ public:
 	                             optional_ptr<LocalTableStorage> local_storage, optional_ptr<ConflictManager> manager);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
+
+	//! Direct access to the row group collection. Intended for extensions that need to walk storage internals;
+	//! prefer the higher-level DataTable API for normal use.
+	const shared_ptr<RowGroupCollection> &GetRowGroupCollection() const {
+		return row_groups;
+	}
 
 	void BindIndexes(ClientContext &context);
 	bool HasIndexes() const;
@@ -51115,6 +51331,9 @@ private:
 
 	void InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
+
+	//! Rebuild all indexes after vacuuming changed rowid's (used with vacuum_rebuild_indexes setting).
+	void RebuildIndexes();
 
 	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
 	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
@@ -51429,6 +51648,8 @@ public:
 	DUCKDB_API static string Escape(const string &input);
 	//! Unescape a hive partition key or value encoded using URL encoding
 	DUCKDB_API static string Unescape(const string &input);
+	//! Whether the column is "NULL"/"__HIVE_DEFAULT_PARTITION"
+	DUCKDB_API static bool IsNull(const string &input);
 };
 
 struct HivePartitionKey {
@@ -54027,6 +54248,7 @@ private:
 
 
 namespace duckdb {
+class LocalDatabaseFileSystem;
 
 class BufferManager;
 class DatabaseManager;
@@ -54062,6 +54284,7 @@ public:
 	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
+	DUCKDB_API FileSystem &GetLocalFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
 	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
@@ -54104,6 +54327,7 @@ private:
 	unique_ptr<ExtensionManager> extension_manager;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
+	unique_ptr<LocalDatabaseFileSystem> local_db_file_system;
 	unique_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
@@ -56914,6 +57138,12 @@ public:
 		auto created = duckdb_appender(nullptr);
 		if (duckdb_appender_create_ext(conn, catalog, schema, table, &created) != DuckDBSuccess) {
 			if (created) {
+				auto error_data = duckdb_appender_error_data(created);
+				auto error_message = duckdb_error_data_message(error_data);
+				if (error_message) {
+					create_error = error_message;
+				}
+				duckdb_destroy_error_data(&error_data);
 				duckdb_appender_destroy(&created);
 			}
 			return;
@@ -56932,9 +57162,13 @@ public:
 	bool Valid() const {
 		return appender != nullptr;
 	}
+	const std::string &CreateError() const {
+		return create_error;
+	}
 
 private:
 	duckdb_appender appender;
+	std::string create_error;
 };
 
 class DataChunkWrapper {

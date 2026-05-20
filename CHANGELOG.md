@@ -1,5 +1,8 @@
 # Changelog
 
+0.4.1
+- Updated to DuckDB 1.5.3.
+
 0.4.0
   - Breaking change release.
   - Updated to DuckDB 1.5.1.

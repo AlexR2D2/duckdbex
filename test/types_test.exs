@@ -1091,14 +1091,6 @@ defmodule Duckdbex.TypesTest do
                  Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", [invalid_input])
       end)
     end
-
-    test "duckdb bugs?", %{conn: conn} do
-      assert {:ok, r} =
-               Duckdbex.query(conn, "select TIMETZ '26:11:02.123456-04:20';")
-
-      assert [[{26, 11, 2, 123_456, {-4, 20}}]] =
-               Duckdbex.fetch_all(r)
-    end
   end
 
   # Time of day with microsecond precision (ignores time zone)
