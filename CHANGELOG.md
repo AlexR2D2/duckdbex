@@ -1,10 +1,20 @@
 # Changelog
 
+0.4.0-prokeep.4
+
+- Add ubuntu glibc x86_64 (`x86_64-pc-linux-gnu`) to build matrix.
+- Consolidate three separate linux build jobs into a single matrix job.
+- Add artifact extractability check (`tar tzf`) in each build job to catch truncated uploads before they reach the release.
+- Add artifact name pattern check in each build job so non-main runs produce enough signal to verify `finalize-release` will succeed.
+- Fix `finalize-release` to re-verify artifact extractability after download from GitHub Artifacts.
+
 0.4.0-prokeep.3
 
 - Add ubuntu glibc aarch64 1.19.5-otp-28 to build matrix. Use @version in mix.exs as the canonical release version.
-  0.4.0-prokeep.2
-- change build to generate artifacts on trigger rather than upon push of a tag. Update matrix to build the set of artifacts that prokeep needs.
+
+0.4.0-prokeep.2
+
+- Change build to generate artifacts on trigger rather than upon push of a tag. Update matrix to build the set of artifacts that prokeep needs.
 
 0.4.0-prokeep.1
 

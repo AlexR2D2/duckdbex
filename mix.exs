@@ -1,7 +1,7 @@
 defmodule Duckdbex.MixProject do
   use Mix.Project
 
-  @version "0.4.0-prokeep.3"
+  @version "0.4.0-prokeep.4"
   @duckdb_version "1.5.1"
 
   def project do
@@ -90,7 +90,8 @@ defmodule Duckdbex.MixProject do
         {:unix, :linux} => %{
           :include_default_ones => false,
           "x86_64-linux-musl" => "",
-          "aarch64-linux-gnu" => ""
+          "aarch64-linux-gnu" => "",
+          "x86_64-pc-linux-gnu" => ""
         },
         {:unix, :darwin} => %{
           :include_default_ones => false,
