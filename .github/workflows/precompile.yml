@@ -10,21 +10,40 @@ env:
   DUCKDB_VERSION: "1.5.1"
 
 jobs:
-  linux-musl:
-    name: Alpine musl x86_64 - elixir:1.19.5-otp-28-alpine
-    runs-on: ubuntu-22.04
+  linux:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     container:
-      image: elixir:1.19.5-otp-28-alpine
+      image: ${{ matrix.container }}
     env:
       MIX_ENV: "prod"
-      CC_PRECOMPILER_PRECOMPILE_ONLY_LOCAL: "true"
+    strategy:
+      matrix:
+        include:
+          - name: Alpine musl x86_64
+            runner: ubuntu-22.04
+            container: elixir:1.19.5-otp-28-alpine
+            install_cmd: apk add --no-cache alpine-sdk git ccache python3
+            artifact: linux-musl-nif
+            precompile_only_local: "true"
+          - name: Ubuntu glibc aarch64
+            runner: ubuntu-22.04-arm
+            container: elixir:1.19.5-otp-28
+            install_cmd: apt-get update && apt-get install -y --no-install-recommends build-essential git ccache ca-certificates
+            artifact: linux-gnu-aarch64-nif
+            precompile_only_local: "true"
+          - name: Ubuntu glibc x86_64
+            runner: ubuntu-22.04
+            container: elixir:1.19.5-otp-28
+            install_cmd: apt-get update && apt-get install -y --no-install-recommends build-essential git ccache ca-certificates
+            artifact: linux-gnu-x86_64-nif
+            precompile_only_local: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install system dependencies
-        run: |
-          apk add --no-cache alpine-sdk git ccache python3
+        run: ${{ matrix.install_cmd }}
 
       - name: Setup Mix
         run: |
@@ -45,6 +64,7 @@ jobs:
           export CXX="ccache g++"
           export CXXFLAGS="-D_GNU_SOURCE -std=c++11 -Wno-deprecated-declarations"
           export MAKEFLAGS="-j$(nproc)"
+          [ "${{ matrix.precompile_only_local }}" = "true" ] && export CC_PRECOMPILER_PRECOMPILE_ONLY_LOCAL=true
 
           mix deps.get
           mix elixir_make.precompile
@@ -56,6 +76,21 @@ jobs:
           for f in cache/*.tar.gz; do
             echo "Checking $f ($(du -sh "$f" | cut -f1))"
             tar tzf "$f" > /dev/null || (echo "CORRUPT: $f" && exit 1)
+          done
+
+      - name: Check artifact names match release expectations
+        run: |
+          VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs)
+          echo "Package version: ${VERSION}"
+          for f in cache/*.tar.gz; do
+            name=$(basename "$f")
+            case "$name" in
+              duckdbex-nif-*-"${VERSION}".tar.gz)
+                echo "OK  ${name}" ;;
+              *)
+                echo "BAD ${name} (expected duckdbex-nif-*-${VERSION}.tar.gz)"
+                exit 1 ;;
+            esac
           done
 
       - name: Refresh checksum.exs with local builds
@@ -84,85 +119,7 @@ jobs:
       - name: Upload precompiled NIF artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-musl-nif
-          path: cache/*.tar.gz
-
-  linux-gnu-aarch64:
-    name: Ubuntu glibc aarch64 - elixir:1.19.5-otp-28
-    runs-on: ubuntu-22.04-arm
-    container:
-      image: elixir:1.19.5-otp-28
-    env:
-      MIX_ENV: "prod"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends build-essential git ccache ca-certificates
-
-      - name: Setup Mix
-        run: |
-          mix local.hex --force
-          mix local.rebar --force
-
-      - name: Pre-compile NIF library
-        run: |
-          echo "Target info:"
-          uname -m
-          ldd --version | head -1
-          elixir -e 'IO.inspect(:erlang.system_info(:system_architecture), label: "system_architecture")'
-          elixir -e 'IO.inspect(:erlang.system_info(:nif_version), label: "nif_version")'
-
-          export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
-          mkdir -p "${ELIXIR_MAKE_CACHE_DIR}"
-          export ELIXIR_MAKE_FORCE_BUILD=1
-          export CC="ccache gcc"
-          export CXX="ccache g++"
-          export CXXFLAGS="-D_GNU_SOURCE -std=c++11 -Wno-deprecated-declarations"
-          export MAKEFLAGS="-j$(nproc)"
-
-          mix deps.get
-          mix elixir_make.precompile
-
-          ls -lh cache/*.tar.gz
-
-      - name: Verify artifacts are extractable
-        run: |
-          for f in cache/*.tar.gz; do
-            echo "Checking $f ($(du -sh "$f" | cut -f1))"
-            tar tzf "$f" > /dev/null || (echo "CORRUPT: $f" && exit 1)
-          done
-
-      - name: Refresh checksum.exs with local builds
-        run: |
-          python3 - <<'PY'
-          import hashlib, re
-          from pathlib import Path
-
-          cf = Path("checksum.exs")
-          checksums = {}
-          if cf.exists():
-              for m in re.finditer(r'"([^"]+)"\s*=>\s*"sha256:([a-f0-9]+)"', cf.read_text()):
-                  checksums[m.group(1)] = m.group(2)
-          for p in sorted(Path("cache").glob("*.tar.gz")):
-              checksums[p.name] = hashlib.sha256(p.read_bytes()).hexdigest()
-          lines = ["%{"] + [f'  "{n}" => "sha256:{d}",' for n, d in sorted(checksums.items())] + ["}"]
-          cf.write_text("\n".join(lines) + "\n")
-          print(f"checksum.exs: {len(checksums)} entries")
-          PY
-
-      - name: Mix Test
-        run: |
-          export ELIXIR_MAKE_CACHE_DIR=$(pwd)/cache
-          MIX_ENV=test mix test
-
-      - name: Upload precompiled NIF artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-gnu-aarch64-nif
+          name: ${{ matrix.artifact }}
           path: cache/*.tar.gz
 
   macos:
@@ -252,6 +209,21 @@ jobs:
             tar tzf "$f" > /dev/null || (echo "CORRUPT: $f" && exit 1)
           done
 
+      - name: Check artifact names match release expectations
+        run: |
+          VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs)
+          echo "Package version: ${VERSION}"
+          for f in cache/*.tar.gz; do
+            name=$(basename "$f")
+            case "$name" in
+              duckdbex-nif-*-"${VERSION}".tar.gz)
+                echo "OK  ${name}" ;;
+              *)
+                echo "BAD ${name} (expected duckdbex-nif-*-${VERSION}.tar.gz)"
+                exit 1 ;;
+            esac
+          done
+
       - name: Mix Test
         run: |
           MIX_ENV=test mix test
@@ -267,8 +239,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/main'
     needs:
-      - linux-musl
-      - linux-gnu-aarch64
+      - linux
       - macos
     steps:
       - name: Checkout source branch
@@ -296,6 +267,7 @@ jobs:
 
           test -f "precompiled-assets/duckdbex-nif-2.17-x86_64-linux-musl-${VERSION}.tar.gz"
           test -f "precompiled-assets/duckdbex-nif-2.17-aarch64-linux-gnu-${VERSION}.tar.gz"
+          test -f "precompiled-assets/duckdbex-nif-2.17-x86_64-pc-linux-gnu-${VERSION}.tar.gz"
 
           echo "Verifying all artifacts are extractable after download:"
           for f in precompiled-assets/*.tar.gz; do
