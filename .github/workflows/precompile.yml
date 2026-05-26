@@ -51,6 +51,13 @@ jobs:
 
           ls -lh cache/*.tar.gz
 
+      - name: Verify artifacts are extractable
+        run: |
+          for f in cache/*.tar.gz; do
+            echo "Checking $f ($(du -sh "$f" | cut -f1))"
+            tar tzf "$f" > /dev/null || (echo "CORRUPT: $f" && exit 1)
+          done
+
       - name: Refresh checksum.exs with local builds
         run: |
           python3 - <<'PY'
@@ -121,6 +128,13 @@ jobs:
           mix elixir_make.precompile
 
           ls -lh cache/*.tar.gz
+
+      - name: Verify artifacts are extractable
+        run: |
+          for f in cache/*.tar.gz; do
+            echo "Checking $f ($(du -sh "$f" | cut -f1))"
+            tar tzf "$f" > /dev/null || (echo "CORRUPT: $f" && exit 1)
+          done
 
       - name: Refresh checksum.exs with local builds
         run: |
@@ -231,6 +245,13 @@ jobs:
 
           ls -lh cache/*.tar.gz
 
+      - name: Verify artifacts are extractable
+        run: |
+          for f in cache/*.tar.gz; do
+            echo "Checking $f ($(du -sh "$f" | cut -f1))"
+            tar tzf "$f" > /dev/null || (echo "CORRUPT: $f" && exit 1)
+          done
+
       - name: Mix Test
         run: |
           MIX_ENV=test mix test
@@ -275,6 +296,12 @@ jobs:
 
           test -f "precompiled-assets/duckdbex-nif-2.17-x86_64-linux-musl-${VERSION}.tar.gz"
           test -f "precompiled-assets/duckdbex-nif-2.17-aarch64-linux-gnu-${VERSION}.tar.gz"
+
+          echo "Verifying all artifacts are extractable after download:"
+          for f in precompiled-assets/*.tar.gz; do
+            echo "Checking $f ($(du -sh "$f" | cut -f1))"
+            tar tzf "$f" > /dev/null || (echo "CORRUPT after download: $f" && exit 1)
+          done
 
       - name: Generate checksum.exs
         run: |
