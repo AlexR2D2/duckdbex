@@ -10,11 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #pragma once
 #define DUCKDB_AMALGAMATION 1
-#define DUCKDB_SOURCE_ID "14eca11bd9"
-#define DUCKDB_VERSION "v1.5.3"
+#define DUCKDB_SOURCE_ID "d8cdaa33fd"
+#define DUCKDB_VERSION "v1.5.5"
 #define DUCKDB_MAJOR_VERSION 1
 #define DUCKDB_MINOR_VERSION 5
-#define DUCKDB_PATCH_VERSION "3"
+#define DUCKDB_PATCH_VERSION "5"
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -4727,6 +4727,7 @@ public:
 	string_t() = default;
 	explicit string_t(uint32_t len) {
 		value.inlined.length = len;
+		memset(value.inlined.inlined, 0, INLINE_BYTES);
 	}
 	string_t(const char *data, uint32_t len) {
 		value.inlined.length = len;
@@ -7428,7 +7429,7 @@ private:
 	                                  const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
 	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-	                                         bool allow_default_table_lookup);
+	                                         bool allow_default_lookup);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
 	                                         const string &schema, const EntryLookupInfo &lookup_info,
 	                                         OnEntryNotFound if_not_found);
@@ -7437,6 +7438,10 @@ private:
 	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever,
 	                                                const EntryLookupInfo &lookup_info,
 	                                                bool allow_ignore_at_clause = false);
+
+	//! Looks for a non-table entry in the default schema of any implicit search catalog
+	static CatalogEntryLookup TryLookupDefaultSchema(CatalogEntryRetriever &retriever,
+	                                                 const EntryLookupInfo &lookup_info);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever,
@@ -8690,6 +8695,10 @@ public:
 	static void SetBackgroundThreads(bool enable);
 
 private:
+	//! Returns free memory in the system heap (glibc) to the OS via malloc_trim, rate-limited to once
+	//! per 100ms. No-op on non-glibc platforms. Shared by the flush paths of both allocator backends.
+	static void MallocTrim(idx_t pad);
+
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;
 	reallocate_function_ptr_t reallocate_function;
@@ -8773,6 +8782,11 @@ class VectorBuffer;
 
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
+	// Out-of-line destructor: prevents GCC IPA-ICF from folding
+	// _Sp_counted_ptr_inplace<SelectionData>::_M_dispose with the
+	// corresponding instantiation for TemplatedValidityData, which produces
+	// a spurious -Warray-bounds with g++ >= 14.
+	DUCKDB_API ~SelectionData();
 
 	AllocatedData owned_data;
 };
@@ -15501,10 +15515,27 @@ public:
 		return GeometryExtent {EMPTY_MIN, EMPTY_MIN, EMPTY_MIN, EMPTY_MIN, EMPTY_MAX, EMPTY_MAX, EMPTY_MAX, EMPTY_MAX};
 	}
 
-	// Does this extent have any X/Y values set?
-	// In other words, is the range of the x/y axes not empty and not unknown?
+	// Does this extent have the X axis set?
+	// In other words, is the range of the x-axis not empty and not unknown?
+	bool HasX() const {
+		return std::isfinite(x_min) && std::isfinite(x_max);
+	}
+	// Does this extent have the Y axis set?
+	// In other words, is the range of the y-axis not empty and not unknown?
+	bool HasY() const {
+		return std::isfinite(y_min) && std::isfinite(y_max);
+	}
+	// Does this extent have both X and Y axes set?
+	// In other words, are the ranges of both the x and y axes not empty and not unknown?
+	// Used to gate serialization, where a non-finite axis cannot be represented.
 	bool HasXY() const {
-		return std::isfinite(x_min) && std::isfinite(y_min) && std::isfinite(x_max) && std::isfinite(y_max);
+		return HasX() && HasY();
+	}
+	// Can this extent be used for X/Y zonemap pruning?
+	// A single finite axis is enough: an unknown axis is treated as an infinite range,
+	// which intersects everything, so pruning simply degrades to the finite axis.
+	bool CanPruneXY() const {
+		return HasX() || HasY();
 	}
 	// Does this extent have any Z values set?
 	// In other words, is the range of the Z-axis not empty and not unknown?
@@ -22860,6 +22891,67 @@ public:
 
 
 
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/storage/table/per_column_metadata_blocks.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+namespace duckdb {
+
+class Serializer;
+class Deserializer;
+
+struct PerColumnMetadataBlock {
+	bool is_column_index : 1;
+	idx_t index : 63;
+
+	idx_t GetPacked();
+
+	static PerColumnMetadataBlock Unpack(idx_t packed);
+};
+
+class PerColumnMetadataBlocks {
+public:
+	//! Get block IDs for specific columns (linear scan), returns one vector per requested column
+	vector<vector<idx_t>> GetBlocksForColumns(const vector<idx_t> &columns) const;
+
+	//! Add a column entry with its block IDs
+	void AddColumn(idx_t col_idx, const vector<idx_t> &blocks);
+	//! Clear a column's entry and all its block IDs in place, leaving the indices of the other
+	//! columns untouched (linear scan), for use when the column is rewritten (e.g. ALTER TYPE)
+	void ClearColumn(idx_t col_idx);
+	//! Remove a column's entry and shift down the indices of all subsequent columns,
+	//! for use when the column is positionally removed (e.g. DROP COLUMN)
+	void RemoveColumn(idx_t col_idx);
+	//! Merge two PerColumnMetadataBlocks sorted by column index with disjoint column sets
+	static PerColumnMetadataBlocks Merge(const PerColumnMetadataBlocks &a, const PerColumnMetadataBlocks &b);
+
+	//! Iterate over all block IDs, passing (column_index, block_id) to the callback
+	template <typename Func>
+	void ForEachBlock(Func func) const {
+		idx_t current_col = 0;
+		for (auto &entry : data) {
+			if (entry.is_column_index) {
+				current_col = entry.index;
+			} else {
+				func(current_col, entry.index);
+			}
+		}
+	}
+
+	vector<PerColumnMetadataBlock> data;
+};
+
+} // namespace duckdb
+
 
 //===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -23199,6 +23291,7 @@ struct ColumnFetchState;
 struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
+class CommitDropState;
 class ScanFilterInfo;
 class StorageCommitState;
 template <class T>
@@ -23225,12 +23318,17 @@ private:
 	optional_ptr<vector<unique_ptr<PartialBlockManager>>> column_partial_block_managers;
 };
 
+enum class RowGroupWriteAction {
+	REUSE_EXISTING_ROW_GROUP_METADATA,
+	PARTIALLY_REUSE_COLUMN_METADATA,
+	FULLY_CHECKPOINT_ROW_GROUP
+};
+
 struct RowGroupWriteData {
 	shared_ptr<RowGroup> result_row_group;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
-	bool reuse_existing_metadata_blocks = false;
-	vector<idx_t> existing_extra_metadata_blocks;
+	RowGroupWriteAction write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
 	optional_idx write_count;
 };
 
@@ -23259,10 +23357,12 @@ public:
 	RowGroupCollection &GetCollection() const {
 		return collection.get();
 	}
-	//! Returns the list of meta block pointers used by the columns
-	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
+	//! Compute per-column metadata blocks by reading column metadata from disk
+	PerColumnMetadataBlocks ComputePerColumnMetadataBlocks() const;
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
+
+	vector<MetaBlockPointer> GetExtraMetadataBlockPointers() const;
 
 	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo() const;
@@ -23274,8 +23374,12 @@ public:
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
+	//! Accumulates this row group's on-disk blocks into the drop state.
+	void CommitDrop(CommitDropState &drop_state);
+	//! Accumulates the given column's on-disk blocks into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Drops every column's on-disk blocks and marks them as modified immediately.
 	void CommitDrop();
-	void CommitDropColumn(const idx_t column_index);
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;
@@ -23319,6 +23423,8 @@ public:
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info) const;
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
+	//! Returns the number of rows visible to the given transaction
+	idx_t GetVisibleRowCount(TransactionData transaction);
 	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
@@ -23357,7 +23463,7 @@ public:
 	RowVersionManager &GetOrCreateVersionInfo();
 
 	// Serialization
-	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer, bool supports_per_column_writes);
 	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 	idx_t GetRowGroupSize() const;
@@ -23384,8 +23490,14 @@ private:
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
 	void SetCount(idx_t count);
+	bool ColumnIsLoaded(storage_t c) const;
+	void UnloadColumn(storage_t c);
+	bool HasUnchangedColumns() const;
+	static shared_ptr<ColumnData> CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
+	                                               RowGroupWriteData &write_data);
 
 	bool HasUnloadedDeletes() const;
+	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);
 
 private:
 	mutable mutex row_group_lock;
@@ -23395,6 +23507,8 @@ private:
 	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
+	bool has_per_column_metadata_blocks = false;
+	PerColumnMetadataBlocks per_column_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
 	//! The row id column data (mutable because `const` can lazy load)
@@ -24064,7 +24178,7 @@ struct OffsetPruningResult {
 
 class RowGroupReorderer {
 public:
-	explicit RowGroupReorderer(const RowGroupOrderOptions &options_p);
+	RowGroupReorderer(const RowGroupOrderOptions &options_p, TransactionData transaction_p);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups);
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(SegmentNode<RowGroup> &row_group);
 
@@ -24076,6 +24190,7 @@ public:
 
 private:
 	const RowGroupOrderOptions options;
+	const TransactionData transaction;
 
 	idx_t offset;
 	bool initialized;
@@ -30027,6 +30142,9 @@ typedef enum duckdb_statement_type {
 	DUCKDB_STATEMENT_TYPE_ATTACH = 25,
 	DUCKDB_STATEMENT_TYPE_DETACH = 26,
 	DUCKDB_STATEMENT_TYPE_MULTI = 27,
+	DUCKDB_STATEMENT_TYPE_COPY_DATABASE = 28,
+	DUCKDB_STATEMENT_TYPE_UPDATE_EXTENSIONS = 29,
+	DUCKDB_STATEMENT_TYPE_MERGE_INTO = 30,
 } duckdb_statement_type;
 
 //! An enum over DuckDB's different error types.
@@ -30336,7 +30454,7 @@ typedef struct {
 } duckdb_bit;
 
 //! BIGNUMs are composed of a byte pointer, a size, and an `is_negative` bool.
-//! The absolute value of the number is stored in `data` in little endian format.
+//! The absolute value of the number is stored in `data` in big endian format.
 //! You must free `data` with `duckdb_free`.
 typedef struct {
 	uint8_t *data;
@@ -32350,8 +32468,11 @@ DUCKDB_C_API duckdb_value duckdb_create_bignum(duckdb_bignum input);
 /*!
 Creates a DECIMAL value from a duckdb_decimal
 
+The width must be between 1 and 38, and the scale must not exceed the width.
+
 * @param input The duckdb_decimal value
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
+* @return The value, or `nullptr` if the width or scale are out of range. This must be destroyed with
+`duckdb_destroy_value`.
 */
 DUCKDB_C_API duckdb_value duckdb_create_decimal(duckdb_decimal input);
 
@@ -32972,9 +33093,9 @@ DUCKDB_C_API duckdb_logical_type duckdb_create_enum_type(const char **member_nam
 Creates a DECIMAL type with the specified width and scale.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* @param width The width of the decimal type
-* @param scale The scale of the decimal type
-* @return The logical type.
+* @param width The width of the decimal type. Must be between 1 and 38.
+* @param scale The scale of the decimal type. Must not exceed the width.
+* @return The logical type, or `nullptr` if the width or scale are out of range.
 */
 DUCKDB_C_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale);
 
@@ -38852,6 +38973,7 @@ enum class BitpackingMode : uint8_t { INVALID, AUTO, CONSTANT, CONSTANT_DELTA, D
 
 
 
+
 namespace duckdb {
 
 class Serializer;
@@ -38913,7 +39035,13 @@ struct RowGroupPointer {
 	bool has_metadata_blocks = false;
 	//! Metadata blocks of the columns that are not mentioned in "data_pointers"
 	//! This is often empty - but can be set for wide columns with a lot of metadata
+	//! When targeting 2.0 storage format, per_column_metadata_blocks is used instead
 	vector<idx_t> extra_metadata_blocks;
+	//! Whether or not we have per-column metadata blocks
+	bool has_per_column_metadata_blocks = false;
+	//! Per-column metadata blocks beyond the start block
+	//! Each column entry contains the additional block IDs that the column's metadata spans (excluding the start block)
+	PerColumnMetadataBlocks per_column_metadata_blocks;
 };
 
 } // namespace duckdb
@@ -40299,6 +40427,7 @@ private:
 
 
 namespace duckdb {
+class AttachedDatabase;
 class DatabaseInstance;
 class MetaTransaction;
 
@@ -40307,6 +40436,7 @@ public:
 	explicit ValidChecker(DatabaseInstance &db);
 
 	DUCKDB_API static ValidChecker &Get(DatabaseInstance &db);
+	DUCKDB_API static ValidChecker &Get(AttachedDatabase &db);
 	DUCKDB_API static ValidChecker &Get(MetaTransaction &transaction);
 
 	DUCKDB_API void Invalidate(string error);
@@ -40364,6 +40494,7 @@ private:
 //
 //
 //===----------------------------------------------------------------------===//
+
 
 
 
@@ -40436,6 +40567,8 @@ struct AttachOptions {
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
+	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
+	optional_idx vacuum_rebuild_indexes_threshold;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -40466,6 +40599,10 @@ public:
 	DatabaseInstance &GetDatabase() {
 		return db;
 	}
+	ValidChecker &GetValidChecker() {
+		return validity;
+	}
+	void Invalidate(const string &reason);
 
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
@@ -40490,6 +40627,9 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	//! vacuum_rebuild_indexes threshold for this attached database.
+	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
+	idx_t GetVacuumRebuildIndexThreshold() const;
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}
@@ -40503,6 +40643,7 @@ public:
 
 private:
 	DatabaseInstance &db;
+	ValidChecker validity;
 	unique_ptr<StoredDatabasePath> stored_database_path;
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
@@ -40515,6 +40656,7 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	shared_ptr<mutex> close_lock;
+	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 
 private:
@@ -41538,6 +41680,7 @@ public:
 	void Commit();
 	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
+	void SetAutocheckpointError(ErrorData error);
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() const {
@@ -41566,10 +41709,11 @@ public:
 private:
 	ClientContext &context;
 	bool auto_commit;
-	TransactionInvalidationPolicy invalidation_policy;
-	bool auto_rollback;
+	TransactionInvalidationPolicy invalidation_policy = TransactionInvalidationPolicy::STANDARD_POLICY;
+	bool auto_rollback = false;
 
 	unique_ptr<MetaTransaction> current_transaction;
+	ErrorData autocheckpoint_error;
 
 	TransactionContext(const TransactionContext &) = delete;
 };
@@ -48573,6 +48717,7 @@ public:
 	//! Flush all blocks to disk
 	void Flush();
 
+	bool BlockIsModified(const MetaBlockPointer &ptr);
 	bool BlockHasBeenCleared(const MetaBlockPointer &ptr);
 
 	void MarkBlocksAsModified();
@@ -49785,8 +49930,7 @@ public:
 		return column_id_set;
 	}
 
-	// All indexes can be dropped, even if they are unbound
-	virtual void CommitDrop() = 0;
+	virtual void ResetStorage() = 0;
 
 public:
 	template <class TARGET>
@@ -49974,6 +50118,8 @@ public:
 	             AttachedDatabase &db);
 
 public:
+	void ResetStorage() override;
+
 	bool IsBound() const override {
 		return false;
 	}
@@ -49998,8 +50144,6 @@ public:
 	const string &GetTableName() const {
 		return GetCreateInfo().table;
 	}
-
-	void CommitDrop() override;
 
 	//! Buffer Index delete or insert (replay_type) data chunk.
 	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into
@@ -50133,12 +50277,11 @@ public:
 	//! Verifies the constraint for a chunk of data.
 	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
 
-	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
-	virtual void CommitDrop(IndexLock &index_lock) = 0;
+	//! Resets all index storage, clearing the index entirely. The lock obtained from InitializeLock must be held.
+	virtual void ResetStorage(IndexLock &index_lock) = 0;
+	//! Obtains a lock and calls ResetStorage while holding that lock.
+	void ResetStorage() override;
 
-	//! Deletes all data from the index
-	// FIXME: we can rename this to ResetStorage().
-	void CommitDrop() override;
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
 	//! Returns the amount of rows successfully deleted from the index.
 	//! If either deleted_sel or non_deleted_sel are provided the exact rows that were (not) deleted are written there
@@ -50303,10 +50446,8 @@ public:
 	TableIndexIterationHelper<Index> Indexes() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
-	//! Removes an index entry from the list of index entries.
+	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const string &name);
-	//! Removes all remaining memory of an index after dropping the catalog entry.
-	void CommitDrop(const string &name);
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name);
 	//! Returns an optional pointer to the index matching the name.
@@ -50565,6 +50706,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class CommitDropState;
 class DataTable;
 class RowGroupIterationHelper;
 class TableScanState;
@@ -50650,11 +50792,18 @@ public:
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
+	//! Accumulates block drops for every row group's copy of the column into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Accumulates block drops for every row group into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Drops every row group's copy of the column and immediately marks the blocks as modified.
 	void CommitDropColumn(const idx_t column_index);
+	//! Drops every row group and immediately marks the blocks as modified.
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context) const;
+	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
@@ -50724,6 +50873,8 @@ private:
 	vector<MetaBlockPointer> metadata_pointers;
 	//! Controls whether the next append creates a new row group or reuses the existing one
 	RowGroupAppendMode row_group_append_mode;
+	//! Whether or not we can append to a checkpointed row group
+	bool can_append_to_checkpointed_row_group = true;
 };
 
 class RowGroupIterationHelper {
@@ -51070,6 +51221,12 @@ struct ConstraintState;
 struct TableUpdateState;
 enum class VerifyExistenceType : uint8_t;
 struct OptimisticWriteCollection;
+struct ColumnFetchState;
+struct DataTableInfo;
+struct LocalAppendState;
+struct ParallelTableScanState;
+struct TableAppendState;
+class CommitDropState;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -51257,8 +51414,10 @@ public:
 	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
-	void CommitDropTable();
-	void CommitDropColumn(const idx_t column_index);
+	//! Accumulates the table's on-disk blocks for reclamation into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Accumulates the column's on-disk blocks for reclamation into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
@@ -51994,6 +52153,7 @@ struct CSVReaderOptions {
 } // namespace duckdb
 
 
+
 namespace duckdb {
 
 class Deserializer {
@@ -52504,6 +52664,12 @@ private:
 		return idx == DConstants::INVALID_INDEX ? optional_idx() : optional_idx(idx);
 	}
 
+	// Deserialize a ProjectionIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, PerColumnMetadataBlock>::value, T>::type Read() {
+		return PerColumnMetadataBlock::Unpack(ReadUnsignedInt64());
+	}
+
 protected:
 	// Hooks for subclasses to override to implement custom behavior
 	virtual void OnPropertyBegin(const field_id_t field_id, const char *tag) = 0;
@@ -52839,6 +53005,7 @@ struct ValueOperations {
 	static bool DistinctLessThanEquals(const Value &left, const Value &right);
 };
 } // namespace duckdb
+
 
 
 
@@ -53193,6 +53360,9 @@ protected:
 	}
 	void WriteValue(optional_idx value) {
 		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);
+	}
+	void WriteValue(PerColumnMetadataBlock value) {
+		WriteValue(value.GetPacked());
 	}
 };
 
@@ -57132,7 +57302,7 @@ namespace duckdb_adbc {
 class AppenderWrapper {
 public:
 	AppenderWrapper(duckdb_connection conn, const char *catalog, const char *schema, const char *table)
-	    : appender(nullptr) {
+	    : appender(nullptr), create_error_type(DUCKDB_ERROR_UNKNOWN_TYPE) {
 		// Note: duckdb_appender_create_ext allocates an internal wrapper even on failure.
 		// If creation fails, make sure to destroy it to avoid leaking.
 		auto created = duckdb_appender(nullptr);
@@ -57143,6 +57313,7 @@ public:
 				if (error_message) {
 					create_error = error_message;
 				}
+				create_error_type = duckdb_error_data_error_type(error_data);
 				duckdb_destroy_error_data(&error_data);
 				duckdb_appender_destroy(&created);
 			}
@@ -57165,10 +57336,14 @@ public:
 	const std::string &CreateError() const {
 		return create_error;
 	}
+	duckdb_error_type CreateErrorType() const {
+		return create_error_type;
+	}
 
 private:
 	duckdb_appender appender;
 	std::string create_error;
+	duckdb_error_type create_error_type;
 };
 
 class DataChunkWrapper {
@@ -57245,6 +57420,13 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct ArrowArrayStream *out,
                                        struct AdbcError *error);
 
+AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const char *catalog, const char *db_schema,
+                                       const char *table_name, char approximate, struct ArrowArrayStream *out,
+                                       struct AdbcError *error);
+
+AdbcStatusCode ConnectionGetStatisticNames(struct AdbcConnection *connection, struct ArrowArrayStream *out,
+                                           struct AdbcError *error);
+
 AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
                                        size_t serialized_length, struct ArrowArrayStream *out, struct AdbcError *error);
 
@@ -57304,6 +57486,9 @@ AdbcStatusCode StatementSetOptionDouble(struct AdbcStatement *statement, const c
 
 const AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatusCode *status);
 
+int ErrorGetDetailCount(const struct AdbcError *error);
+struct AdbcErrorDetail ErrorGetDetail(const struct AdbcError *error, int index);
+
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error);
 
@@ -57326,6 +57511,9 @@ AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray 
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *stream,
                                    struct AdbcError *error);
+
+AdbcStatusCode StatementExecuteSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
+                                      struct AdbcError *error);
 
 AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                            struct AdbcError *error);
@@ -57498,6 +57686,10 @@ public:
 	static constexpr uint8_t MAX_WIDTH_DECIMAL = MAX_WIDTH_INT128;
 
 public:
+	//! Whether width/scale form a valid DECIMAL type: width in [1, MAX_WIDTH_DECIMAL] and scale not exceeding width.
+	static bool IsValidWidthScale(uint8_t width, uint8_t scale) {
+		return width >= 1 && width <= MAX_WIDTH_DECIMAL && scale <= width;
+	}
 	static string ToString(int16_t value, uint8_t width, uint8_t scale);
 	static string ToString(int32_t value, uint8_t width, uint8_t scale);
 	static string ToString(int64_t value, uint8_t width, uint8_t scale);
