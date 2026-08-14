@@ -242,7 +242,7 @@ defmodule DuckdbexTest do
 
   test "extension_is_loaded/1" do
     assert {:ok, db} = Duckdbex.open()
-    refute Duckdbex.extension_is_loaded(db, "parquet")
+    assert Duckdbex.extension_is_loaded(db, "parquet")
   end
 
   test "number_of_threads/1" do
