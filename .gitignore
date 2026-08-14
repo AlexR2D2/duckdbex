@@ -16,6 +16,9 @@
 # NIF Precompilation stuff
 checksum.exs
 
+# Precompiled NIF artifacts (elixir_make.precompile output)
+/cache/
+
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump
 
@@ -32,3 +35,4 @@ duckdbex-*.tar
 .elixir_ls/
 CLAUDE.md
 notes/
+my_database.duckdb

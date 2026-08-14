@@ -54,7 +54,7 @@ defmodule Duckdbex.MixProject do
   end
 
   defp nif_versions(_opts) do
-    ["2.16", "2.17"]
+    ["2.16", "2.17", "2.18"]
   end
 
   defp fallback_nif_versions(opts) do
