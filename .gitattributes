@@ -1,0 +1,4 @@
+# Vendored DuckDB sources — generated code, see
+# c_src/duckdb/PROVENANCE.md and bin/regen_duckdb.sh.
+/c_src/duckdb/** -diff
+/c_src/duckdb/** linguist-generated=true

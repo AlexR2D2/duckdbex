@@ -1,5 +1,7 @@
 #include "value_to_term.h"
 #include "duckdb.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "term.h"
 #include <cmath>
 

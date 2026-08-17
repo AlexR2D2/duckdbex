@@ -12,9 +12,6 @@ defmodule Duckdbex.IssuesTest do
 
     {:ok, conn} = Duckdbex.connection(db)
 
-    assert {:ok, _res} = Duckdbex.query(conn, "INSTALL core_functions;")
-    assert {:ok, _res} = Duckdbex.query(conn, "LOAD core_functions;")
-
     Map.put(ctx, :conn, conn)
   end
 
