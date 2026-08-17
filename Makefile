@@ -1,5 +1,8 @@
 SRC_DIR = c_src
 DUCKDB_DIR = $(SRC_DIR)/duckdb
+DUCKDB_ARCHIVE = $(SRC_DIR)/duckdb.tar.gz
+DUCKDB_MANIFEST = $(DUCKDB_DIR)/.sources
+DUCKDB_ARCHIVE_CHECKSUM = $(DUCKDB_DIR)/.archive.checksum
 
 CXXFLAGS = -O3 -std=c++11
 
@@ -10,7 +13,7 @@ CXXFLAGS += -DDUCKDB_EXTENSION_PARQUET_LINKED=1
 
 # Include roots emitted by DuckDB's scripts/package_build.py and recorded
 # in c_src/duckdb/.include_dirs at generation time (see bin/regen_duckdb.sh).
-DUCKDB_INCLUDE_DIRS = $(shell cat $(DUCKDB_DIR)/.include_dirs)
+DUCKDB_INCLUDE_DIRS = $(shell test -f $(DUCKDB_DIR)/.include_dirs && cat $(DUCKDB_DIR)/.include_dirs)
 CXXFLAGS += $(foreach dir, $(DUCKDB_INCLUDE_DIRS), -I"$(DUCKDB_DIR)/$(dir)")
 CXXFLAGS += -I"$(ERTS_INCLUDE_DIR)"
 CXXFLAGS += -DNDEBUG=1
@@ -41,7 +44,7 @@ endif
 # Compile the file list emitted by DuckDB's scripts/package_build.py
 # (unity builds + directly referenced sources), plus the NIF files.
 # See c_src/duckdb/.sources for the generated list.
-GENERATED_SRC = $(shell cat $(DUCKDB_DIR)/.sources)
+GENERATED_SRC = $(shell test -f $(DUCKDB_MANIFEST) && cat $(DUCKDB_MANIFEST))
 NIF_SRC = $(SRC_DIR)/nif.cpp $(SRC_DIR)/config.cpp $(SRC_DIR)/term.cpp $(SRC_DIR)/term_to_value.cpp $(SRC_DIR)/value_to_term.cpp
 SRC = $(addprefix $(DUCKDB_DIR)/, $(GENERATED_SRC)) $(NIF_SRC)
 
@@ -69,11 +72,31 @@ $(PRIV_DIR)/%.o: $(SRC_DIR)/%.cc | $$(@D)/.
 $(LIB_NAME): $(OBJ)
 	$(CXX) $(LDFLAGS) $^ -o $@
 
-all: $(PRIV_DIR) $(SRC) $(LIB_NAME)
+all: prepare-duckdb
+	$(MAKE) build
+
+build: $(PRIV_DIR) $(SRC) $(LIB_NAME)
+
+prepare-duckdb:
+	@set -eu; \
+	test -f "$(DUCKDB_ARCHIVE)" || { echo "ERROR: missing $(DUCKDB_ARCHIVE)"; exit 1; }; \
+	archive_checksum="$$(cksum < "$(DUCKDB_ARCHIVE)")"; \
+	installed_checksum="$$(cat "$(DUCKDB_ARCHIVE_CHECKSUM)" 2>/dev/null || true)"; \
+	if [ ! -f "$(DUCKDB_MANIFEST)" ] || [ "$$archive_checksum" != "$$installed_checksum" ]; then \
+		echo "Extracting vendored DuckDB sources"; \
+		extract_dir="$$(mktemp -d "$(SRC_DIR)/duckdb.extract.XXXXXX")"; \
+		trap 'rm -rf "$$extract_dir"' EXIT; \
+		tar -xzf "$(DUCKDB_ARCHIVE)" -C "$$extract_dir"; \
+		test -f "$$extract_dir/duckdb/.sources" || { echo "ERROR: invalid $(DUCKDB_ARCHIVE)"; exit 1; }; \
+		rm -rf "$(DUCKDB_DIR)"; \
+		mv "$$extract_dir/duckdb" "$(DUCKDB_DIR)"; \
+		printf '%s\n' "$$archive_checksum" > "$(DUCKDB_ARCHIVE_CHECKSUM)"; \
+		find "$(DUCKDB_DIR)" -type f -exec touch {} +; \
+	fi
 
 # Guard against a broken/partial vendor tree: every file in .sources must
 # exist on disk (run this in CI to catch rsync/LFS accidents).
-verify-sources:
+verify-sources: prepare-duckdb
 	@missing=""; while IFS= read -r f; do \
 	  [ -f "$(DUCKDB_DIR)/$$f" ] || missing="$$missing $$f"; \
 	done < "$(DUCKDB_DIR)/.sources"; \
@@ -86,4 +109,4 @@ clean:
 	$(RM) -rf run $(OBJ)
 	$(RM) -f $(LIB_NAME)
 
-.PHONY: all clean verify-sources
+.PHONY: all build prepare-duckdb clean verify-sources

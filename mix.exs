@@ -74,6 +74,7 @@ defmodule Duckdbex.MixProject do
         README.md
         LICENSE
       ),
+      exclude_patterns: [~r{^c_src/duckdb(?:/|$)}],
       name: "duckdbex",
       licenses: ["MIT"],
       links: %{

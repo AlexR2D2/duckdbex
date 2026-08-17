@@ -9,7 +9,7 @@ set -euo pipefail
 # leading "v" stripped when <ref> looks like a release tag; pass it explicitly
 # for non-tag refs (it becomes DUCKDB_VERSION, e.g. "1.6.0-dev").
 #
-# Requirements: gh CLI (authenticated), python3, rsync.
+# Requirements: gh CLI (authenticated), python3, make.
 #
 # package_build.py has no CLI. The driver script
 # (bin/generate_duckdb_sources.py) calls build_package() directly, and the
@@ -22,9 +22,9 @@ set -euo pipefail
 # Upgrading DuckDB (e.g. v1.5.5 -> v1.6.0):
 #
 #   1. bin/regen_duckdb.sh v1.6.0
-#   2. git diff --stat c_src/duckdb/   # review the delta
+#   2. make verify-sources             # verify the generated archive
 #   3. mix test                        # full suite
-#   4. commit the regenerated tree
+#   4. commit c_src/duckdb.tar.gz
 #
 # The Makefile reads .sources / .include_dirs from the generated tree, so a
 # version bump normally needs no Makefile changes. gh is used for two things:
@@ -41,7 +41,7 @@ else
   exit 1
 fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TARGET="$ROOT/c_src/duckdb"
+ARCHIVE="$ROOT/c_src/duckdb.tar.gz"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -60,11 +60,7 @@ mkdir -p "$WORK/out"
     python3 "$ROOT/bin/generate_duckdb_sources.py" "$WORK/out"
 )
 
-echo "==> syncing into duckdbex/c_src/duckdb"
-mkdir -p "$TARGET"
-rsync -a --delete "$WORK/out/" "$TARGET/"
-
-cat > "$TARGET/PROVENANCE.md" <<EOF
+cat > "$WORK/out/PROVENANCE.md" <<EOF
 # Vendored DuckDB sources
 
 Everything in this directory is 100% generated code. Do not edit by hand;
@@ -86,6 +82,14 @@ regenerate instead:
   \`SETUPTOOLS_SCM_PRETEND_HASH\`
 EOF
 
+python3 "$ROOT/bin/archive_duckdb_sources.py" "$WORK/out" "$WORK/duckdb.tar.gz"
+
+mv "$WORK/duckdb.tar.gz" "$ARCHIVE"
+
+echo "==> materializing archive through Makefile"
+make -C "$ROOT" prepare-duckdb
+
 echo "==> done"
-echo "    verify: git diff --stat c_src/duckdb/"
+echo "    archive: $ARCHIVE"
+echo "    verify: make verify-sources"
 echo "    build:  mix test"

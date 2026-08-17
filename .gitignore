@@ -19,6 +19,9 @@ checksum.exs
 # Precompiled NIF artifacts (elixir_make.precompile output)
 /cache/
 
+# Materialized from the vendored archive by Makefile.
+/c_src/duckdb/
+
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump
 
