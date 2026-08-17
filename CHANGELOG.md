@@ -1,5 +1,8 @@
 # Changelog
 
+0.5.0
+- Statically link core_functions and parquet extensions ([PR](https://github.com/AlexR2D2/duckdbex/pull/57))
+
 0.4.1
 - Updated to DuckDB 1.5.3.
 
