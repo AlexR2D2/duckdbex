@@ -1,3 +1,4 @@
+#include <cstdint>
 #include "term.h"
 #include <cassert>
 #include <cstring>
