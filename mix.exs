@@ -1,7 +1,7 @@
 defmodule Duckdbex.MixProject do
   use Mix.Project
 
-  @version "0.5.0"
+  @version "0.5.0-fork"
   @duckdb_version "1.5.5"
 
   def project do
@@ -20,7 +20,7 @@ defmodule Duckdbex.MixProject do
       # elixir_make specific config
       make_precompiler: {:nif, CCPrecompiler},
       make_precompiler_url:
-        "https://github.com/AlexR2D2/duckdbex/releases/download/v#{@version}/@{artefact_filename}",
+        "https://github.com/boxxxie/duckdbex/releases/download/v#{@version}/@{artefact_filename}",
       make_precompiler_filename: "duckdb_nif",
       make_precompiler_nif_versions: [
         versions: &nif_versions/1,
@@ -29,8 +29,8 @@ defmodule Duckdbex.MixProject do
       cc_precompiler: cc_precompiler(),
       # Docs
       name: "Duckdbex",
-      source_url: "https://github.com/AlexR2D2/duckdbex/",
-      homepage_url: "https://github.com/AlexR2D2/duckdbex/",
+      source_url: "https://github.com/boxxxie/duckdbex/",
+      homepage_url: "https://github.com/boxxxie/duckdbex/",
       docs: docs()
     ]
   end
@@ -78,8 +78,8 @@ defmodule Duckdbex.MixProject do
       name: "duckdbex",
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/AlexR2D2/duckdbex",
-        "Changelog" => "https://github.com/AlexR2D2/duckdbex/blob/main/CHANGELOG.md"
+        "GitHub" => "https://github.com/boxxxie/duckdbex",
+        "Changelog" => "https://github.com/boxxxie/duckdbex/blob/main/CHANGELOG.md"
       }
     ]
   end
@@ -109,7 +109,7 @@ defmodule Duckdbex.MixProject do
         "CHANGELOG.md": []
       ],
       source_ref: "v#{@version}",
-      source_url: "https://github.com/AlexR2D2/duckdbex"
+      source_url: "https://github.com/boxxxie/duckdbex"
     ]
   end
 
