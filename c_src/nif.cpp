@@ -185,7 +185,8 @@ connection(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
 
   ErlangResourceBuilder<duckdb::Connection> resource_builder(connection_nif_type, *dbres->data);
-
+  enif_keep_resource(dbres);
+  resource_builder.get()->parent_resource = dbres;
   return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
 }
 
@@ -210,6 +211,8 @@ query_without_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ErlangResourceBuilder<duckdb::QueryResult> resource_builder(
     query_result_nif_type,
     std::move(result));
+  enif_keep_resource(connres);
+  resource_builder.get()->parent_resource = connres;
 
   return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
 }
@@ -265,6 +268,8 @@ query_with_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ErlangResourceBuilder<duckdb::QueryResult> resource_builder(
     query_result_nif_type,
     std::move(result));
+  enif_keep_resource(connres);
+  resource_builder.get()->parent_resource = connres;
 
   return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
 }
@@ -286,7 +291,8 @@ prepare_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ErlangResourceBuilder<duckdb::PreparedStatement> resource_builder(
     prepared_statement_nif_type,
     std::move(statement));
-
+  enif_keep_resource(connres);
+  resource_builder.get()->parent_resource = connres;
   return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
 }
 
@@ -327,6 +333,8 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   ErlangResourceBuilder<duckdb::QueryResult> resource_builder(
     query_result_nif_type,
     std::move(result));
+  enif_keep_resource(stmtres);
+  resource_builder.get()->parent_resource = stmtres;
 
   return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
 }
@@ -552,6 +560,8 @@ appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       return nif::make_error_tuple(env, "Table '" + table_name + "' could not be found");
 
     ErlangResourceBuilder<duckdb::Appender> resource_builder(appender_nif_type, *connres->data, table_name);
+    enif_keep_resource(connres);
+    resource_builder.get()->parent_resource = connres;
     return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
   } else {
     ErlNifBinary binary_schema_name;
@@ -572,6 +582,8 @@ appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     }
 
     ErlangResourceBuilder<duckdb::Appender> resource_builder(appender_nif_type, *connres->data, schema_name, table_name);
+    enif_keep_resource(connres);
+    resource_builder.get()->parent_resource = connres;
     return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
   }
 }

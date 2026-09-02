@@ -20,6 +20,7 @@ static ErlNifResourceType* appender_nif_type = nullptr;
 template<class T>
 struct erlang_resource {
   std::unique_ptr<T> data;
+  void* parent_resource = nullptr;
 
   erlang_resource(std::unique_ptr<T> d)
       : data(std::move(d)) {}
@@ -28,6 +29,9 @@ struct erlang_resource {
 template<class T>
 static void resource_destructor(ErlNifEnv*, void* arg) {
   auto* resource = static_cast<erlang_resource<T>*>(arg);
+  if (resource->parent_resource) {
+    enif_release_resource(resource->parent_resource);
+  }
   resource->~erlang_resource<T>();
 }
 
