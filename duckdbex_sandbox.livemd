@@ -63,6 +63,11 @@ Suppose we want to insert a lot of data into this table. Folowing the DuckDB rec
 {:ok, appender} = Duckdbex.appender(conn, "books")
 ```
 
+The appender does not keep its connection alive. Keep `conn` open and reachable
+until the appender is closed. In this example, the query after closing the appender
+uses `conn` again. A variable merely being in scope does not guarantee that it
+will keep the resource alive after its last use.
+
 Now we are preparing the huge amount of books data. `MAPs` must have a single type for all keys, and a single type for all values. In contrast, `STRUCTs` must have string keys, but each key may have a value of a different type.
 
 ```elixir
@@ -88,13 +93,20 @@ a_looot_of_books_list = [
 Ok, now we are inserting this data into table using our `Appender`
 
 ```elixir
-Duckdbex.appender_add_rows(appender, a_looot_of_books_list)
+:ok = Duckdbex.appender_add_rows(appender, a_looot_of_books_list)
 ```
 
-Any values added to the appender are cached prior to being inserted into the database system for performance reasons. That means that, while appending, the rows might not be immediately visible in the system. The cache can be manually flushed using the `Duckdbex.appender_flush/1` method. Let's flush them.
+Rows are buffered and may not be visible immediately. Use `Duckdbex.appender_flush/1`
+to flush the buffer while keeping the appender open. Since we have finished
+appending, we will use `Duckdbex.appender_close/1`, which flushes the buffer and
+closes the appender.
+
+Check for `:ok`: failures return `{:error, reason}`, including when buffered rows
+cannot be flushed because the connection has been closed. Garbage collection
+does not guarantee a successful flush.
 
 ```elixir
-Duckdbex.appender_flush(appender)
+:ok = Duckdbex.appender_close(appender)
 ```
 
 It's time to get our data back.

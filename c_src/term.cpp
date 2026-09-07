@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstring>
 #include <erl_nif.h>
+#include <cstdint>
 #include <vector>
 
 const int64_t POWERS_OF_TEN[] {1,

@@ -53,6 +53,10 @@ defmodule Duckdbex do
   @doc """
   Release resource (config, db, connection, stmt, query_result)
 
+  For appenders, first call `appender_close/1` while the creating connection is
+  still open and reachable, and check for `:ok`. Releasing an appender directly
+  or relying on garbage collection does not guarantee that buffered rows are written.
+
   Will cause destruction and automatic closing the releasing resource in the calling process on dirty schedulers. The released resource cannot be used after this point.
 
   If you do not release some resource you have the resource will be automatically released by the Erlang garbage collector (GC) when you lose last ref to the resource, but the GC may run resource releasing in the main schedulers which may affect the performance of your main system perfomance.
@@ -333,12 +337,24 @@ defmodule Duckdbex do
 
   This is the recommended way to load bulk data.
 
+  The appender does not keep its creating connection alive. Keep that connection
+  open and reachable until `appender_close/1` succeeds. A variable being in scope
+  is not enough: after its last use, it may no longer keep the resource alive.
+  Calling `release(conn)` after closing the appender, as below, keeps the connection
+  reachable throughout the appender operations.
+
+  Flushing buffered rows after the connection is released or garbage-collected
+  returns `{:error, reason}`. Do not rely on garbage collection to save buffered
+  rows; explicitly close the appender and check for `:ok`.
+
   ## Examples
 
     iex> {:ok, db} = Duckdbex.open()
     iex> {:ok, conn} = Duckdbex.connection(db)
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE table_1 (data INTEGER);")
-    iex> {:ok, _appender} = Duckdbex.appender(conn, "table_1")
+    iex> {:ok, appender} = Duckdbex.appender(conn, "table_1")
+    iex> :ok = Duckdbex.appender_close(appender)
+    iex> :ok = Duckdbex.release(conn)
   """
   @spec appender(connection(), binary()) :: {:ok, appender()} | {:error, reason()}
   def appender(connection, table_name) when is_reference(connection) and is_binary(table_name),
@@ -347,7 +363,8 @@ defmodule Duckdbex do
   @doc """
   Creates the Appender to load bulk data into a DuckDB database with schema name.
 
-  This is the recommended way to load bulk data.
+  Keep the creating connection open and reachable until the appender is closed.
+  See `appender/2` for the connection lifetime requirements.
 
   ## Examples
 
@@ -355,7 +372,9 @@ defmodule Duckdbex do
     iex> {:ok, conn} = Duckdbex.connection(db)
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE SCHEMA schema_1")
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE schema_1.table_1 (data INTEGER);")
-    iex> {:ok, _appender} = Duckdbex.appender(conn, "schema_1", "table_1")
+    iex> {:ok, appender} = Duckdbex.appender(conn, "schema_1", "table_1")
+    iex> :ok = Duckdbex.appender_close(appender)
+    iex> :ok = Duckdbex.release(conn)
   """
   @spec appender(connection(), binary(), binary()) :: {:ok, appender()} | {:error, reason()}
   def appender(connection, schema_name, table_name)
@@ -365,7 +384,10 @@ defmodule Duckdbex do
   @doc """
   Append row into a DuckDB database table.
 
-  Any values added to the appender are cached prior to being inserted into the database system for performance reasons. That means that, while appending, the rows might not be immediately visible in the system. The cache is automatically flushed when the appender goes out of scope or when Duckdbex.appender_close(appender) is called. The cache can also be manually flushed using the Duckdbex.appender_flush(appender) method. After either flush or close is called, all the data has been written to the database system.
+  Rows are buffered and may not be visible immediately. Call `appender_flush/1`
+  or `appender_close/1` and check for `:ok` to confirm that buffered rows were written.
+  Keep the creating connection open and reachable until the appender is closed;
+  see `appender/2`. Garbage collection does not guarantee a successful flush.
 
   ## Examples
 
@@ -374,6 +396,8 @@ defmodule Duckdbex do
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE table_1 (data INTEGER);")
     iex> {:ok, appender} = Duckdbex.appender(conn, "table_1")
     iex> :ok = Duckdbex.appender_add_row(appender, [1])
+    iex> :ok = Duckdbex.appender_close(appender)
+    iex> :ok = Duckdbex.release(conn)
   """
   @spec appender_add_row(appender(), list()) :: :ok | {:error, reason()}
   def appender_add_row(appender, row) when is_reference(appender) and is_list(row),
@@ -382,7 +406,10 @@ defmodule Duckdbex do
   @doc """
   Append multiple rows into a DuckDB database table at once.
 
-  Any values added to the appender are cached prior to being inserted into the database system for performance reasons. That means that, while appending, the rows might not be immediately visible in the system. The cache is automatically flushed when the appender goes out of scope or when `Duckdbex.appender_close/1` is called. The cache can also be manually flushed using the `Duckdbex.appender_flush/1` method. After either flush or close is called, all the data has been written to the database system.
+  Rows are buffered and may not be visible immediately. Call `appender_flush/1`
+  or `appender_close/1` and check for `:ok` to confirm that buffered rows were written.
+  Keep the creating connection open and reachable until the appender is closed;
+  see `appender/2`. Garbage collection does not guarantee a successful flush.
 
   ## Examples
 
@@ -391,13 +418,18 @@ defmodule Duckdbex do
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE table_1 (the_n1 INTEGER, the_str1 STRING);")
     iex> {:ok, appender} = Duckdbex.appender(conn, "table_1")
     iex> :ok = Duckdbex.appender_add_rows(appender, [[1, "one"], [2, "two"]])
+    iex> :ok = Duckdbex.appender_close(appender)
+    iex> :ok = Duckdbex.release(conn)
   """
   @spec appender_add_rows(appender(), list(list())) :: :ok | {:error, reason()}
   def appender_add_rows(appender, rows) when is_reference(appender) and is_list(rows),
     do: Duckdbex.NIF.appender_add_rows(appender, rows)
 
   @doc """
-  Commit the changes made by the appender.
+  Flush buffered rows without closing the appender.
+
+  Keep the creating connection open and reachable; see `appender/2`.
+  Returns `:ok` on success or `{:error, reason}` if flushing fails.
 
   ## Examples
 
@@ -411,15 +443,22 @@ defmodule Duckdbex do
     iex> :ok = Duckdbex.appender_flush(appender)
     iex> {:ok, res} = Duckdbex.query(conn, "SELECT * FROM table_1;")
     iex> [[1, "one"], [2, "two"]] = Duckdbex.fetch_all(res)
+    iex> :ok = Duckdbex.appender_close(appender)
+    iex> :ok = Duckdbex.release(conn)
   """
   @spec appender_flush(appender()) :: :ok | {:error, reason()}
   def appender_flush(appender) when is_reference(appender),
     do: Duckdbex.NIF.appender_flush(appender)
 
   @doc """
-  Flush the changes made by the appender and close it. Also it will release appender resource (see Duckdbex.release(resource))
+  Flush buffered rows and close the appender, releasing its resource on success.
 
-  The appender cannot be used after this point
+  Keep the creating connection open and reachable until this call completes;
+  see `appender/2`. Returns `:ok` on success or `{:error, reason}` if closing fails.
+  After a successful close, the appender cannot be used again.
+
+  Check the result before releasing the connection. `release/1` can clean up an
+  appender after an error, but does not guarantee that buffered rows were written.
 
   ## Examples
 
@@ -433,6 +472,7 @@ defmodule Duckdbex do
     iex> :ok = Duckdbex.appender_close(appender)
     iex> {:ok, res} = Duckdbex.query(conn, "SELECT * FROM table_1;")
     iex> [[1, "one"], [2, "two"]] = Duckdbex.fetch_all(res)
+    iex> :ok = Duckdbex.release(conn)
   """
   @spec appender_close(appender()) :: :ok | {:error, reason()}
   def appender_close(appender) when is_reference(appender),

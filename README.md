@@ -300,25 +300,36 @@ you can find more examples [here](https://duckdb.org/docs/data/parquet)
 
 ### Appender
 
-Appender can be used to load bulk data into a DuckDB database.
+Appender can be used to load bulk data into a DuckDB database. It uses the connection
+that created it and does not keep that connection alive. Keep the connection open
+and reachable until `Duckdbex.appender_close/1` succeeds.
+
+An Elixir variable being in scope is not enough: after its last use, it may no
+longer keep the resource alive. In this example, `Duckdbex.release(conn)` after
+closing the appender keeps `conn` reachable throughout the appender operations:
 
 ```elixir
 {:ok, db} = Duckdbex.open()
 {:ok, conn} = Duckdbex.connection(db)
+{:ok, _} = Duckdbex.query(conn, "CREATE TABLE people(id INTEGER, name VARCHAR);")
 
-Duckdbex.query(conn, "CREATE TABLE people(id INTEGER, name VARCHAR);")
+{:ok, appender} = Duckdbex.appender(conn, "people")
+:ok = Duckdbex.appender_add_rows(appender, [[2, "Sarah"], [3, "Alex"]])
 
-# Create Appender for table 'people'
-{:ok, appender} = Duckdbex.appender conn, "people"
-
-# Append two rows at once.
-Duckdbex.appender_add_rows appender, [[2, "Sarah"], [3, "Alex"]]
-
-# Persist cached rows
-Duckdbex.appender_flush()
+# Flush buffered rows and close the appender before releasing its connection.
+:ok = Duckdbex.appender_close(appender)
+:ok = Duckdbex.release(conn)
 ```
 
-Any values added to the appender are cached prior to being inserted into the database system for performance reasons. That means that, while appending, the rows might not be immediately visible in the system. The cache is automatically flushed when the appender goes out of scope or when `Duckdbex.appender_close/1` is called. The cache can also be manually flushed using the `Duckdbex.appender_flush/1` method. After either flush or close is called, all the data has been written to the database system.
+Rows are buffered and may not be visible immediately. Use `Duckdbex.appender_flush/1`
+to flush them while keeping the appender open, or `Duckdbex.appender_close/1` when
+finished. Both return `:ok` on success or `{:error, reason}` on failure; check the
+result before treating buffered rows as written.
+
+If the connection is released or garbage-collected, flushing buffered rows fails
+with `{:error, reason}`. Releasing the appender or relying on garbage collection
+does not guarantee a successful flush. If your application reuses the connection,
+keep it reachable for subsequent operations and close the appender before releasing it.
 
 ## Data Types
 

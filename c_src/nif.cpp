@@ -5,6 +5,7 @@
 #include "value_to_term.h"
 #include "duckdb.hpp"
 #include <erl_nif.h>
+#include <exception>
 #include <string>
 
 /*
@@ -551,7 +552,9 @@ appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     if (!connres->data->TableInfo(table_name))
       return nif::make_error_tuple(env, "Table '" + table_name + "' could not be found");
 
-    ErlangResourceBuilder<duckdb::Appender> resource_builder(appender_nif_type, *connres->data, table_name);
+    // Construct first so a throwing Appender constructor cannot leak an Erlang resource.
+    ErlangResourceBuilder<duckdb::Appender> resource_builder(
+      appender_nif_type, duckdb::make_uniq<duckdb::Appender>(*connres->data, table_name));
     return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
   } else {
     ErlNifBinary binary_schema_name;
@@ -571,7 +574,9 @@ appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       return nif::make_error_tuple(env, "Table '" + schema_name + "." + table_name + "' could not be found");
     }
 
-    ErlangResourceBuilder<duckdb::Appender> resource_builder(appender_nif_type, *connres->data, schema_name, table_name);
+    // Construct first so a throwing Appender constructor cannot leak an Erlang resource.
+    ErlangResourceBuilder<duckdb::Appender> resource_builder(
+      appender_nif_type, duckdb::make_uniq<duckdb::Appender>(*connres->data, schema_name, table_name));
     return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
   }
 }
@@ -798,6 +803,19 @@ on_upgrade(ErlNifEnv* env, void** priv, void** old_priv_data, ERL_NIF_TERM load_
   return 0;
 }
 
+// C++ exceptions must not escape an appender NIF call into BEAM.
+template <ERL_NIF_TERM (*Function)(ErlNifEnv*, int, const ERL_NIF_TERM[])>
+static ERL_NIF_TERM
+catch_appender_exceptions(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  try {
+    return Function(env, argc, argv);
+  } catch (const std::exception& ex) {
+    return nif::make_error_tuple(env, ex.what());
+  } catch (...) {
+    return nif::make_error_tuple(env, "Unknown appender exception");
+  }
+}
+
 static ErlNifFunc nif_funcs[] = {
   {"source_id", 0, source_id, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"library_version", 0, library_version, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -825,12 +843,12 @@ static ErlNifFunc nif_funcs[] = {
   {"columns", 1, columns, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_chunk", 1, fetch_chunk, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_all", 1, fetch_all, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"appender", 2, appender, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"appender", 3, appender, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"appender_add_row", 2, appender_add_row, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"appender_add_rows", 2, appender_add_rows, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"appender_flush", 1, appender_flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
-  {"appender_close", 1, appender_close, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"appender", 2, catch_appender_exceptions<appender>, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"appender", 3, catch_appender_exceptions<appender>, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"appender_add_row", 2, catch_appender_exceptions<appender_add_row>, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"appender_add_rows", 2, catch_appender_exceptions<appender_add_rows>, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"appender_flush", 1, catch_appender_exceptions<appender_flush>, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"appender_close", 1, catch_appender_exceptions<appender_close>, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"release", 1, release, ERL_NIF_DIRTY_JOB_IO_BOUND}
 };
 

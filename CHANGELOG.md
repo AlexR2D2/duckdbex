@@ -1,5 +1,11 @@
 # Changelog
 
+0.5.1
+- Fixed BEAM crashes caused by uncaught C++ exceptions in appender operations, including after the connection is released or garbage-collected. These operations now return `{:error, reason}` on exceptions.
+- Prevented NIF resource leaks when appender construction throws an exception.
+- Documented that the connection must remain alive until the appender is successfully closed, and added regression tests for appender and result lifetimes.
+- Fixed source compilation failing with `uint8_t` undeclared by adding the missing `<cstdint>` include ([#59](https://github.com/AlexR2D2/duckdbex/issues/59)).
+
 0.5.0
 - Statically link core_functions and parquet extensions ([PR](https://github.com/AlexR2D2/duckdbex/pull/57))
 
