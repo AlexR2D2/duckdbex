@@ -1,5 +1,8 @@
 # Changelog
 
+0.5.2
+- [DuckDB v1.5.6 Bugfix Release](https://github.com/duckdb/duckdb/releases/tag/v1.5.6)
+
 0.5.1
 - Fixed BEAM crashes caused by uncaught C++ exceptions in appender operations, including after the connection is released or garbage-collected. These operations now return `{:error, reason}` on exceptions.
 - Prevented NIF resource leaks when appender construction throws an exception.

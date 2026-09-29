@@ -19,7 +19,8 @@ defmodule Duckdbex.ExtensionsTest do
     # bump this together with scripts/regen_duckdb.sh <ref>
     test "version() reports the bundled duckdb version", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT version();")
-      assert [["v1.5.5"]] = Duckdbex.fetch_all(r)
+      assert [["v" <> database_version]] = Duckdbex.fetch_all(r)
+      assert database_version == Duckdbex.MixProject.duckdb_version()
     end
 
     test "date functions work without LOAD", %{conn: conn} do
