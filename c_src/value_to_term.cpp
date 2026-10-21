@@ -507,7 +507,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
           ERL_NIF_TERM val_term;
           if (!value_to_term(env, values[i], val_term))
             return false;
-          keys_array[i] = nif::make_binary_term(env, names[i].first);
+          keys_array[i] = nif::make_binary_term(env, names[i].first.GetIdentifierName());
           values_array[i] = val_term;
         }
 
@@ -520,7 +520,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
       auto member_name = duckdb::UnionType::GetMemberName(value.type(), duckdb::UnionValue::GetTag(value));
       auto& member_value = duckdb::UnionValue::GetValue(value);
 
-      ERL_NIF_TERM union_tag_name_term = nif::make_binary_term(env, member_name);
+      ERL_NIF_TERM union_tag_name_term = nif::make_binary_term(env, member_name.GetIdentifierName());
 
       ERL_NIF_TERM union_value_term;
       if (!value_to_term(env, member_value, union_value_term))
