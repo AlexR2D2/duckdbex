@@ -1,5 +1,10 @@
 # Changelog
 
+0.6.0
+- [DuckDB v2.0.0](https://github.com/duckdb/duckdb/releases/tag/v2.0.0) ([#60](https://github.com/AlexR2D2/duckdbex/pull/60))
+- Building from source now requires a C++17 compiler.
+- Some DuckDB error messages changed text (e.g. missing prepared statement parameters); code matching on error strings may need updating.
+
 0.5.2
 - [DuckDB v1.5.6 Bugfix Release](https://github.com/duckdb/duckdb/releases/tag/v1.5.6)
 
