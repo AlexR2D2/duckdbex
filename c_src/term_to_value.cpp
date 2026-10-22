@@ -655,7 +655,7 @@ bool nif::term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
     return true;
   } else if(enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_ns_t result;
-    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result)) {
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, true)) {
       sink = std::move(duckdb::Value::CreateValue(result));
       return true;
     }
@@ -812,7 +812,7 @@ bool nif::term_to_array(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
   if (!enif_is_list(env, term))
     return false;
 
-  duckdb::LogicalType child_type = duckdb::ListType::GetChildType(list_type);
+  duckdb::LogicalType child_type = duckdb::ArrayType::GetChildType(list_type);
 
   unsigned list_length = 0;
   if (!enif_get_list_length(env, term, &list_length))
@@ -896,7 +896,7 @@ bool nif::term_to_struct(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logica
     auto field_name = duckdb::StructType::GetChildName(map_type, child_idx);
 
     ERL_NIF_TERM value_term;
-    if (!enif_get_map_value(env, term, nif::make_binary_term(env, field_name), &value_term))
+    if (!enif_get_map_value(env, term, nif::make_binary_term(env, field_name.GetIdentifierName()), &value_term))
       return false;
 
     duckdb::Value value_sink;
