@@ -26,6 +26,7 @@ defmodule Duckdbex.Nif.DBGTest do
   defp config_value(%{type: :double}), do: 0.8
   defp config_value(%{type: type}) when type in [:bigint, :ubigint], do: 1
   defp config_value(%{type: :string}), do: ""
+  defp config_value(%{type: :map}), do: %{}
 
   test "dbg config options that fail with create_config" do
     failures =

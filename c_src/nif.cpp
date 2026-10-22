@@ -63,7 +63,7 @@ library_version_of_storage(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) 
   if (!enif_get_uint64(env, argv[0], &storage_format_version))
     return enif_make_badarg(env);
 
-  return nif::make_binary_term(env, duckdb::GetDuckDBVersions(storage_format_version));
+  return nif::make_binary_term(env, duckdb::GetDuckDBVersions(static_cast<duckdb::StorageVersion>(storage_format_version)));
 }
 
 static ERL_NIF_TERM
@@ -104,7 +104,7 @@ set_config_option(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   duckdb::Value value;
 
-  if (auto option = duckdb::DBConfig::GetOptionByName(option_name)) {
+  if (auto option = duckdb::DBConfig::GetOptionByName(duckdb::Identifier(option_name))) {
     if (!nif::term_to_option_value(env, argv[2], *option, value))
       return nif::make_error_tuple(env, "invalid value for option \"" + option_name + "\"");
 
@@ -116,7 +116,7 @@ set_config_option(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     }
   } else {
     duckdb::ExtensionOption extension_option;
-    if (!configres->data->TryGetExtensionOption(option_name, extension_option))
+    if (!configres->data->TryGetExtensionOption(duckdb::Identifier(option_name), extension_option))
       return nif::make_error_tuple(env, "unknown config option \"" + option_name + "\"");
 
     if (!nif::term_to_option_value(env, argv[2], extension_option, value))
@@ -231,8 +231,8 @@ query_with_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
 
   auto statement = connres->data->Prepare(std::string((const char*)sql_stmt.data, sql_stmt.size));
-  if (!statement->success)
-    return nif::make_error_tuple(env, statement->error.Message());
+  if (statement->HasError())
+    return nif::make_error_tuple(env, statement->GetErrorObject().Message());
 
   duckdb::vector<duckdb::Value> query_params;
 
@@ -258,7 +258,7 @@ query_with_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     }
   }
 
-  duckdb::unique_ptr<duckdb::QueryResult> result = statement->Execute(query_params, false);
+  duckdb::unique_ptr<duckdb::QueryResult> result = statement->Execute(query_params);
 
   if (result->HasError())
     return nif::make_error_tuple(env, result->GetErrorObject().Message());
@@ -281,8 +281,8 @@ prepare_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
 
   auto statement = connres->data->Prepare(std::string((const char*)sql_stmt.data, sql_stmt.size));
-  if (!statement->success)
-    return nif::make_error_tuple(env, statement->error.Message());
+  if (statement->HasError())
+    return nif::make_error_tuple(env, statement->GetErrorObject().Message());
 
   ErlangResourceBuilder<duckdb::PreparedStatement> resource_builder(
     prepared_statement_nif_type,
@@ -439,7 +439,7 @@ columns(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (duckdb::idx_t columns_count = result->data->ColumnCount()) {
     std::vector<ERL_NIF_TERM> columns(columns_count);
     for (duckdb::idx_t col = 0; col < columns_count; col++) {
-      duckdb::string column_name = result->data->ColumnName(col);
+      const duckdb::string &column_name = result->data->ColumnName(col).GetIdentifierName();
       columns[col] = nif::make_binary_term(env, column_name);
     }
     return enif_make_list_from_array(env, &columns[0], columns.size());
@@ -466,7 +466,7 @@ fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   duckdb::unique_ptr<duckdb::DataChunk> chunk;
   duckdb::ErrorData error;
-  if (result->data->TryFetch(chunk, error) && chunk) {
+  if (result->data->TryFetchOrError(chunk, error) && chunk) {
     duckdb::idx_t rows_count = chunk->size();
     duckdb::idx_t columns_count = chunk->ColumnCount();
 
@@ -507,7 +507,7 @@ fetch_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
   duckdb::unique_ptr<duckdb::DataChunk> chunk;
   duckdb::ErrorData error;
-  while (result->data->TryFetch(chunk, error) && chunk) {
+  while (result->data->TryFetchOrError(chunk, error) && chunk) {
     duckdb::idx_t rows_count = chunk->size();
     duckdb::idx_t columns_count = chunk->ColumnCount();
     for (duckdb::idx_t row = 0; row < rows_count; row++) {
@@ -549,12 +549,12 @@ appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
     std::string table_name((const char*)binary_table_name.data, binary_table_name.size);
 
-    if (!connres->data->TableInfo(table_name))
+    if (!connres->data->TableInfo(duckdb::Identifier(table_name)))
       return nif::make_error_tuple(env, "Table '" + table_name + "' could not be found");
 
     // Construct first so a throwing Appender constructor cannot leak an Erlang resource.
     ErlangResourceBuilder<duckdb::Appender> resource_builder(
-      appender_nif_type, duckdb::make_uniq<duckdb::Appender>(*connres->data, table_name));
+      appender_nif_type, duckdb::make_uniq<duckdb::Appender>(*connres->data, duckdb::Identifier(table_name)));
     return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
   } else {
     ErlNifBinary binary_schema_name;
@@ -570,13 +570,13 @@ appender(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     std::string schema_name((const char*)binary_schema_name.data, binary_schema_name.size);
     std::string table_name((const char*)binary_table_name.data, binary_table_name.size);
 
-    if (!connres->data->TableInfo(schema_name, table_name)) {
+    if (!connres->data->TableInfo(duckdb::Identifier(schema_name), duckdb::Identifier(table_name))) {
       return nif::make_error_tuple(env, "Table '" + schema_name + "." + table_name + "' could not be found");
     }
 
     // Construct first so a throwing Appender constructor cannot leak an Erlang resource.
     ErlangResourceBuilder<duckdb::Appender> resource_builder(
-      appender_nif_type, duckdb::make_uniq<duckdb::Appender>(*connres->data, schema_name, table_name));
+      appender_nif_type, duckdb::make_uniq<duckdb::Appender>(*connres->data, duckdb::Identifier(schema_name), duckdb::Identifier(table_name)));
     return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
   }
 }

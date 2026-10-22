@@ -199,7 +199,7 @@ defmodule Duckdbex.IssuesTest do
       # Is this a bug?
 
       assert {:error,
-              "Invalid Input Error: Values were not provided for the following prepared statement parameters: 1"} =
+              "Invalid Input Error: Values were not provided for the following parameters: 1"} =
                Duckdbex.execute_statement(stmt, ["test_value"])
     end
   end
@@ -209,7 +209,7 @@ defmodule Duckdbex.IssuesTest do
       {:ok, _} = Duckdbex.query(conn, "SELECT bin('goose');")
 
       {:error,
-       "Invalid Input Error: Values were not provided for the following prepared statement parameters: 1"} =
+       "Invalid Input Error: Values were not provided for the following parameters: 1"} =
         Duckdbex.query(conn, "SELECT bin($1);", ["goose"])
 
       {:ok, _} =
