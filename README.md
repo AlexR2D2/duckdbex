@@ -393,19 +393,22 @@ Duckdbex.query(conn, "INSERT INTO map_table VALUES (map([1, 2], [2.98, 3.14])), 
 [[[{1, 2.98}, {2, 3.14}]], [[{3, 9.8}, {4, 1.6}]]] = Duckdbex.fetch_all(r)
 ```
 
+MAPs are returned as a list of `{key, value}` pairs rather than an Elixir map:
+DuckDB keeps the entry order and compares maps by it
+(`MAP([1,2],[10,20]) = MAP([2,1],[20,10])` is false), while Elixir maps are
+unordered. Use `Map.new/1` when you only need lookups.
+
 ### TUPLE
 
-A TUPLE is an unnamed STRUCT: its fields are positional and have a fixed arity. Results are returned as an Elixir list, following LIST/ARRAY; parameters accept either a list or a tuple.
+A TUPLE is an unnamed STRUCT: its fields are positional and have a fixed arity, so it maps to an Elixir tuple. Parameters accept either a tuple or a list.
 
 ```elixir
 {:ok, r} = Duckdbex.query(conn, "SELECT (1, 'a')::TUPLE(INTEGER, VARCHAR);")
-[[[1, "a"]]] = Duckdbex.fetch_all(r)
+[[{1, "a"}]] = Duckdbex.fetch_all(r)
 
 {:ok, r} = Duckdbex.query(conn, "SELECT $1::TUPLE(INTEGER, VARCHAR);", [{1, "a"}])
-[[[1, "a"]]] = Duckdbex.fetch_all(r)
+[[{1, "a"}]] = Duckdbex.fetch_all(r)
 ```
-
-Results stay a list rather than a tuple because Elixir tuples already carry other meanings here (`UNION` is `{tag, value}`, dates and timestamps are tuples too).
 
 ### UNION
 
@@ -556,7 +559,8 @@ Scalar DuckDB types map to Elixir's built-in types where they exist, and to
 | `HUGEINT` / `UHUGEINT` | `%Duckdbex.Hugeint{upper, lower}` |
 | `UNION` | `%Duckdbex.Union{tag, value}` |
 | `MAP` | `[{key, value}]` |
-| `LIST` / `ARRAY` / `TUPLE` | list |
+| `TUPLE` | tuple |
+| `LIST` / `ARRAY` | list |
 
 Parameters accept the same representations (strings are still accepted for
 date, time, timestamp and interval columns).
@@ -674,7 +678,7 @@ Other changes that affect duckdbex users:
 * The PEG parser is now the default. The single-arrow lambda syntax (`x -> x + 1`) is disabled;
   use `lambda x: x + 1` or `SET lambda_syntax = 'enable_single_arrow';`.
 * Parser errors include source locations, and several DuckDB error messages were reworded.
-* Unnamed structs such as `row(1, 'a')` are now reported as `TUPLE` and arrive as an Elixir list.
+* Unnamed structs such as `row(1, 'a')` are now reported as `TUPLE` and arrive as an Elixir tuple.
 * `TUPLE`, `TIMESTAMPTZ_NS`, `VARIANT` and `GEOMETRY` conversions were added, and `json` plus
   `icu` are now statically linked, so JSON functions (`'…'::JSON`, `json_extract`, …) and
   timezone/collation functions work without `LOAD`.
