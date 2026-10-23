@@ -566,6 +566,28 @@ their `_NS` variants) are returned as `:infinity` / `:"-infinity"` atoms, becaus
 neither `Date` nor `NaiveDateTime` can represent them. The same atoms are accepted
 as parameters.
 
+### Raw values
+
+Decoding costs a struct per value. For throughput-sensitive reads, `fetch_all/2`
+and `fetch_chunk/2` accept `raw: true`, which returns the integers DuckDB stores:
+
+```elixir
+> {:ok, r} = Duckdbex.query(conn, "SELECT DATE '1970-01-02', TIMESTAMP '1970-01-01 00:00:02';")
+> Duckdbex.fetch_all(r, raw: true)
+[[1, 2_000_000]]
+```
+
+| DuckDB | raw value |
+| --- | --- |
+| `DATE` | days since 1970-01-01 |
+| `TIME` | microseconds since midnight |
+| `TIMESTAMP` / `TIMESTAMPTZ` | microseconds since the epoch |
+| `TIMESTAMP_S` / `_MS` / `_NS` | seconds / milliseconds / nanoseconds |
+| `TIMETZ` | `{microseconds, offset_seconds}` |
+
+Other types are unaffected, and `:infinity` / `:"-infinity"` stay atoms in both
+modes.
+
 ### Huge numbers (hugeint)
 
 `HUGEINT` is a 128-bit integer. The NIF API cannot build Erlang bignums, so the

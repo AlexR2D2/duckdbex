@@ -357,6 +357,24 @@ defmodule Duckdbex do
     do: Duckdbex.NIF.fetch_chunk(query_result)
 
   @doc """
+  Fetches the next chunk with raw temporal values.
+
+  `DATE`, `TIME`, `TIMESTAMP*` and `TIMETZ` are returned as the integers DuckDB
+  stores instead of `Date`, `Time`, `NaiveDateTime`, `DateTime` or structs.
+  `:infinity` / `:\"-infinity\"` are still returned as atoms.
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, r} = Duckdbex.query(conn, "SELECT DATE '1970-01-02';")
+    iex> [[1]] = Duckdbex.fetch_chunk(r, raw: true)
+  """
+  @spec fetch_chunk(query_result(), keyword()) :: list() | {:error, reason()}
+  def fetch_chunk(query_result, opts) when is_reference(query_result) and is_list(opts),
+    do: Duckdbex.NIF.fetch_chunk(query_result, Keyword.get(opts, :raw, false))
+
+  @doc """
   Fetches all data from the query result.
 
   Returns empty list if there are no result to fetch.
@@ -371,6 +389,23 @@ defmodule Duckdbex do
   @spec fetch_all(query_result()) :: list() | {:error, reason()}
   def fetch_all(query_result) when is_reference(query_result),
     do: Duckdbex.NIF.fetch_all(query_result)
+
+  @doc """
+  Fetches all rows with raw temporal values.
+
+  `DATE`, `TIME`, `TIMESTAMP*` and `TIMETZ` are returned as the integers DuckDB
+  stores instead of `Date`, `Time`, `NaiveDateTime`, `DateTime` or structs.
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, r} = Duckdbex.query(conn, "SELECT DATE '1970-01-02', TIME '00:00:01.500000';")
+    iex> [[1, 1_500_000]] = Duckdbex.fetch_all(r, raw: true)
+  """
+  @spec fetch_all(query_result(), keyword()) :: list() | {:error, reason()}
+  def fetch_all(query_result, opts) when is_reference(query_result) and is_list(opts),
+    do: Duckdbex.NIF.fetch_all(query_result, Keyword.get(opts, :raw, false))
 
   @doc """
   Creates the Appender to load bulk data into a DuckDB database.

@@ -129,6 +129,50 @@ defmodule Duckdbex.TypesTest do
     end
   end
 
+  # Raw mode returns the integers DuckDB stores instead of the decoded types.
+  describe "raw fetch" do
+    setup %{conn: conn} do
+      %{conn: conn}
+    end
+
+    test "returns the physical temporal values", %{conn: conn} do
+      sql = """
+      SELECT DATE '1970-01-02',
+             TIME '00:00:01.500000',
+             TIMESTAMP '1970-01-01 00:00:02',
+             TIMESTAMPTZ '1970-01-01 00:00:03+00',
+             TIMESTAMP_NS '1970-01-01 00:00:00.000000004',
+             TIMESTAMP_MS '1970-01-01 00:00:00.005',
+             TIMESTAMP_S '1970-01-01 00:00:06',
+             TIMETZ '00:00:07+02',
+             'infinity'::DATE;
+      """
+
+      assert {:ok, r} = Duckdbex.query(conn, sql)
+
+      assert [[1, 1_500_000, 2_000_000, 3_000_000, 4, 5, 6, {7_000_000, 7200}, :infinity]] =
+               Duckdbex.fetch_all(r, raw: true)
+    end
+
+    test "applies to fetch_chunk too", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT DATE '1970-01-02';")
+
+      assert [[1]] = Duckdbex.fetch_chunk(r, raw: true)
+    end
+
+    test "leaves non-temporal values alone", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT 1, 'abc', [1, 2], DECIMAL '1.5';")
+
+      assert [[1, "abc", [1, 2], %Duckdbex.Decimal{unscaled: 1500, width: 18, scale: 3}]] =
+               Duckdbex.fetch_all(r, raw: true)
+    end
+
+    test "defaults to decoded values", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT DATE '1970-01-02';")
+      assert [[~D[1970-01-02]]] = Duckdbex.fetch_all(r)
+    end
+  end
+
   # MAP A dictionary of multiple named values, each key having the same type and each value having the same type.
   # Keys and values can be any type and can be different types from one another.
   # https://duckdb.org/docs/sql/data_types/map

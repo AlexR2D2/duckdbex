@@ -78,8 +78,14 @@ defmodule Duckdbex.NIF do
   @spec fetch_chunk(query_result()) :: list() | {:error, reason()}
   def fetch_chunk(_query_result), do: :erlang.nif_error(:not_loaded)
 
+  @spec fetch_chunk(query_result(), boolean()) :: list() | {:error, reason()}
+  def fetch_chunk(_query_result, _raw), do: :erlang.nif_error(:not_loaded)
+
   @spec fetch_all(query_result()) :: list() | {:error, reason()}
   def fetch_all(_query_result), do: :erlang.nif_error(:not_loaded)
+
+  @spec fetch_all(query_result(), boolean()) :: list() | {:error, reason()}
+  def fetch_all(_query_result, _raw), do: :erlang.nif_error(:not_loaded)
 
   @spec appender(connection(), binary()) :: {:ok, appender()} | {:error, reason()}
   def appender(_connection, _table_name), do: :erlang.nif_error(:not_loaded)

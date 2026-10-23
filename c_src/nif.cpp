@@ -571,10 +571,20 @@ columns(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   }
 }
 
+static bool
+raw_mode_arg(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[], int index) {
+  if (argc <= index)
+    return false;
+
+  return enif_is_identical(argv[index], enif_make_atom(env, "true"));
+}
+
 static ERL_NIF_TERM
 fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1)
+  if (argc < 1 || argc > 2)
     return enif_make_badarg(env);
+
+  const bool raw = raw_mode_arg(env, argc, argv, 1);
 
   auto result = get_resource<duckdb::QueryResult>(env, argv[0]);
   if (!result)
@@ -598,7 +608,7 @@ fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       for (duckdb::idx_t col = 0; col < columns_count; col++) {
         auto value = chunk->GetValue(col, row);
         ERL_NIF_TERM sink;
-        if (!nif::value_to_term(env, value, sink))
+        if (!nif::value_to_term(env, value, sink, raw))
           return nif::make_error_tuple(env, "Can't convert DuckDB value of type '" + value.type().ToString() + "' to the Erlang term.");
         columns[col] = sink;
       }
@@ -614,8 +624,10 @@ fetch_chunk(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
 
 static ERL_NIF_TERM
 fetch_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
-  if (argc != 1)
+  if (argc < 1 || argc > 2)
     return enif_make_badarg(env);
+
+  const bool raw = raw_mode_arg(env, argc, argv, 1);
 
   auto result = get_resource<duckdb::QueryResult>(env, argv[0]);
   if (!result)
@@ -638,7 +650,7 @@ fetch_all(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
       for (duckdb::idx_t col = 0; col < columns_count; col++) {
         auto value = chunk->GetValue(col, row);
         ERL_NIF_TERM sink;
-        if (!nif::value_to_term(env, value, sink))
+        if (!nif::value_to_term(env, value, sink, raw))
           return nif::make_error_tuple(env, "Can't convert DuckDB value of type '" + value.type().ToString() + "' to the Erlang term.");
         columns[col] = sink;
       }
@@ -966,7 +978,9 @@ static ErlNifFunc nif_funcs[] = {
   {"has_active_transaction", 1, has_active_transaction, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"columns", 1, columns, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_chunk", 1, fetch_chunk, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"fetch_chunk", 2, fetch_chunk, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"fetch_all", 1, fetch_all, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"fetch_all", 2, fetch_all, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender", 2, catch_appender_exceptions<appender>, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender", 3, catch_appender_exceptions<appender>, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"appender_add_row", 2, catch_appender_exceptions<appender_add_row>, ERL_NIF_DIRTY_JOB_IO_BOUND},
