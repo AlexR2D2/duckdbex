@@ -141,11 +141,19 @@ nif::make_struct(ErlNifEnv* env, const char* module,
   return result;
 }
 
+// Lookups must never create atoms: if a field name ever comes from data
+// instead of a literal, enif_make_atom would leak an atom per distinct name.
+static bool
+existing_atom(ErlNifEnv* env, const char* name, ERL_NIF_TERM& atom) {
+  return enif_make_existing_atom(env, name, &atom, ERL_NIF_LATIN1);
+}
+
 bool
 nif::struct_is(ErlNifEnv* env, ERL_NIF_TERM term, const char* module) {
-  ERL_NIF_TERM struct_atom;
+  ERL_NIF_TERM struct_key, struct_atom;
 
-  if (!enif_get_map_value(env, term, nif::make_atom(env, "__struct__"), &struct_atom))
+  if (!existing_atom(env, "__struct__", struct_key) ||
+      !enif_get_map_value(env, term, struct_key, &struct_atom))
     return false;
 
   return nif::is_atom(env, struct_atom, module);
@@ -153,7 +161,9 @@ nif::struct_is(ErlNifEnv* env, ERL_NIF_TERM term, const char* module) {
 
 bool
 nif::get_struct_field(ErlNifEnv* env, ERL_NIF_TERM term, const char* field, ERL_NIF_TERM& sink) {
-  return enif_get_map_value(env, term, nif::make_atom(env, field), &sink);
+  ERL_NIF_TERM field_atom;
+
+  return existing_atom(env, field, field_atom) && enif_get_map_value(env, term, field_atom, &sink);
 }
 
 bool nif::get_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string& sink) {
