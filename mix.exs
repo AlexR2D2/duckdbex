@@ -88,8 +88,10 @@ defmodule Duckdbex.MixProject do
     [
       cleanup: "clean",
       compilers: %{
+        # No :include_default_ones here: CI only builds these three, and the
+        # defaults would make `mix elixir_make.checksum --all` fetch absent
+        # targets (404) and list the overlapping ones twice.
         {:unix, :linux} => %{
-          :include_default_ones => true,
           "x86_64-linux-gnu" => "x86_64-linux-gnu-",
           "aarch64-linux-gnu" => "aarch64-linux-gnu-",
           "riscv64-linux-gnu" => "riscv64-linux-gnu-"
