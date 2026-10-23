@@ -105,6 +105,22 @@ defmodule Duckdbex.TypesTest do
 
       assert [[%{"age" => 25, "name" => "Alice"}]] = Duckdbex.fetch_all(r)
     end
+
+    test "'map' keys are matched case-insensitively", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
+                 %{"Name" => "Alice", "AGE" => 25}
+               ])
+
+      assert [[%{"age" => 25, "name" => "Alice"}]] = Duckdbex.fetch_all(r)
+    end
+
+    test "'map' with a missing key is rejected", %{conn: conn} do
+      assert {:error, "invalid type of parameter #1"} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
+                 %{"name" => "Alice"}
+               ])
+    end
   end
 
   # MAP A dictionary of multiple named values, each key having the same type and each value having the same type.
@@ -170,6 +186,114 @@ defmodule Duckdbex.TypesTest do
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [[1, nil, nil]])
 
       assert [[[1, nil, nil]]] = Duckdbex.fetch_all(r)
+    end
+  end
+
+  # TUPLE An unnamed STRUCT: positional fields instead of named ones.
+  # https://duckdb.org/docs/sql/data_types/struct
+  describe "TUPLE" do
+    setup %{conn: conn} do
+      assert {:ok, _} =
+               Duckdbex.query(conn, "CREATE TABLE table1 (col1 TUPLE(INTEGER, VARCHAR));")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, "INSERT INTO table1 VALUES ((1, 'a')), ((2, NULL));")
+
+      %{conn: conn}
+    end
+
+    test "list input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [[1, "a"]])
+      assert [[[1, "a"]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "query output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 ORDER BY col1;")
+      assert [[[1, "a"]], [[2, nil]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "tuple input, list output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [{1, "a"}])
+      assert [[[1, "a"]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "tuple of the wrong arity is rejected", %{conn: conn} do
+      assert {:error, "invalid type of parameter #1"} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [{1, "a", 3}])
+    end
+  end
+
+  # VARIANT A dynamically typed value that can hold any other data type.
+  # https://duckdb.org/docs/sql/data_types/variant
+  describe "VARIANT" do
+    setup %{conn: conn} do
+      assert {:ok, _} = Duckdbex.query(conn, "CREATE TABLE table1 (col1 VARIANT);")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, """
+               INSERT INTO table1 VALUES
+                 (CAST(123 AS VARIANT)), (CAST('abc' AS VARIANT)), (CAST([1, 2] AS VARIANT));
+               """)
+
+      %{conn: conn}
+    end
+
+    test "scalar input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [123])
+      assert [[123]] = Duckdbex.fetch_all(r)
+
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", ["abc"])
+      assert [["abc"]] = Duckdbex.fetch_all(r)
+    end
+
+    test "nested output", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = CAST([1, 2] AS VARIANT);")
+
+      assert [[[1, 2]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "list input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [[1, 2]])
+      assert [[[1, 2]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "struct input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [%{"a" => 1}])
+      assert [[%{"a" => 1}]] = Duckdbex.fetch_all(r)
+    end
+
+    test "nested input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [%{"a" => [1, 2]}])
+      assert [[%{"a" => [1, 2]}]] = Duckdbex.fetch_all(r)
+    end
+
+    test "empty list and map input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [[]])
+      assert [[[]]] = Duckdbex.fetch_all(r)
+
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [%{}])
+      assert [[%{}]] = Duckdbex.fetch_all(r)
+    end
+  end
+
+  # GEOMETRY Geometry values, exposed as WKB binaries.
+  # https://duckdb.org/docs/sql/data_types/geometry
+  describe "GEOMETRY" do
+    setup %{conn: conn} do
+      assert {:ok, _} = Duckdbex.query(conn, "CREATE TABLE table1 (col1 GEOMETRY);")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, "INSERT INTO table1 VALUES ('POINT(1 2)'::GEOMETRY);")
+
+      %{conn: conn}
+    end
+
+    test "WKB input/output", %{conn: conn} do
+      wkb = <<1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 240, 63, 0, 0, 0, 0, 0, 0, 0, 64>>
+
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [wkb])
+      assert [[^wkb]] = Duckdbex.fetch_all(r)
     end
   end
 
@@ -894,6 +1018,29 @@ defmodule Duckdbex.TypesTest do
         assert {:error, "invalid type of parameter #1"} =
                  Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", [invalid_input])
       end)
+    end
+  end
+
+  # Timestamp (uses time zone), with nanosecond precision
+  describe "TIMESTAMPTZ_NS" do
+    setup %{conn: conn} do
+      assert {:ok, _} = Duckdbex.query(conn, "CREATE TABLE table1(col1 TIMESTAMPTZ_NS);")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, """
+               INSERT INTO table1 VALUES (TIMESTAMPTZ_NS '1992-09-20 11:30:00.999999999+00');
+               """)
+
+      %{conn: conn}
+    end
+
+    test "native input/output", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
+                 {{1992, 09, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}
+               ])
+
+      assert [[{{1992, 9, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}]] = Duckdbex.fetch_all(r)
     end
   end
 

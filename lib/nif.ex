@@ -37,7 +37,8 @@ defmodule Duckdbex.NIF do
   @spec query(connection(), binary()) :: {:ok, query_result()} | {:error, reason()}
   def query(_connection, _string_sql), do: :erlang.nif_error(:not_loaded)
 
-  @spec query(connection(), binary(), list()) :: {:ok, query_result()} | {:error, reason()}
+  @spec query(connection(), binary(), list() | map()) ::
+          {:ok, query_result()} | {:error, reason()}
   def query(_connection, _string_sql, _args), do: :erlang.nif_error(:not_loaded)
 
   @spec prepare_statement(connection(), binary()) :: {:ok, statement()} | {:error, reason()}
@@ -46,8 +47,12 @@ defmodule Duckdbex.NIF do
   @spec execute_statement(statement()) :: {:ok, query_result()} | {:error, reason()}
   def execute_statement(_statement), do: :erlang.nif_error(:not_loaded)
 
-  @spec execute_statement(statement(), list()) :: {:ok, query_result()} | {:error, reason()}
+  @spec execute_statement(statement(), list() | map()) ::
+          {:ok, query_result()} | {:error, reason()}
   def execute_statement(_statement, _args), do: :erlang.nif_error(:not_loaded)
+
+  @spec get_named_parameters(statement()) :: [{binary(), atom()}]
+  def get_named_parameters(_statement), do: :erlang.nif_error(:not_loaded)
 
   @spec begin_transaction(connection()) :: :ok | {:error, reason()}
   def begin_transaction(_conn), do: :erlang.nif_error(:not_loaded)

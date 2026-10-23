@@ -150,15 +150,29 @@ defmodule Duckdbex do
   @doc """
   Issues a query to the database with parameters and returns a result reference.
 
+  Parameters can be positional (a list) or named (a map using the `$name`
+  syntax). Named parameters are matched case-insensitively.
+
   ## Examples
 
     iex> {:ok, db} = Duckdbex.open()
     iex> {:ok, conn} = Duckdbex.connection(db)
     iex> {:ok, _res} = Duckdbex.query(conn, "SELECT 1 WHERE $1 = 1;", [1])
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, res} = Duckdbex.query(conn, "SELECT $name::VARCHAR;", %{"name" => "world"})
+    iex> [["world"]] = Duckdbex.fetch_all(res)
   """
-  @spec query(connection(), binary(), list()) :: {:ok, query_result()} | {:error, reason()}
+  @spec query(connection(), binary(), list() | map()) ::
+          {:ok, query_result()} | {:error, reason()}
   def query(connection, sql_string, args)
       when is_reference(connection) and is_binary(sql_string) and is_list(args),
+      do: Duckdbex.NIF.query(connection, sql_string, args)
+
+  @spec query(connection(), binary(), map()) :: {:ok, query_result()} | {:error, reason()}
+  def query(connection, sql_string, args)
+      when is_reference(connection) and is_binary(sql_string) and is_map(args),
       do: Duckdbex.NIF.query(connection, sql_string, args)
 
   @doc """
@@ -191,7 +205,7 @@ defmodule Duckdbex do
     do: Duckdbex.NIF.execute_statement(statement)
 
   @doc """
-  Execute the prepared statement with the given list of parameters
+  Execute the prepared statement with the given list or map of parameters
 
   ## Examples
 
@@ -200,10 +214,36 @@ defmodule Duckdbex do
     iex> {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT 1 WHERE $1 = 1;")
     iex> {:ok, res} = Duckdbex.execute_statement(stmt, [1])
     iex> [[1]] = Duckdbex.fetch_all(res)
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT $value::INTEGER;")
+    iex> {:ok, res} = Duckdbex.execute_statement(stmt, %{"value" => 1})
+    iex> [[1]] = Duckdbex.fetch_all(res)
   """
   @spec execute_statement(statement(), list()) :: {:ok, query_result()} | {:error, reason()}
   def execute_statement(statement, args) when is_reference(statement) and is_list(args),
     do: Duckdbex.NIF.execute_statement(statement, args)
+
+  @spec execute_statement(statement(), map()) :: {:ok, query_result()} | {:error, reason()}
+  def execute_statement(statement, args) when is_reference(statement) and is_map(args),
+    do: Duckdbex.NIF.execute_statement(statement, args)
+
+  @doc """
+  Returns the named parameters of a prepared statement as `{name, type}` tuples.
+
+  Positional parameters (`$1`, `$2`, ...) are not included.
+
+  ## Examples
+
+    iex> {:ok, db} = Duckdbex.open()
+    iex> {:ok, conn} = Duckdbex.connection(db)
+    iex> {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT $value::INTEGER;")
+    iex> [{"value", :integer}] = Duckdbex.get_named_parameters(stmt)
+  """
+  @spec get_named_parameters(statement()) :: [{binary(), atom()}]
+  def get_named_parameters(statement) when is_reference(statement),
+    do: Duckdbex.NIF.get_named_parameters(statement)
 
   @doc """
   Begin a transaction

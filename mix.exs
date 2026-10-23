@@ -74,7 +74,9 @@ defmodule Duckdbex.MixProject do
         README.md
         LICENSE
       ),
-      exclude_patterns: [~r{^c_src/duckdb(?:/|$)}],
+      # The vendored DuckDB sources are regenerated on demand (see Makefile),
+      # so the package ships precompiled NIFs only.
+      exclude_patterns: [~r{^c_src/duckdb(?:/|$)}, "c_src/duckdb.tar.gz"],
       name: "duckdbex",
       licenses: ["MIT"],
       links: %{

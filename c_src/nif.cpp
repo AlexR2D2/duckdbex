@@ -99,7 +99,7 @@ set_config_option(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
 
   std::string option_name;
-  if (!nif::get_config_name(env, argv[1], option_name))
+  if (!nif::get_string(env, argv[1], option_name))
     return enif_make_badarg(env);
 
   duckdb::Value value;
@@ -215,6 +215,82 @@ query_without_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
 }
 
+enum class NamedBindResult { OK, INVALID_NAME, UNKNOWN_NAME, INVALID_VALUE };
+
+static NamedBindResult
+bind_named_values(ErlNifEnv* env, ERL_NIF_TERM term,
+                  const duckdb::case_insensitive_map_t<duckdb::LogicalType>& param_types,
+                  duckdb::identifier_map_t<duckdb::BoundParameterData>& sink,
+                  std::string& failing_name) {
+  ErlNifMapIterator iter;
+  if (!enif_map_iterator_create(env, term, &iter, ERL_NIF_MAP_ITERATOR_FIRST))
+    return NamedBindResult::INVALID_NAME;
+
+  NamedBindResult result = NamedBindResult::OK;
+
+  ERL_NIF_TERM key, value;
+  while (enif_map_iterator_get_pair(env, &iter, &key, &value)) {
+    failing_name.clear();
+
+    if (!nif::get_string(env, key, failing_name)) {
+      result = NamedBindResult::INVALID_NAME;
+      break;
+    }
+
+    auto type_it = param_types.find(failing_name);
+    if (type_it == param_types.end()) {
+      result = NamedBindResult::UNKNOWN_NAME;
+      break;
+    }
+
+    duckdb::Value bound;
+    if (!nif::term_to_value(env, value, type_it->second, bound)) {
+      result = NamedBindResult::INVALID_VALUE;
+      break;
+    }
+
+    sink.emplace(duckdb::Identifier(failing_name), duckdb::BoundParameterData(std::move(bound)));
+    enif_map_iterator_next(env, &iter);
+  }
+
+  enif_map_iterator_destroy(env, &iter);
+  return result;
+}
+
+static ERL_NIF_TERM
+named_bind_error(ErlNifEnv* env, NamedBindResult result, const std::string& name) {
+  switch (result) {
+    case NamedBindResult::UNKNOWN_NAME:
+      return nif::make_error_tuple(env, "unknown named parameter \"" + name + "\"");
+    case NamedBindResult::INVALID_VALUE:
+      return nif::make_error_tuple(env, "invalid value for named parameter \"" + name + "\"");
+    default:
+      return nif::make_error_tuple(env, "invalid named parameter name");
+  }
+}
+
+static bool
+bind_positional_values(ErlNifEnv* env, ERL_NIF_TERM term,
+                       duckdb::case_insensitive_map_t<duckdb::LogicalType>& param_types,
+                       duckdb::vector<duckdb::Value>& sink,
+                       std::string& error_message) {
+  ERL_NIF_TERM item, items = term;
+  int arg_idx = 0;
+
+  while (enif_get_list_cell(env, items, &item, &items)) {
+    duckdb::Value value;
+    auto arg_idx_str = std::to_string(arg_idx + 1);
+    if (!nif::term_to_value(env, item, param_types[arg_idx_str], value)) {
+      error_message = "invalid type of parameter #" + arg_idx_str;
+      return false;
+    }
+    sink.push_back(std::move(value));
+    arg_idx++;
+  }
+
+  return true;
+}
+
 //
 // This is trying to execute multiple statements sql with parameters
 // looks like this is not possible yet.
@@ -235,30 +311,34 @@ query_with_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return nif::make_error_tuple(env, statement->GetErrorObject().Message());
 
   duckdb::vector<duckdb::Value> query_params;
+  duckdb::identifier_map_t<duckdb::BoundParameterData> named_values;
 
   duckdb::case_insensitive_map_t<duckdb::LogicalType> params_types = statement->GetExpectedParameterTypes();
 
-  if (params_types.size()) {
-    if (argc != 3)
-      return enif_make_badarg(env);
+  duckdb::unique_ptr<duckdb::QueryResult> result;
 
-    if (!enif_is_list(env, argv[2]))
-      return enif_make_badarg(env);
+  if (argc == 3 && enif_is_map(env, argv[2])) {
+    std::string failing_name;
+    auto named_result = bind_named_values(env, argv[2], params_types, named_values, failing_name);
+    if (named_result != NamedBindResult::OK)
+      return named_bind_error(env, named_result, failing_name);
 
-    ERL_NIF_TERM item, items;
-    items = argv[2];
-    int arg_idx = 0;
-    while(enif_get_list_cell(env, items, &item, &items)) {
-      duckdb::Value value;
-      auto arg_idx_str = std::to_string(arg_idx + 1);
-      if (!nif::term_to_value(env, item, params_types[arg_idx_str], value))
-        return nif::make_error_tuple(env, "invalid type of parameter #" + arg_idx_str);
-      query_params.push_back(std::move(value));
-      arg_idx++;
+    result = statement->Execute(named_values);
+  } else {
+    if (params_types.size()) {
+      if (argc != 3)
+        return enif_make_badarg(env);
+
+      if (!enif_is_list(env, argv[2]))
+        return enif_make_badarg(env);
+
+      std::string error_message;
+      if (!bind_positional_values(env, argv[2], params_types, query_params, error_message))
+        return nif::make_error_tuple(env, error_message);
     }
-  }
 
-  duckdb::unique_ptr<duckdb::QueryResult> result = statement->Execute(query_params);
+    result = statement->Execute(query_params);
+  }
 
   if (result->HasError())
     return nif::make_error_tuple(env, result->GetErrorObject().Message());
@@ -298,29 +378,33 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_badarg(env);
 
   duckdb::vector<duckdb::Value> query_params;
+  duckdb::identifier_map_t<duckdb::BoundParameterData> named_values;
   duckdb::case_insensitive_map_t<duckdb::LogicalType> params_types = stmtres->data->GetExpectedParameterTypes();
 
-  if (params_types.size()) {
-    if (argc != 2)
-      return enif_make_badarg(env);
+  duckdb::unique_ptr<duckdb::QueryResult> result;
 
-    if (!enif_is_list(env, argv[1]))
-      return enif_make_badarg(env);
+  if (argc == 2 && enif_is_map(env, argv[1])) {
+    std::string failing_name;
+    auto named_result = bind_named_values(env, argv[1], params_types, named_values, failing_name);
+    if (named_result != NamedBindResult::OK)
+      return named_bind_error(env, named_result, failing_name);
 
-    ERL_NIF_TERM item, items;
-    items = argv[1];
-    int arg_idx = 0;
-    while(enif_get_list_cell(env, items, &item, &items)) {
-      duckdb::Value value;
-      auto arg_idx_str = std::to_string(arg_idx + 1);
-      if (!nif::term_to_value(env, item, params_types[arg_idx_str], value))
-        return nif::make_error_tuple(env, "invalid type of parameter #" + arg_idx_str);
-      query_params.push_back(std::move(value));
-      arg_idx++;
+    result = stmtres->data->Execute(named_values);
+  } else {
+    if (params_types.size()) {
+      if (argc != 2)
+        return enif_make_badarg(env);
+
+      if (!enif_is_list(env, argv[1]))
+        return enif_make_badarg(env);
+
+      std::string error_message;
+      if (!bind_positional_values(env, argv[1], params_types, query_params, error_message))
+        return nif::make_error_tuple(env, error_message);
     }
-  }
 
-  duckdb::unique_ptr<duckdb::QueryResult> result = stmtres->data->Execute(query_params);
+    result = stmtres->data->Execute(query_params);
+  }
 
   if (result->HasError())
     return nif::make_error_tuple(env, result->GetErrorObject().Message());
@@ -330,6 +414,45 @@ execute_statement(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     std::move(result));
 
   return nif::make_ok_tuple(env, resource_builder.make_and_release_resource(env));
+}
+
+static ERL_NIF_TERM
+get_named_parameters(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+  if (argc != 1)
+    return enif_make_badarg(env);
+
+  auto stmtres = get_resource<duckdb::PreparedStatement>(env, argv[0]);
+  if (!stmtres)
+    return enif_make_badarg(env);
+
+  auto& named = stmtres->data->GetNamedParameterMap();
+  auto types = stmtres->data->GetExpectedParameterTypes();
+
+  std::vector<ERL_NIF_TERM> params;
+  params.reserve(named.size());
+
+  for (auto& entry : named) {
+    auto& name = entry.first.GetIdentifierName();
+
+    // positional parameters show up in the named map as "1", "2", ...
+    if (!name.empty() && name.find_first_not_of("0123456789") == std::string::npos)
+      continue;
+
+    auto type_it = types.find(name);
+
+    ERL_NIF_TERM type_term = type_it == types.end()
+      ? nif::make_atom(env, "unknown")
+      : nif::logical_type_to_term(env, type_it->second);
+
+    params.push_back(enif_make_tuple2(env,
+      nif::make_binary_term(env, name),
+      type_term));
+  }
+
+  if (params.empty())
+    return enif_make_list(env, 0);
+
+  return enif_make_list_from_array(env, params.data(), params.size());
 }
 
 static ERL_NIF_TERM
@@ -439,7 +562,7 @@ columns(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
   if (duckdb::idx_t columns_count = result->data->ColumnCount()) {
     std::vector<ERL_NIF_TERM> columns(columns_count);
     for (duckdb::idx_t col = 0; col < columns_count; col++) {
-      const duckdb::string &column_name = result->data->ColumnName(col).GetIdentifierName();
+      const duckdb::string& column_name = result->data->ColumnName(col).GetIdentifierName();
       columns[col] = nif::make_binary_term(env, column_name);
     }
     return enif_make_list_from_array(env, &columns[0], columns.size());
@@ -834,6 +957,7 @@ static ErlNifFunc nif_funcs[] = {
   {"prepare_statement", 2, prepare_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 1, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"execute_statement", 2, execute_statement, ERL_NIF_DIRTY_JOB_IO_BOUND},
+  {"get_named_parameters", 1, get_named_parameters, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"begin_transaction", 1, begin_transaction, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"commit", 1, commit, ERL_NIF_DIRTY_JOB_IO_BOUND},
   {"rollback", 1, rollback, ERL_NIF_DIRTY_JOB_IO_BOUND},

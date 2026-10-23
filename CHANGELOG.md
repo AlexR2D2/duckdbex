@@ -4,6 +4,13 @@
 - [DuckDB v2.0.0](https://github.com/duckdb/duckdb/releases/tag/v2.0.0) ([#60](https://github.com/AlexR2D2/duckdbex/pull/60))
 - Building from source now requires a C++17 compiler.
 - Some DuckDB error messages changed text (e.g. missing prepared statement parameters); code matching on error strings may need updating.
+- Added named parameters: `Duckdbex.query/3` and `execute_statement/2` accept a map keyed by parameter name (`$name`), plus `get_named_parameters/1` for introspection.
+- Added support for the new `TUPLE` and `TIMESTAMPTZ_NS` types. `TUPLE` is returned as an Elixir list and accepted as a list or a tuple, `TIMESTAMPTZ_NS` keeps nanosecond precision.
+- Added support for `VARIANT` and `GEOMETRY` values. `GEOMETRY` is exposed as WKB binaries, and `VARIANT` accepts nested lists and maps as parameters.
+- STRUCT parameters now match map keys case-insensitively, following DuckDB 2.0 `Identifier` semantics.
+- Statically linked `json` and `icu`, so JSON functions and timezone/collation functions work without `LOAD`.
+- Documented the Quack client-server protocol, with an opt-in end-to-end test (`mix test --include quack`).
+- The generated DuckDB sources are no longer committed or shipped in the Hex package; they are regenerated on demand by `bin/regen_duckdb.sh` when `c_src/duckdb.tar.gz` is missing. A source build therefore needs `gh`, `python3` and `make`.
 
 0.5.2
 - [DuckDB v1.5.6 Bugfix Release](https://github.com/duckdb/duckdb/releases/tag/v1.5.6)

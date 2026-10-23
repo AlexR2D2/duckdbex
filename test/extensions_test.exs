@@ -38,17 +38,41 @@ defmodule Duckdbex.ExtensionsTest do
   end
 
   describe "statically linked extensions" do
-    test "core_functions and parquet report STATICALLY_LINKED", %{conn: conn} do
+    test "build baseline extensions report STATICALLY_LINKED", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(
                  conn,
-                 "SELECT extension_name, install_mode FROM duckdb_extensions() WHERE extension_name IN ('core_functions', 'parquet') ORDER BY extension_name;"
+                 "SELECT extension_name, install_mode FROM duckdb_extensions() WHERE extension_name IN ('core_functions', 'parquet', 'json', 'icu') ORDER BY extension_name;"
                )
 
       assert [
                ["core_functions", "STATICALLY_LINKED"],
+               ["icu", "STATICALLY_LINKED"],
+               ["json", "STATICALLY_LINKED"],
                ["parquet", "STATICALLY_LINKED"]
              ] = Duckdbex.fetch_all(r)
+    end
+  end
+
+  describe "json" do
+    test "json functions work without LOAD", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT json_valid('{\"a\": 1}');")
+      assert [[true]] = Duckdbex.fetch_all(r)
+
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT '{\"a\": 1}'::JSON::VARIANT;")
+      assert [[%{"a" => 1}]] = Duckdbex.fetch_all(r)
+    end
+  end
+
+  describe "icu" do
+    test "timezone functions work without LOAD", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(
+                 conn,
+                 "SELECT timezone('America/New_York', TIMESTAMPTZ '2024-01-15 12:00:00+00');"
+               )
+
+      assert [[{{2024, 1, 15}, {7, 0, 0, 0}}]] = Duckdbex.fetch_all(r)
     end
   end
 

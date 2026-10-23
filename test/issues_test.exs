@@ -208,8 +208,7 @@ defmodule Duckdbex.IssuesTest do
     test "DuckDB did't return expected parameters for table functions", %{conn: conn} do
       {:ok, _} = Duckdbex.query(conn, "SELECT bin('goose');")
 
-      {:error,
-       "Invalid Input Error: Values were not provided for the following parameters: 1"} =
+      {:error, "Invalid Input Error: Values were not provided for the following parameters: 1"} =
         Duckdbex.query(conn, "SELECT bin($1);", ["goose"])
 
       {:ok, _} =

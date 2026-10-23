@@ -49,6 +49,8 @@ ERL_NIF_TERM nif::logical_type_to_term(ErlNifEnv* env, const duckdb::LogicalType
       return make_atom(env, "timestamp");
     case duckdb::LogicalTypeId::TIMESTAMP_TZ:
       return make_atom(env, "timestamp_tz");
+    case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS:
+      return make_atom(env, "timestamp_tz_ns");
     case duckdb::LogicalTypeId::TIMESTAMP_NS:
       return make_atom(env, "timestamp_ns");
     case duckdb::LogicalTypeId::TIMESTAMP_MS:
@@ -69,13 +71,36 @@ ERL_NIF_TERM nif::logical_type_to_term(ErlNifEnv* env, const duckdb::LogicalType
       return make_atom(env, "map");
     case duckdb::LogicalTypeId::STRUCT:
       return make_atom(env, "struct");
+    case duckdb::LogicalTypeId::TUPLE:
+      return make_atom(env, "tuple");
     case duckdb::LogicalTypeId::UNION:
       return make_atom(env, "union");
+    case duckdb::LogicalTypeId::VARIANT:
+      return make_atom(env, "variant");
+    case duckdb::LogicalTypeId::GEOMETRY:
+      return make_atom(env, "geometry");
     case duckdb::LogicalTypeId::ANY:
       return make_atom(env, "any");
     default:
       return make_atom(env, "unknown");
   }
+}
+
+static bool children_to_term(ErlNifEnv* env, const std::vector<duckdb::Value>& values, ERL_NIF_TERM& sink) {
+  if (values.empty()) {
+    sink = enif_make_list(env, 0);
+    return true;
+  }
+
+  std::vector<ERL_NIF_TERM> terms(values.size());
+
+  for (size_t i = 0; i < values.size(); i++) {
+    if (!nif::value_to_term(env, values[i], terms[i]))
+      return false;
+  }
+
+  sink = enif_make_list_from_array(env, &terms[0], terms.size());
+  return true;
 }
 
 bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM& sink) {
@@ -110,6 +135,11 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
     case duckdb::LogicalTypeId::BLOB: {
         auto blob = duckdb::StringValue::Get(value);
         sink = make_binary_term(env, blob);
+        return true;
+      }
+    case duckdb::LogicalTypeId::GEOMETRY: {
+        auto& geometry = duckdb::StringValue::Get(value);
+        sink = make_binary_term(env, geometry.data(), geometry.size());
         return true;
       }
     case duckdb::LogicalTypeId::DATE: {
@@ -325,6 +355,37 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
 
         return true;
       }
+    case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS: {
+        duckdb::timestamp_ns_t timestamp_ns(duckdb::TimestampTZNSValue::Get(value));
+
+        duckdb::date_t out_date;
+        duckdb::dtime_t out_time;
+        int32_t out_nanos = 0;
+
+        duckdb::Timestamp::Convert(timestamp_ns, out_date, out_time, out_nanos);
+
+        int32_t out_year, out_month, out_day;
+        duckdb::Date::Convert(out_date, out_year, out_month, out_day);
+
+        int32_t out_hour, out_min, out_sec, out_micros;
+        duckdb::Time::Convert(out_time, out_hour, out_min, out_sec, out_micros);
+
+        int32_t nanoseconds = out_micros * duckdb::Interval::NANOS_PER_MICRO + out_nanos;
+
+        sink = enif_make_tuple2(env,
+          enif_make_tuple3(env,
+            enif_make_int(env, out_year),
+            enif_make_int(env, out_month),
+            enif_make_int(env, out_day)),
+          enif_make_tuple4(env,
+            enif_make_int(env, out_hour),
+            enif_make_int(env, out_min),
+            enif_make_int(env, out_sec),
+            enif_make_int(env, nanoseconds))
+        );
+
+        return true;
+      }
     case duckdb::LogicalTypeId::TIMESTAMP_MS: {
         auto date_value = value.DefaultCastAs(duckdb::LogicalType::DATE);
         auto time_value = value.DefaultCastAs(duckdb::LogicalType::TIME);
@@ -427,44 +488,13 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         return true;
       }
     case duckdb::LogicalTypeId::LIST: {
-        auto& values = duckdb::ListValue::GetChildren(value);
-
-        if (!values.size()) {
-          sink = enif_make_list(env, 0);
-          return true;
-        }
-
-        std::vector<ERL_NIF_TERM> terms(values.size());
-
-        for (size_t i = 0; i < values.size(); i++) {
-          ERL_NIF_TERM val_term;
-          if (!value_to_term(env, values[i], val_term))
-            return false;
-          terms[i] = val_term;
-        }
-
-        sink = enif_make_list_from_array(env, &terms[0], terms.size());
-        return true;
+        return children_to_term(env, duckdb::ListValue::GetChildren(value), sink);
       }
     case duckdb::LogicalTypeId::ARRAY: {
-        auto& values = duckdb::ArrayValue::GetChildren(value);
-
-        if (!values.size()) {
-          sink = enif_make_list(env, 0);
-          return true;
-        }
-
-        std::vector<ERL_NIF_TERM> terms(values.size());
-
-        for (size_t i = 0; i < values.size(); i++) {
-          ERL_NIF_TERM val_term;
-          if (!value_to_term(env, values[i], val_term))
-            return false;
-          terms[i] = val_term;
-        }
-
-        sink = enif_make_list_from_array(env, &terms[0], terms.size());
-        return true;
+        return children_to_term(env, duckdb::ArrayValue::GetChildren(value), sink);
+      }
+    case duckdb::LogicalTypeId::TUPLE: {
+        return children_to_term(env, duckdb::StructValue::GetChildren(value), sink);
       }
     case duckdb::LogicalTypeId::MAP: {
         std::vector<duckdb::Value> pairs = duckdb::MapValue::GetChildren(value);
@@ -512,6 +542,9 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         }
 
         return enif_make_map_from_arrays(env, &keys_array[0], &values_array[0], names.size(), &sink);
+      }
+    case duckdb::LogicalTypeId::VARIANT: {
+        return nif::value_to_term(env, duckdb::VariantValue::GetValue(value), sink);
       }
     case duckdb::LogicalTypeId::UNION: {
       std::vector<ERL_NIF_TERM> keys_array(1);

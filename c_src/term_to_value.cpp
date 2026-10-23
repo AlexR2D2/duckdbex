@@ -886,21 +886,41 @@ bool nif::term_to_map(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalTy
 }
 
 bool nif::term_to_struct(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& map_type, duckdb::Value& sink) {
-  size_t map_size = 0;
-  if (!enif_get_map_size(env, term, &map_size))
+  duckdb::identifier_map_t<ERL_NIF_TERM> entries;
+
+  ErlNifMapIterator iter;
+  if (!enif_map_iterator_create(env, term, &iter, ERL_NIF_MAP_ITERATOR_FIRST))
+    return false;
+
+  bool map_ok = true;
+  ERL_NIF_TERM key, value;
+  while (enif_map_iterator_get_pair(env, &iter, &key, &value)) {
+    std::string name;
+    if (!nif::get_string(env, key, name)) {
+      map_ok = false;
+      break;
+    }
+
+    entries.emplace(duckdb::Identifier(name), value);
+    enif_map_iterator_next(env, &iter);
+  }
+
+  enif_map_iterator_destroy(env, &iter);
+
+  if (!map_ok)
     return false;
 
   duckdb::child_list_t<duckdb::Value> children;
 
-  for (duckdb::idx_t child_idx = 0; child_idx < map_size; child_idx++) {
-    auto field_name = duckdb::StructType::GetChildName(map_type, child_idx);
+  for (duckdb::idx_t child_idx = 0; child_idx < duckdb::StructType::GetChildCount(map_type); child_idx++) {
+    auto& field_name = duckdb::StructType::GetChildName(map_type, child_idx);
+    auto entry = entries.find(field_name);
 
-    ERL_NIF_TERM value_term;
-    if (!enif_get_map_value(env, term, nif::make_binary_term(env, field_name.GetIdentifierName()), &value_term))
+    if (entry == entries.end())
       return false;
 
     duckdb::Value value_sink;
-    if (!term_to_value(env, value_term, duckdb::StructType::GetChildType(map_type, child_idx), value_sink))
+    if (!term_to_value(env, entry->second, duckdb::StructType::GetChildType(map_type, child_idx), value_sink))
       return false;
 
     children.push_back(make_pair(field_name, std::move(value_sink)));
@@ -941,6 +961,172 @@ bool nif::term_to_union(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
 
   sink = duckdb::Value::UNION(member_types, union_tag_index, std::move(union_value));
 
+  return true;
+}
+
+bool nif::term_to_tuple(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& tuple_type, duckdb::Value& sink) {
+  const duckdb::idx_t child_count = duckdb::StructType::GetChildCount(tuple_type);
+
+  duckdb::vector<duckdb::Value> children;
+
+  if (enif_is_tuple(env, term)) {
+    int arity = 0;
+    const ERL_NIF_TERM* elements = nullptr;
+
+    if (!enif_get_tuple(env, term, &arity, &elements) || (duckdb::idx_t)arity != child_count)
+      return false;
+
+    children.reserve(child_count);
+
+    for (duckdb::idx_t child_idx = 0; child_idx < child_count; child_idx++) {
+      duckdb::Value child;
+      if (!term_to_value(env, elements[child_idx], duckdb::StructType::GetChildType(tuple_type, child_idx), child))
+        return false;
+
+      children.push_back(std::move(child));
+    }
+  } else if (enif_is_list(env, term)) {
+    ERL_NIF_TERM head, tail = term;
+    while (enif_get_list_cell(env, tail, &head, &tail)) {
+      if (children.size() >= child_count)
+        return false;
+
+      duckdb::Value child;
+      if (!term_to_value(env, head, duckdb::StructType::GetChildType(tuple_type, children.size()), child))
+        return false;
+
+      children.push_back(std::move(child));
+    }
+
+    if (children.size() != child_count)
+      return false;
+  } else {
+    return false;
+  }
+
+  sink = duckdb::Value::TUPLE(std::move(children));
+  return true;
+}
+
+bool nif::term_to_timestamp_tz_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  ErlNifBinary bin;
+
+  if (enif_is_tuple(env, term)) {
+    int year, month, day, hour, minute, second, nanosecond = 0;
+    if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, nanosecond))
+      return false;
+
+    int32_t micros = nanosecond / duckdb::Interval::NANOS_PER_MICRO;
+    int32_t nanos = nanosecond % duckdb::Interval::NANOS_PER_MICRO;
+
+    const duckdb::timestamp_t timestamp = duckdb::Timestamp::FromDatetime(
+      duckdb::Date::FromDate(year, month, day),
+      duckdb::Time::FromTime(hour, minute, second, micros));
+
+    duckdb::timestamp_ns_t timestamp_ns;
+    if (!duckdb::Timestamp::TryFromTimestampNanos(timestamp, nanos, timestamp_ns))
+      return false;
+
+    sink = duckdb::Value::TIMESTAMPTZNS(duckdb::timestamp_tz_ns_t(timestamp_ns));
+    return true;
+  } else if (enif_inspect_binary(env, term, &bin)) {
+    duckdb::timestamp_ns_t result;
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, true)) {
+      sink = duckdb::Value::TIMESTAMPTZNS(duckdb::timestamp_tz_ns_t(result));
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static bool
+term_to_variant_source(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  if (nif::term_to_any(env, term, sink))
+    return true;
+
+  if (enif_is_list(env, term)) {
+    duckdb::vector<duckdb::Value> children;
+
+    ERL_NIF_TERM head, tail = term;
+    while (enif_get_list_cell(env, tail, &head, &tail)) {
+      duckdb::Value child;
+      if (!term_to_variant_source(env, head, child))
+        return false;
+      children.push_back(std::move(child));
+    }
+
+    if (children.empty()) {
+      sink = duckdb::Value::LIST(duckdb::LogicalType::SQLNULL, duckdb::vector<duckdb::Value>());
+    } else {
+      sink = duckdb::Value::LIST(std::move(children));
+    }
+
+    return true;
+  }
+
+  if (enif_is_map(env, term)) {
+    duckdb::child_list_t<duckdb::Value> children;
+
+    ErlNifMapIterator iter;
+    if (!enif_map_iterator_create(env, term, &iter, ERL_NIF_MAP_ITERATOR_FIRST))
+      return false;
+
+    bool map_ok = true;
+    ERL_NIF_TERM key, value;
+    while (enif_map_iterator_get_pair(env, &iter, &key, &value)) {
+      std::string name;
+      if (!nif::get_string(env, key, name)) {
+        map_ok = false;
+        break;
+      }
+
+      duckdb::Value child;
+      if (!term_to_variant_source(env, value, child)) {
+        map_ok = false;
+        break;
+      }
+
+      children.emplace_back(duckdb::Identifier(name), std::move(child));
+      enif_map_iterator_next(env, &iter);
+    }
+
+    enif_map_iterator_destroy(env, &iter);
+
+    if (!map_ok)
+      return false;
+
+    sink = duckdb::Value::STRUCT(std::move(children));
+    return true;
+  }
+
+  return false;
+}
+
+bool nif::term_to_variant(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  duckdb::Value source;
+
+  try {
+    if (!term_to_variant_source(env, term, source))
+      return false;
+
+    auto variant = source.DefaultTryCastAs(duckdb::LogicalType::VARIANT());
+    if (!variant)
+      return false;
+
+    sink = std::move(*variant);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+bool nif::term_to_geometry(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  ErlNifBinary bin;
+  if (!enif_inspect_binary(env, term, &bin))
+    return false;
+
+  sink = duckdb::Value::GEOMETRY(bin.data, bin.size);
   return true;
 }
 
@@ -1022,6 +1208,9 @@ bool nif::term_to_value(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
     case duckdb::LogicalTypeId::TIMESTAMP_TZ:
       return term_to_timestamp_tz(env, term, sink);
 
+    case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS:
+      return term_to_timestamp_tz_ns(env, term, sink);
+
     case duckdb::LogicalTypeId::TIMESTAMP_NS:
       return term_to_timestamp_ns(env, term, sink);
 
@@ -1033,6 +1222,9 @@ bool nif::term_to_value(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
 
     case duckdb::LogicalTypeId::BLOB:
       return term_to_blob(env, term, sink);
+
+    case duckdb::LogicalTypeId::GEOMETRY:
+      return term_to_geometry(env, term, sink);
 
     case duckdb::LogicalTypeId::INTERVAL:
       return term_to_interval(env, term, sink);
@@ -1052,8 +1244,14 @@ bool nif::term_to_value(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
     case duckdb::LogicalTypeId::STRUCT:
       return term_to_struct(env, term, value_type, sink);
 
+    case duckdb::LogicalTypeId::TUPLE:
+      return term_to_tuple(env, term, value_type, sink);
+
     case duckdb::LogicalTypeId::UNION:
       return term_to_union(env, term, value_type, sink);
+
+    case duckdb::LogicalTypeId::VARIANT:
+      return term_to_variant(env, term, sink);
 
     default:
       return false;

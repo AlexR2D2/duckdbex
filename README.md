@@ -8,7 +8,7 @@ To find out where and why you could use DuckDB, please see [why DuckDB](https://
 
 Also, you may find useful the DuckDB [documentation](https://duckdb.org/docs/sql/introduction).
 
-The library vendors the DuckDB C++ sources in `c_src/duckdb/`. That tree is 100% generated from the upstream [duckdb/duckdb](https://github.com/duckdb/duckdb) repository by DuckDB's own `scripts/package_build.py` — see [`bin/regen_duckdb.sh`](bin/regen_duckdb.sh) and [`c_src/duckdb/PROVENANCE.md`](c_src/duckdb/PROVENANCE.md) for the exact version, source id and regeneration workflow. The build statically links the `core_functions` and `parquet` extensions (the upstream build baseline), so functions like `now()` / `version()` and Parquet import/export work out of the box. Other extensions like [JSON](https://duckdb.org/docs/extensions/json), [Full Text Search](https://duckdb.org/docs/extensions/full_text_search), [HTTPFS](https://duckdb.org/docs/extensions/httpfs), [SQLite Scanner](https://duckdb.org/docs/extensions/sqlite_scanner), [Postgres Scanner](https://duckdb.org/docs/extensions/postgres_scanner) and [Substrait](https://duckdb.org/docs/extensions/substrait) are not bundled.
+The library vendors the DuckDB C++ sources, generated from the upstream [duckdb/duckdb](https://github.com/duckdb/duckdb) repository by DuckDB's own `scripts/package_build.py` — see [`bin/regen_duckdb.sh`](bin/regen_duckdb.sh) and [`c_src/duckdb/PROVENANCE.md`](c_src/duckdb/PROVENANCE.md) for the exact version, source id and regeneration workflow. The generated tree is not committed; `mix compile` regenerates it when `c_src/duckdb.tar.gz` is missing (requires `gh`, `python3` and `make`). The build statically links `core_functions`, `parquet`, `json` and `icu` (the upstream build baseline), so functions like `now()` / `version()`, Parquet import/export, JSON functions and timezone/collation support work out of the box. Other extensions like [Full Text Search](https://duckdb.org/docs/extensions/full_text_search), [HTTPFS](https://duckdb.org/docs/extensions/httpfs), [SQLite Scanner](https://duckdb.org/docs/extensions/sqlite_scanner), [Postgres Scanner](https://duckdb.org/docs/extensions/postgres_scanner) and [Substrait](https://duckdb.org/docs/extensions/substrait) are not bundled.
 
 All NIF functions implemented as [**Dirty NIF**](https://www.erlang.org/doc/man/erl_nif.html)
 
@@ -22,10 +22,12 @@ by adding `duckdbex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:duckdbex, "~> 0.4.0"}
+    {:duckdbex, "~> 0.6.0"}
   ]
 end
 ```
+
+The Hex package ships precompiled NIFs. Building from a checkout compiles DuckDB from source; the first build regenerates the vendored sources and takes several minutes.
 
 # Usage
 
@@ -209,6 +211,21 @@ or with parameters
 # fetch result ...
 ```
 
+### Named parameters
+
+DuckDB 2.0 supports named parameters using the `$name` syntax. Pass them as a map, keyed by
+parameter name. Names are matched case-insensitively.
+
+```elixir
+{:ok, r} = Duckdbex.query(conn, "SELECT $name::VARCHAR;", %{"name" => "world"})
+[["world"]] = Duckdbex.fetch_all(r)
+
+# prepared statements work the same way
+{:ok, stmt_ref} = Duckdbex.prepare_statement(conn, "SELECT $value::INTEGER;")
+[{"value", :integer}] = Duckdbex.get_named_parameters(stmt_ref)
+{:ok, r} = Duckdbex.execute_statement(stmt_ref, %{"value" => 1})
+```
+
 ## Importing Data
 
 DuckDB provides several methods that allows you to easily and efficiently insert data to the database.
@@ -333,9 +350,9 @@ keep it reachable for subsequent operations and close the appender before releas
 
 ## Data Types
 
-Along with [General-Purpose Data types](https://duckdb.org/docs/sql/data_types/overview) DuckDB supports three nested data types: [LIST](https://duckdb.org/docs/sql/data_types/list), [STRUCT](https://duckdb.org/docs/sql/data_types/struct) and [MAP](https://duckdb.org/docs/sql/data_types/map). There is also [UNION](https://duckdb.org/docs/sql/data_types/union) data type what implemented on top of STRUCT types, and simply keep the “tag” as the first entry. Each supports different use cases and has a different structure.
+Along with [General-Purpose Data types](https://duckdb.org/docs/sql/data_types/overview) DuckDB supports several nested data types: [LIST](https://duckdb.org/docs/sql/data_types/list), [STRUCT](https://duckdb.org/docs/sql/data_types/struct), TUPLE, [MAP](https://duckdb.org/docs/sql/data_types/map) and [VARIANT](https://duckdb.org/docs/2.0/sql/data_types/variant.html). There is also [UNION](https://duckdb.org/docs/sql/data_types/union) data type what implemented on top of STRUCT types, and simply keep the “tag” as the first entry. [GEOMETRY](https://duckdb.org/docs/2.0/sql/data_types/geometry.html) values are exposed as WKB binaries. Each supports different use cases and has a different structure.
 
-**You can find more examples about how to work with different types [here](https://github.com/AlexR2D2/duckdbex/test/nif/types_test.exs).**
+**You can find more examples about how to work with different types [here](https://github.com/AlexR2D2/duckdbex/test/types_test.exs).**
 
 ### LIST
 
@@ -376,6 +393,20 @@ Duckdbex.query(conn, "INSERT INTO map_table VALUES (map([1, 2], [2.98, 3.14])), 
 [[[{1, 2.98}, {2, 3.14}]], [[{3, 9.8}, {4, 1.6}]]] = Duckdbex.fetch_all(r)
 ```
 
+### TUPLE
+
+A TUPLE is an unnamed STRUCT: its fields are positional and have a fixed arity. Results are returned as an Elixir list, following LIST/ARRAY; parameters accept either a list or a tuple.
+
+```elixir
+{:ok, r} = Duckdbex.query(conn, "SELECT (1, 'a')::TUPLE(INTEGER, VARCHAR);")
+[[[1, "a"]]] = Duckdbex.fetch_all(r)
+
+{:ok, r} = Duckdbex.query(conn, "SELECT $1::TUPLE(INTEGER, VARCHAR);", [{1, "a"}])
+[[[1, "a"]]] = Duckdbex.fetch_all(r)
+```
+
+Results stay a list rather than a tuple because Elixir tuples already carry other meanings here (`UNION` is `{tag, value}`, dates and timestamps are tuples too).
+
 ### UNION
 
 A UNION type (not to be confused with the SQL UNION operator) is a nested type capable of holding one of multiple “alternative” values, much like the union in C. The main difference being that these UNION types are tagged unions and thus always carry a discriminator “tag” which signals which alternative it is currently holding, even if the inner value itself is null. See more [here](https://duckdb.org/docs/sql/data_types/union).
@@ -386,6 +417,32 @@ A UNION type (not to be confused with the SQL UNION operator) is a nested type c
 {:ok, _} = Duckdbex.query(conn, "INSERT INTO tbl1 values (1) , ('two') , (union_value(str := 'three'));")
 {:ok, r} = Duckdbex.query(conn, "SELECT u from tbl1;")
 [[{"num", 1}], [{"str", "two"}], [{"str", "three"}]] = Duckdbex.fetch_all(r)
+```
+
+### VARIANT
+
+VARIANT holds a value of any type and maps to the corresponding Elixir value. Scalars (`nil`, booleans, numbers and strings), lists and maps can also be passed as parameters.
+See more [here](https://duckdb.org/docs/2.0/sql/data_types/variant.html).
+
+```elixir
+{:ok, r} = Duckdbex.query(conn, "SELECT CAST([1, 2] AS VARIANT);")
+[[[1, 2]]] = Duckdbex.fetch_all(r)
+
+{:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [%{"a" => [1, 2]}])
+[[%{"a" => [1, 2]}]] = Duckdbex.fetch_all(r)
+```
+
+### GEOMETRY
+
+GEOMETRY values are passed through as WKB binaries, as query results and as parameters alike.
+See more [here](https://duckdb.org/docs/2.0/sql/data_types/geometry.html).
+
+```elixir
+# WKB for POINT(1 2)
+wkb = <<1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 240, 63, 0, 0, 0, 0, 0, 0, 0, 64>>
+
+{:ok, r} = Duckdbex.query(conn, "SELECT $1::GEOMETRY;", [wkb])
+[[^wkb]] = Duckdbex.fetch_all(r)
 ```
 
 ### ENUM
@@ -502,3 +559,47 @@ And vice versa, if you should pass HUGEINT as argument to sql query, you should 
 ```
 
 Currently Duckdbex lib didn't convert automatically `hugeint_to_integer` for you because this is additional extra pass through your collection of rows which will be executed inside the library.
+
+## Remote access (Quack)
+
+DuckDB 2.0 ships the pre-release
+[Quack](https://github.com/duckdb/duckdb-quack) client-server protocol. It is a regular DuckDB
+extension, so duckdbex can serve a database and query it from another connection.
+
+```elixir
+# server
+{:ok, _} = Duckdbex.query(conn, "INSTALL quack; LOAD quack;")
+{:ok, _} = Duckdbex.query(conn, "CREATE TABLE main.hello (s VARCHAR);")
+{:ok, _} = Duckdbex.query(conn, "INSERT INTO main.hello VALUES ('world');")
+
+{:ok, r} = Duckdbex.query(conn, "CALL quack_serve('quack:localhost', token = 'secret');")
+[["quack:localhost", "http://localhost:9494", "secret"]] = Duckdbex.fetch_all(r)
+
+# client
+{:ok, _} = Duckdbex.query(client, "INSTALL quack; LOAD quack;")
+{:ok, _} = Duckdbex.query(client, "CREATE SECRET (TYPE quack, TOKEN 'secret');")
+{:ok, _} = Duckdbex.query(client, "ATTACH 'quack:localhost' AS remote;")
+
+{:ok, r} = Duckdbex.query(client, "SELECT * FROM remote.hello;")
+[["world"]] = Duckdbex.fetch_all(r)
+```
+
+`CALL quack_serve(...)` returns as soon as the server is listening; the server runs inside the
+DuckDB instance and stops when that instance is released. The end-to-end test is opt-in because it
+needs network access to install the extension: `mix test --include quack`.
+
+## Upgrading to DuckDB 2.0
+
+DuckDB 2.0 has a new storage format, so database files written by 2.0 cannot be opened by
+DuckDB 1.x. DuckDB 2.0 still reads and writes files created by earlier versions, so upgrading an
+existing database is safe as long as you do not need to go back.
+
+Other changes that affect duckdbex users:
+
+* The PEG parser is now the default. The single-arrow lambda syntax (`x -> x + 1`) is disabled;
+  use `lambda x: x + 1` or `SET lambda_syntax = 'enable_single_arrow';`.
+* Parser errors include source locations, and several DuckDB error messages were reworded.
+* Unnamed structs such as `row(1, 'a')` are now reported as `TUPLE` and arrive as an Elixir list.
+* `TUPLE`, `TIMESTAMPTZ_NS`, `VARIANT` and `GEOMETRY` conversions were added, and `json` plus
+  `icu` are now statically linked, so JSON functions (`'…'::JSON`, `json_extract`, …) and
+  timezone/collation functions work without `LOAD`.

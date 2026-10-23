@@ -39,3 +39,7 @@ duckdbex-*.tar
 CLAUDE.md
 notes/
 my_database.duckdb
+
+# Vendored DuckDB sources are regenerated, not committed (see README)
+/c_src/duckdb.tar.gz
+/build.rsp

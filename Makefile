@@ -4,6 +4,11 @@ DUCKDB_ARCHIVE = $(SRC_DIR)/duckdb.tar.gz
 DUCKDB_MANIFEST = $(DUCKDB_DIR)/.sources
 DUCKDB_ARCHIVE_CHECKSUM = $(DUCKDB_DIR)/.archive.checksum
 
+# The vendored sources are not committed; regenerate them from the DuckDB
+# release pinned in mix.exs when the archive is missing.
+DUCKDB_VERSION = $(shell sed -n 's/.*@duckdb_version "\(.*\)".*/\1/p' mix.exs)
+DUCKDB_REF ?= v$(DUCKDB_VERSION)
+
 CXXFLAGS = -O3 -std=c++17
 
 # Silence GCC's informational C++17 ABI notes (GCC 10.1 pair-passing change):
@@ -11,7 +16,9 @@ CXXFLAGS = -O3 -std=c++17
 CXXFLAGS += -Wno-psabi
 
 # Statically link the DuckDB build-baseline extensions (see
-# extension/extension_config.cmake upstream): core_functions and parquet.
+# extension/extension_config.cmake upstream): core_functions, parquet, json
+# and icu. The generated extension loader defaults the matching
+# DUCKDB_EXTENSION_*_LINKED macros to 1.
 CXXFLAGS += -DDUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED=1
 CXXFLAGS += -DDUCKDB_EXTENSION_PARQUET_LINKED=1
 
@@ -49,10 +56,6 @@ endif
 # (unity builds + directly referenced sources), plus the NIF files.
 # See c_src/duckdb/.sources for the generated list.
 GENERATED_SRC = $(shell test -f $(DUCKDB_MANIFEST) && cat $(DUCKDB_MANIFEST))
-# Since v2.0.0 package_build.py always lists the bundled jemalloc C sources.
-# DuckDB only uses them with -DDUCKDB_ENABLE_JEMALLOC (64-bit Linux), which
-# this build does not set, so skip them and keep the default allocator.
-GENERATED_SRC := $(filter-out third_party/jemalloc/%, $(GENERATED_SRC))
 NIF_SRC = $(SRC_DIR)/nif.cpp $(SRC_DIR)/config.cpp $(SRC_DIR)/term.cpp $(SRC_DIR)/term_to_value.cpp $(SRC_DIR)/value_to_term.cpp
 SRC = $(addprefix $(DUCKDB_DIR)/, $(GENERATED_SRC)) $(NIF_SRC)
 
@@ -77,6 +80,7 @@ $(PRIV_DIR)/%.o: $(SRC_DIR)/%.cpp | $$(@D)/.
 $(PRIV_DIR)/%.o: $(SRC_DIR)/%.cc | $$(@D)/.
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+
 $(LIB_NAME): $(OBJ)
 	$(CXX) $(LDFLAGS) $^ -o $@
 
@@ -85,9 +89,15 @@ all: prepare-duckdb
 
 build: $(PRIV_DIR) $(SRC) $(LIB_NAME)
 
-prepare-duckdb:
+$(DUCKDB_ARCHIVE):
+	bin/regen_duckdb.sh $(DUCKDB_REF)
+
+duckdb-sources:
+	bin/regen_duckdb.sh $(DUCKDB_REF)
+
+prepare-duckdb: $(DUCKDB_ARCHIVE)
 	@set -eu; \
-	test -f "$(DUCKDB_ARCHIVE)" || { echo "ERROR: missing $(DUCKDB_ARCHIVE)"; exit 1; }; \
+	test -f "$(DUCKDB_ARCHIVE)" || { echo "ERROR: missing $(DUCKDB_ARCHIVE), run make duckdb-sources"; exit 1; }; \
 	archive_checksum="$$(cksum < "$(DUCKDB_ARCHIVE)")"; \
 	installed_checksum="$$(cat "$(DUCKDB_ARCHIVE_CHECKSUM)" 2>/dev/null || true)"; \
 	if [ ! -f "$(DUCKDB_MANIFEST)" ] || [ "$$archive_checksum" != "$$installed_checksum" ]; then \
@@ -117,4 +127,4 @@ clean:
 	$(RM) -rf run $(OBJ)
 	$(RM) -f $(LIB_NAME)
 
-.PHONY: all build prepare-duckdb clean verify-sources
+.PHONY: all build prepare-duckdb duckdb-sources clean verify-sources

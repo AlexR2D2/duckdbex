@@ -1,47 +1,46 @@
-!IF [where /q Makefile.auto.win]
-# The file doesn't exist, so don't include it.
-!ELSE
+# Windows build for the DuckDB package-build source tree.
+#
+# The vendored DuckDB sources are generated on demand by bin/regen_duckdb.sh,
+# which produces c_src/duckdb/.sources and c_src/duckdb/.include_dirs.
+# This makefile is the MSVC/NMake counterpart of Makefile.
+
+!IF EXIST("Makefile.auto.win")
 !INCLUDE Makefile.auto.win
-!IF [del /f /q Makefile.auto.win] == 0
-!ENDIF
 !ENDIF
 
 NMAKE = nmake -$(MAKEFLAGS)
 
-SRC = c_src\duckdb\duckdb.cpp \
-  c_src\config.cpp \
-  c_src\nif.cpp \
-  c_src\term_to_value.cpp \
-  c_src\term.cpp \
-  c_src\value_to_term.cpp
-
-CPPFLAGS = -O2 $(CPPFLAGS)
-CPPFLAGS = -EHsc $(CPPFLAGS)
-
-# -Wall will emit a lot of warnings on Windows
-# CFLAGS = -Wall $(CFLAGS)
-CPPFLAGS = -Ic_src -Ic_src\duckdb $(CPPFLAGS)
-
-CPPFLAGS = -DNDEBUG=1 $(CPPFLAGS)
-
-# Set Erlang-specific compile flags
-!IFNDEF ERL_CFLAGS
-ERL_CFLAGS = -I"$(ERL_EI_INCLUDE_DIR)"
+!IFNDEF CXX
+CXX = cl
 !ENDIF
 
-all: clean priv\duckdb_nif.dll
+!IFNDEF ERTS_INCLUDE_PATH
+ERL_CFLAGS =
+!ELSE
+ERL_CFLAGS = -I"$(ERTS_INCLUDE_PATH)"
+!ENDIF
 
-clean:
-    del /f /q priv
+all: priv\duckdb_nif.dll
+
+!IF !EXIST("c_src\duckdb\.sources")
+!ERROR c_src\duckdb\.sources is missing. Run bin\regen_duckdb.sh v2.0.0 first (see README).
+!ENDIF
+
+build.rsp: c_src\duckdb\.sources c_src\duckdb\.include_dirs bin\win_build_rsp.ps1
+	powershell -NoProfile -ExecutionPolicy Bypass -File bin\win_build_rsp.ps1
 
 Makefile.auto.win:
-    erl -noshell -s init stop -eval "io:setopts(standard_io, [{encoding, unicode}]), io:format(\"ERTS_INCLUDE_PATH=~ts/erts-~ts/include/\", [code:root_dir(), erlang:system_info(version)])." > $@
+	erl -noshell -s init stop -eval "io:setopts(standard_io, [{encoding, unicode}]), io:format(\"ERTS_INCLUDE_PATH=~ts/erts-~ts/include/\", [code:root_dir(), erlang:system_info(version)])." > $@
 
 !IFDEF ERTS_INCLUDE_PATH
-priv\duckdb_nif.dll:
-    if NOT EXIST "priv" mkdir "priv"
-    $(CXX) $(ERL_CFLAGS) $(CPPFLAGS) -I"$(ERTS_INCLUDE_PATH)" -LD -MD -Fe$@ $(SRC)
+priv\duckdb_nif.dll: build.rsp
+	@if NOT EXIST "priv" mkdir "priv"
+	$(CXX) @build.rsp $(ERL_CFLAGS) /LD /Fe$@ /Fo:priv/
 !ELSE
-priv\duckdb_nif.dll: Makefile.auto.win
-    $(NMAKE) -F Makefile.win priv\duckdb_nif.dll
+priv\duckdb_nif.dll: Makefile.auto.win build.rsp
+	$(NMAKE) -F Makefile.win priv\duckdb_nif.dll
 !ENDIF
+
+clean:
+	@if EXIST "priv" rmdir /s /q "priv"
+	@if EXIST "build.rsp" del /f /q "build.rsp"
