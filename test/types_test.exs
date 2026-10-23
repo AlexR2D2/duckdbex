@@ -648,6 +648,33 @@ defmodule Duckdbex.TypesTest do
 
       assert [[{10000, 5, 3}]] = Duckdbex.fetch_all(r)
     end
+
+    # DECIMAL(10..18, _) is stored as INT64; its value must not be cut to 32 bits.
+    test "INT64-backed decimal output keeps 64 bits", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, """
+               SELECT 21474836.48::DECIMAL(10,2),
+                      123456789012.34::DECIMAL(18,2),
+                      -123456789012.34::DECIMAL(18,2),
+                      999999999999999999::DECIMAL(18,0)
+               """)
+
+      assert [
+               [
+                 {2_147_483_648, 10, 2},
+                 {12_345_678_901_234, 18, 2},
+                 {-12_345_678_901_234, 18, 2},
+                 {999_999_999_999_999_999, 18, 0}
+               ]
+             ] = Duckdbex.fetch_all(r)
+    end
+
+    test "INT64-backed decimal round-trips", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT $1::DECIMAL(18,2)", [{12_345_678_901_234, 18, 2}])
+
+      assert [[{12_345_678_901_234, 18, 2}]] = Duckdbex.fetch_all(r)
+    end
   end
 
   # INTERVAL represent periods of time that can be added to or subtracted from DATE, TIMESTAMP, TIMESTAMPTZ, or TIME values.

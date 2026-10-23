@@ -159,7 +159,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
           return true;
         } else if (internal_type == duckdb::PhysicalType::INT64) {
           sink = enif_make_tuple3(env,
-            enif_make_int(env, duckdb::BigIntValue::Get(value)),
+            enif_make_int64(env, duckdb::BigIntValue::Get(value)),
             enif_make_uint(env, width),
             enif_make_uint(env, scale));
           return true;
