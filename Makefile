@@ -56,6 +56,10 @@ endif
 # (unity builds + directly referenced sources), plus the NIF files.
 # See c_src/duckdb/.sources for the generated list.
 GENERATED_SRC = $(shell test -f $(DUCKDB_MANIFEST) && cat $(DUCKDB_MANIFEST))
+# Since v2.0.0 package_build.py always lists the bundled jemalloc C sources.
+# DuckDB only uses them with -DDUCKDB_ENABLE_JEMALLOC (64-bit Linux), which
+# this build does not set, so skip them and keep the default allocator.
+GENERATED_SRC := $(filter-out third_party/jemalloc/%, $(GENERATED_SRC))
 NIF_SRC = $(SRC_DIR)/nif.cpp $(SRC_DIR)/config.cpp $(SRC_DIR)/term.cpp $(SRC_DIR)/term_to_value.cpp $(SRC_DIR)/value_to_term.cpp
 SRC = $(addprefix $(DUCKDB_DIR)/, $(GENERATED_SRC)) $(NIF_SRC)
 
