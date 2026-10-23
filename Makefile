@@ -6,6 +6,10 @@ DUCKDB_ARCHIVE_CHECKSUM = $(DUCKDB_DIR)/.archive.checksum
 
 CXXFLAGS = -O3 -std=c++17
 
+# Silence GCC's informational C++17 ABI notes (GCC 10.1 pair-passing change):
+# DuckDB and the NIF are built by one compiler, so the ABI never mixes.
+CXXFLAGS += -Wno-psabi
+
 # Statically link the DuckDB build-baseline extensions (see
 # extension/extension_config.cmake upstream): core_functions and parquet.
 CXXFLAGS += -DDUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED=1
