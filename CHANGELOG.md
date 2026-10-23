@@ -6,6 +6,7 @@
   - `DECIMAL` -> `%Duckdbex.Decimal{}`, `HUGEINT`/`UHUGEINT` -> `%Duckdbex.Hugeint{}`, `INTERVAL` -> `%Duckdbex.Interval{}`, `TIMETZ` -> `%Duckdbex.TimeTz{}`, `UNION` -> `%Duckdbex.Union{}`.
   - Parameters accept the same representations; the old tuples are no longer accepted.
   - `Duckdbex.hugeint_to_integer/1` and `integer_to_hugeint/1` now use `%Duckdbex.Hugeint{}`.
+  - `infinity` / `-infinity` dates and timestamps are returned as `:infinity` / `:"-infinity"` atoms instead of an invalid struct (and no longer crash on infinite timestamps).
 
 0.6.0
 - [DuckDB v2.0.0](https://github.com/duckdb/duckdb/releases/tag/v2.0.0) ([#60](https://github.com/AlexR2D2/duckdbex/pull/60))

@@ -163,6 +163,21 @@ bool nif::term_to_enum(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 
 
 static bool
+get_infinity_atom(ErlNifEnv* env, ERL_NIF_TERM term, bool& negative) {
+  if (nif::is_atom(env, term, "infinity")) {
+    negative = false;
+    return true;
+  }
+
+  if (nif::is_atom(env, term, "-infinity")) {
+    negative = true;
+    return true;
+  }
+
+  return false;
+}
+
+static bool
 get_int_field(ErlNifEnv* env, ERL_NIF_TERM term, const char* field, int& sink) {
   ERL_NIF_TERM value;
   return nif::get_struct_field(env, term, field, value) && enif_get_int(env, value, &sink);
@@ -578,6 +593,13 @@ bool nif::term_to_uuid(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 }
 
 bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+
+  if (get_infinity_atom(env, term, negative)) {
+    sink = duckdb::Value::DATE(negative ? duckdb::date_t::ninfinity() : duckdb::date_t::infinity());
+    return true;
+  }
+
   if (nif::struct_is(env, term, "Elixir.Date")) {
     int year, month, day;
 
@@ -673,6 +695,13 @@ bool nif::term_to_time_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 }
 
 bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+
+  if (get_infinity_atom(env, term, negative)) {
+    sink = duckdb::Value::TIMESTAMP(negative ? duckdb::timestamp_t::ninfinity() : duckdb::timestamp_t::infinity());
+    return true;
+  }
+
   if (get_naive_datetime_value(env, term, sink))
     return true;
 
@@ -689,6 +718,14 @@ bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& si
 }
 
 bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+
+  if (get_infinity_atom(env, term, negative)) {
+    auto value = negative ? duckdb::timestamp_t::ninfinity() : duckdb::timestamp_t::infinity();
+    sink = duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(value));
+    return true;
+  }
+
   if (get_datetime_value(env, term, sink))
     return true;
 
@@ -712,6 +749,14 @@ bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 }
 
 bool nif::term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+
+  if (get_infinity_atom(env, term, negative)) {
+    auto value = negative ? duckdb::timestamp_ns_t::ninfinity() : duckdb::timestamp_ns_t::infinity();
+    sink = duckdb::Value::CreateValue(value);
+    return true;
+  }
+
   if (nif::struct_is(env, term, "Elixir.Duckdbex.TimestampNs")) {
     ERL_NIF_TERM datetime_term;
     int nanosecond;
@@ -1074,6 +1119,14 @@ bool nif::term_to_tuple(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
 }
 
 bool nif::term_to_timestamp_tz_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+
+  if (get_infinity_atom(env, term, negative)) {
+    auto value = negative ? duckdb::timestamp_ns_t::ninfinity() : duckdb::timestamp_ns_t::infinity();
+    sink = duckdb::Value::TIMESTAMPTZNS(duckdb::timestamp_tz_ns_t(value));
+    return true;
+  }
+
   if (nif::struct_is(env, term, "Elixir.Duckdbex.TimestampTzNs")) {
     ERL_NIF_TERM datetime_term;
     int nanosecond;

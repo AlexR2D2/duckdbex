@@ -104,6 +104,16 @@ static bool children_to_term(ErlNifEnv* env, const std::vector<duckdb::Value>& v
 }
 
 
+template <class T>
+static bool
+infinite_value_to_term(ErlNifEnv* env, T value, ERL_NIF_TERM& sink) {
+  if (value.IsFinite())
+    return false;
+
+  sink = value == T::infinity() ? nif::make_atom(env, "infinity") : nif::make_atom(env, "-infinity");
+  return true;
+}
+
 static ERL_NIF_TERM
 make_date_term(ErlNifEnv* env, int32_t year, int32_t month, int32_t day) {
   return nif::make_struct(env, "Elixir.Date", {
@@ -208,6 +218,9 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
       }
     case duckdb::LogicalTypeId::DATE: {
         auto date = value.GetValueUnsafe<duckdb::date_t>();
+        if (infinite_value_to_term(env, date, sink))
+          return true;
+
         int32_t out_year, out_month, out_day;
         duckdb::Date::Convert(date, out_year, out_month, out_day);
         sink = make_date_term(env, out_year, out_month, out_day);
@@ -330,6 +343,8 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
     case duckdb::LogicalTypeId::TIMESTAMP:
     case duckdb::LogicalTypeId::TIMESTAMP_TZ: {
         duckdb::timestamp_t timestamp = duckdb::TimestampValue::Get(value);
+        if (infinite_value_to_term(env, timestamp, sink))
+          return true;
 
         duckdb::date_t out_date = duckdb::Timestamp::GetDate(timestamp);
         duckdb::dtime_t out_time = duckdb::Timestamp::GetTime(timestamp);
@@ -352,6 +367,8 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
 
         duckdb::timestamp_ns_t timestamp_ns;
         timestamp_ns.value = timestamp_ns_really.value;
+        if (infinite_value_to_term(env, timestamp_ns, sink))
+          return true;
 
         duckdb::date_t out_date;
         duckdb::dtime_t out_time;
@@ -374,6 +391,8 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
       }
     case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS: {
         duckdb::timestamp_ns_t timestamp_ns(duckdb::TimestampTZNSValue::Get(value));
+        if (infinite_value_to_term(env, timestamp_ns, sink))
+          return true;
 
         duckdb::date_t out_date;
         duckdb::dtime_t out_time;
@@ -395,6 +414,10 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         return true;
       }
     case duckdb::LogicalTypeId::TIMESTAMP_MS: {
+        duckdb::timestamp_t raw = duckdb::TimestampValue::Get(value);
+        if (infinite_value_to_term(env, raw, sink))
+          return true;
+
         auto date_value = value.DefaultCastAs(duckdb::LogicalType::DATE);
         auto time_value = value.DefaultCastAs(duckdb::LogicalType::TIME);
 
@@ -412,6 +435,10 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         return true;
       }
     case duckdb::LogicalTypeId::TIMESTAMP_SEC: {
+        duckdb::timestamp_t raw = duckdb::TimestampValue::Get(value);
+        if (infinite_value_to_term(env, raw, sink))
+          return true;
+
         auto date_value = value.DefaultCastAs(duckdb::LogicalType::DATE);
         auto time_value = value.DefaultCastAs(duckdb::LogicalType::TIME);
 

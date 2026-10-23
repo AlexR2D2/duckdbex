@@ -916,6 +916,21 @@ defmodule Duckdbex.TypesTest do
       assert [] = Duckdbex.fetch_all(r)
     end
 
+    test "infinity", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT 'infinity'::TIMESTAMP, '-infinity'::TIMESTAMPTZ;")
+
+      assert [[:infinity, :"-infinity"]] = Duckdbex.fetch_all(r)
+
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT $1::TIMESTAMP, $2::TIMESTAMP_NS;", [
+                 :infinity,
+                 :"-infinity"
+               ])
+
+      assert [[:infinity, :"-infinity"]] = Duckdbex.fetch_all(r)
+    end
+
     test "invalid input", %{conn: conn} do
       invalid_inputs = [
         {{2022, 10, 20, 23}, {23, 59, 59, 999_000}},
@@ -1359,6 +1374,16 @@ defmodule Duckdbex.TypesTest do
                )
 
       assert [[~D[2024-09-20]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "infinity", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT 'infinity'::DATE, '-infinity'::DATE;")
+      assert [[:infinity, :"-infinity"]] = Duckdbex.fetch_all(r)
+
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT $1::DATE, $2::DATE;", [:infinity, :"-infinity"])
+
+      assert [[:infinity, :"-infinity"]] = Duckdbex.fetch_all(r)
     end
 
     test "invalid input", %{conn: conn} do

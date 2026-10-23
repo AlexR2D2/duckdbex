@@ -561,6 +561,11 @@ Scalar DuckDB types map to Elixir's built-in types where they exist, and to
 Parameters accept the same representations (strings are still accepted for
 date, time, timestamp and interval columns).
 
+DuckDB's `infinity` / `-infinity` (valid for `DATE`, `TIMESTAMP`, `TIMESTAMPTZ` and
+their `_NS` variants) are returned as `:infinity` / `:"-infinity"` atoms, because
+neither `Date` nor `NaiveDateTime` can represent them. The same atoms are accepted
+as parameters.
+
 ### Huge numbers (hugeint)
 
 `HUGEINT` is a 128-bit integer. The NIF API cannot build Erlang bignums, so the
