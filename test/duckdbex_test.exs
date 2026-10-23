@@ -1,6 +1,7 @@
 defmodule DuckdbexTest do
   use ExUnit.Case, async: true
   doctest Duckdbex
+  doctest Duckdbex.Hugeint
 
   test "open/2" do
     {:ok, config} = Duckdbex.create_config()

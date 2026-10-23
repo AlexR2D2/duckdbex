@@ -84,7 +84,6 @@ $(PRIV_DIR)/%.o: $(SRC_DIR)/%.cpp | $$(@D)/.
 $(PRIV_DIR)/%.o: $(SRC_DIR)/%.cc | $$(@D)/.
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-
 $(LIB_NAME): $(OBJ)
 	$(CXX) $(LDFLAGS) $^ -o $@
 

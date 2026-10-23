@@ -23,7 +23,7 @@ ERL_CFLAGS = -I"$(ERTS_INCLUDE_PATH)"
 all: priv\duckdb_nif.dll
 
 !IF !EXIST("c_src\duckdb\.sources")
-!ERROR c_src\duckdb\.sources is missing. Run bin\regen_duckdb.sh v2.0.0 first (see README).
+!ERROR c_src\duckdb\.sources is missing. Run bin\regen_duckdb.sh <ref> first (see README).
 !ENDIF
 
 build.rsp: c_src\duckdb\.sources c_src\duckdb\.include_dirs bin\win_build_rsp.ps1

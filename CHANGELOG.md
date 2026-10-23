@@ -8,6 +8,13 @@
   - `Duckdbex.hugeint_to_integer/1` and `integer_to_hugeint/1` now use `%Duckdbex.Hugeint{}`.
   - `infinity` / `-infinity` dates and timestamps are returned as `:infinity` / `:"-infinity"` atoms instead of an invalid struct (and no longer crash on infinite timestamps).
 - Added `fetch_all/2` and `fetch_chunk/2` with `raw: true`, returning the integers DuckDB stores for temporal types (`DATE`, `TIME`, `TIMESTAMP*`, `TIMETZ`) instead of decoding them.
+- Added named parameters: `Duckdbex.query/3` and `execute_statement/2` accept a map keyed by parameter name (`$name`), plus `get_named_parameters/1` for introspection.
+- Added `TUPLE`, `VARIANT` and `GEOMETRY` support. `TUPLE` maps to an Elixir tuple, `VARIANT` decodes recursively and accepts scalars, lists and maps, `GEOMETRY` round-trips as WKB.
+- `MAP` stays a list of `{key, value}` pairs: DuckDB keeps the entry order and compares maps by it, while Elixir maps are unordered.
+- `STRUCT` parameters match map keys case-insensitively.
+- Statically linked `json` and `icu`, so JSON and timezone/collation functions work without `LOAD`.
+- Documented the Quack client-server protocol, with an opt-in end-to-end test (`mix test --include quack`).
+- The generated DuckDB sources are no longer committed or shipped in the Hex package; they are regenerated on demand by `bin/regen_duckdb.sh` when `c_src/duckdb.tar.gz` is missing. A source build therefore needs `gh`, `python3` and `make`.
 
 0.6.0
 - [DuckDB v2.0.0](https://github.com/duckdb/duckdb/releases/tag/v2.0.0) ([#60](https://github.com/AlexR2D2/duckdbex/pull/60))
