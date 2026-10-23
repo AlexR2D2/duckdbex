@@ -552,7 +552,22 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         return children_to_term(env, duckdb::ArrayValue::GetChildren(value), sink, raw);
       }
     case duckdb::LogicalTypeId::TUPLE: {
-        return children_to_term(env, duckdb::StructValue::GetChildren(value), sink, raw);
+        auto& values = duckdb::StructValue::GetChildren(value);
+
+        if (values.empty()) {
+          sink = enif_make_tuple(env, 0);
+          return true;
+        }
+
+        std::vector<ERL_NIF_TERM> terms(values.size());
+
+        for (size_t i = 0; i < values.size(); i++) {
+          if (!value_to_term(env, values[i], terms[i], raw))
+            return false;
+        }
+
+        sink = enif_make_tuple_from_array(env, &terms[0], terms.size());
+        return true;
       }
     case duckdb::LogicalTypeId::MAP: {
         std::vector<duckdb::Value> pairs = duckdb::MapValue::GetChildren(value);

@@ -192,8 +192,7 @@ defmodule Duckdbex.TypesTest do
     test "inspect", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1;")
 
-      assert [[[{1.1, "one"}, {5.1, "five"}]], [[{7.1, "seven"}]]] =
-               Duckdbex.fetch_all(r)
+      assert [[[{1.1, "one"}, {5.1, "five"}]], [[{7.1, "seven"}]]] = Duckdbex.fetch_all(r)
     end
 
     test "'map' input/output", %{conn: conn} do
@@ -252,19 +251,19 @@ defmodule Duckdbex.TypesTest do
       %{conn: conn}
     end
 
-    test "list input/output", %{conn: conn} do
+    test "list input, tuple output", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [[1, "a"]])
-      assert [[[1, "a"]]] = Duckdbex.fetch_all(r)
+      assert [[{1, "a"}]] = Duckdbex.fetch_all(r)
     end
 
     test "query output", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 ORDER BY col1;")
-      assert [[[1, "a"]], [[2, nil]]] = Duckdbex.fetch_all(r)
+      assert [[{1, "a"}], [{2, nil}]] = Duckdbex.fetch_all(r)
     end
 
-    test "tuple input, list output", %{conn: conn} do
+    test "tuple input/output", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [{1, "a"}])
-      assert [[[1, "a"]]] = Duckdbex.fetch_all(r)
+      assert [[{1, "a"}]] = Duckdbex.fetch_all(r)
     end
 
     test "tuple of the wrong arity is rejected", %{conn: conn} do
