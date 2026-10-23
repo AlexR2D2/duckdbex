@@ -49,15 +49,21 @@ defmodule Duckdbex.TypesTest do
     test "inspect", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1;")
 
-      assert [[{"num", 1}], [{"str", "two"}], [{"str", "three"}]] =
+      assert [
+               [%Duckdbex.Union{tag: "num", value: 1}],
+               [%Duckdbex.Union{tag: "str", value: "two"}],
+               [%Duckdbex.Union{tag: "str", value: "three"}]
+             ] =
                Duckdbex.fetch_all(r)
     end
 
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
-               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [{"str", "two"}])
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
+                 %Duckdbex.Union{tag: "str", value: "two"}
+               ])
 
-      assert [[{"str", "two"}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Union{tag: "str", value: "two"}]] = Duckdbex.fetch_all(r)
     end
   end
 
@@ -362,13 +368,16 @@ defmodule Duckdbex.TypesTest do
 
     test "integer_to_hugeint" do
       _uhugeint =
-        {18_446_744_073_709_551_615, 18_446_744_073_709_551_615} =
+        %Duckdbex.Hugeint{upper: 18_446_744_073_709_551_615, lower: 18_446_744_073_709_551_615} =
         Duckdbex.integer_to_hugeint(_uinteger = 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF)
 
       assert _uinteger =
                340_282_366_920_938_463_463_374_607_431_768_211_455 =
                Duckdbex.hugeint_to_integer(
-                 _uhugeint = {18_446_744_073_709_551_615, 18_446_744_073_709_551_615}
+                 _uhugeint = %Duckdbex.Hugeint{
+                   upper: 18_446_744_073_709_551_615,
+                   lower: 18_446_744_073_709_551_615
+                 }
                )
 
       assert 340_282_366_920_938_463_463_374_607_431_768_211_455 ==
@@ -376,16 +385,20 @@ defmodule Duckdbex.TypesTest do
     end
 
     test "native uhugeint input/output", %{conn: conn} do
-      {_, _} = uhugeint = Duckdbex.integer_to_hugeint(_uinteger = 98_233_720_368_547_758_080_000)
+      %Duckdbex.Hugeint{} =
+        uhugeint = Duckdbex.integer_to_hugeint(_uinteger = 98_233_720_368_547_758_080_000)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [uhugeint])
 
-      assert [[_uhugeint = {5325, 4_808_176_044_395_724_800}]] = Duckdbex.fetch_all(r)
+      assert [[_uhugeint = %Duckdbex.Hugeint{upper: 5325, lower: 4_808_176_044_395_724_800}]] =
+               Duckdbex.fetch_all(r)
 
       assert _uinteger =
                98_233_720_368_547_758_080_000 =
-               Duckdbex.hugeint_to_integer(_uhugeint = {5325, 4_808_176_044_395_724_800})
+               Duckdbex.hugeint_to_integer(
+                 _uhugeint = %Duckdbex.Hugeint{upper: 5325, lower: 4_808_176_044_395_724_800}
+               )
     end
 
     test "double input, hugeint output", %{conn: conn} do
@@ -397,14 +410,15 @@ defmodule Duckdbex.TypesTest do
 
     test "binary input, uhugeint output", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", ["8"])
-      assert [[{0, 8}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Hugeint{upper: 0, lower: 8}]] = Duckdbex.fetch_all(r)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", [
                  "98233720368547758080000"
                ])
 
-      assert [[{5325, 4_808_176_044_395_724_800}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Hugeint{upper: 5325, lower: 4_808_176_044_395_724_800}]] =
+               Duckdbex.fetch_all(r)
     end
   end
 
@@ -424,55 +438,68 @@ defmodule Duckdbex.TypesTest do
     end
 
     test "integer_to_hugeint" do
-      assert {5325, 4_808_176_044_395_724_800} =
+      assert %Duckdbex.Hugeint{upper: 5325, lower: 4_808_176_044_395_724_800} =
                Duckdbex.integer_to_hugeint(98_233_720_368_547_758_080_000)
 
       assert 98_233_720_368_547_758_080_000 =
-               Duckdbex.hugeint_to_integer({5325, 4_808_176_044_395_724_800})
+               Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{
+                 upper: 5325,
+                 lower: 4_808_176_044_395_724_800
+               })
     end
 
     test "native hugeint input/output", %{conn: conn} do
-      {_, _} = hugeint = Duckdbex.integer_to_hugeint(_integer = 98_233_720_368_547_758_080_000)
+      %Duckdbex.Hugeint{} =
+        hugeint = Duckdbex.integer_to_hugeint(_integer = 98_233_720_368_547_758_080_000)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [hugeint])
 
-      assert [[_hugeint = {5325, 4_808_176_044_395_724_800}]] = Duckdbex.fetch_all(r)
+      assert [[_hugeint = %Duckdbex.Hugeint{upper: 5325, lower: 4_808_176_044_395_724_800}]] =
+               Duckdbex.fetch_all(r)
 
       assert _integer =
                98_233_720_368_547_758_080_000 =
-               Duckdbex.hugeint_to_integer(_hugeint = {5325, 4_808_176_044_395_724_800})
+               Duckdbex.hugeint_to_integer(
+                 _hugeint = %Duckdbex.Hugeint{upper: 5325, lower: 4_808_176_044_395_724_800}
+               )
     end
 
     test "integer input, hugeint output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", [_integer = -10])
 
-      assert [[_hugeint = {-1, 18_446_744_073_709_551_606}]] = Duckdbex.fetch_all(r)
+      assert [[_hugeint = %Duckdbex.Hugeint{upper: -1, lower: 18_446_744_073_709_551_606}]] =
+               Duckdbex.fetch_all(r)
 
       assert _integer =
-               -10 = Duckdbex.hugeint_to_integer(_hugeint = {-1, 18_446_744_073_709_551_606})
+               -10 =
+               Duckdbex.hugeint_to_integer(
+                 _hugeint = %Duckdbex.Hugeint{upper: -1, lower: 18_446_744_073_709_551_606}
+               )
     end
 
     test "double input, hugeint output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", [_double = 6.4])
 
-      assert [[_hugeint = {0, 6}]] = Duckdbex.fetch_all(r)
+      assert [[_hugeint = %Duckdbex.Hugeint{upper: 0, lower: 6}]] = Duckdbex.fetch_all(r)
 
-      assert _integer = 6 = Duckdbex.hugeint_to_integer(_hugeint = {0, 6})
+      assert _integer =
+               6 = Duckdbex.hugeint_to_integer(_hugeint = %Duckdbex.Hugeint{upper: 0, lower: 6})
     end
 
     test "binary input, hugeint output", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", ["5"])
-      assert [[{0, 5}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Hugeint{upper: 0, lower: 5}]] = Duckdbex.fetch_all(r)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1;", [
                  "98233720368547758080000"
                ])
 
-      assert [[{5325, 4_808_176_044_395_724_800}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Hugeint{upper: 5325, lower: 4_808_176_044_395_724_800}]] =
+               Duckdbex.fetch_all(r)
     end
 
     test "invalid input", %{conn: conn} do
@@ -748,29 +775,33 @@ defmodule Duckdbex.TypesTest do
     test "decimal input/output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {__value = -22174, _width = 5, _scale = 3}
+                 %Duckdbex.Decimal{unscaled: -22174, width: 5, scale: 3}
                ])
 
-      assert [[{_value = -22174, _width = 5, _scale = 3}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Decimal{unscaled: -22174, width: 5, scale: 3}]] = Duckdbex.fetch_all(r)
     end
 
     test "double input, decimal output", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [0.8])
-      assert [[{800, 5, 3}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Decimal{unscaled: 800, width: 5, scale: 3}]] = Duckdbex.fetch_all(r)
     end
 
     test "binary input, decimal output", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", ["3.14"])
-      assert [[{3140, 5, 3}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Decimal{unscaled: 3140, width: 5, scale: 3}]] = Duckdbex.fetch_all(r)
     end
 
     test "hugeint input, decimal output", %{conn: conn} do
-      hugeint = Duckdbex.integer_to_hugeint(10)
+      decimal = %Duckdbex.Decimal{
+        unscaled: %Duckdbex.Hugeint{upper: 0, lower: 10_000},
+        width: 5,
+        scale: 3
+      }
 
       assert {:ok, r} =
-               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [hugeint])
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [decimal])
 
-      assert [[{10000, 5, 3}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Decimal{unscaled: 10_000, width: 5, scale: 3}]] = Duckdbex.fetch_all(r)
     end
   end
 
@@ -794,9 +825,9 @@ defmodule Duckdbex.TypesTest do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1")
 
       assert [
-               [{_months = 0, _days = 0, _micros = 3_600_000_000}],
-               [{0, 1, 0}],
-               [{2, 0, 0}]
+               [%Duckdbex.Interval{months: 0, days: 0, micros: 3_600_000_000}],
+               [%Duckdbex.Interval{months: 0, days: 1, micros: 0}],
+               [%Duckdbex.Interval{months: 2, days: 0, micros: 0}]
              ] = Duckdbex.fetch_all(r)
     end
 
@@ -807,10 +838,11 @@ defmodule Duckdbex.TypesTest do
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {_months = 0, _days = 0, microseconds}
+                 %Duckdbex.Interval{months: 0, days: 0, micros: microseconds}
                ])
 
-      assert [[{0, 0, ^microseconds}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Interval{months: 0, days: 0, micros: ^microseconds}]] =
+               Duckdbex.fetch_all(r)
     end
 
     test "microseconds input/output", %{conn: conn} do
@@ -821,7 +853,8 @@ defmodule Duckdbex.TypesTest do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [microseconds])
 
-      assert [[{0, 0, ^microseconds}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.Interval{months: 0, days: 0, micros: ^microseconds}]] =
+               Duckdbex.fetch_all(r)
     end
 
     test "binary input, microseconds output", %{conn: conn} do
@@ -830,7 +863,9 @@ defmodule Duckdbex.TypesTest do
           (_micrsec_in_millsec = 1000)
 
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", ["1 HOUR"])
-      assert [[{0, 0, ^microseconds}]] = Duckdbex.fetch_all(r)
+
+      assert [[%Duckdbex.Interval{months: 0, days: 0, micros: ^microseconds}]] =
+               Duckdbex.fetch_all(r)
     end
   end
 
@@ -852,17 +887,17 @@ defmodule Duckdbex.TypesTest do
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{2024, 12, 22}, {12, 20, 0, _ignored = 321}}
+                 ~N[2024-12-22 12:20:00.000000]
                ])
 
-      assert [[{{2024, 12, 22}, {12, 20, 0, _ignored = 0}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2024-12-22 12:20:00.000000]]] = Duckdbex.fetch_all(r)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{2000, 05, 12}, {10, 20, 0, _ignored = 0}}
+                 ~N[2000-05-12 10:20:00.000000]
                ])
 
-      assert [[{{2000, 05, 12}, {10, 20, 0, _ignored = 0}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2000-05-12 10:20:00.000000]]] = Duckdbex.fetch_all(r)
     end
 
     test "binary input, native output", %{conn: conn} do
@@ -871,7 +906,7 @@ defmodule Duckdbex.TypesTest do
                  "2024-12-22 12:20:00"
                ])
 
-      assert [[{{2024, 12, 22}, {12, 20, 0, _ignored = 0}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2024-12-22 12:20:00.000000]]] = Duckdbex.fetch_all(r)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
@@ -919,17 +954,17 @@ defmodule Duckdbex.TypesTest do
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{2024, 12, 22}, {12, 20, 0, _milliseconds = 123}}
+                 ~N[2024-12-22 12:20:00.123000]
                ])
 
-      assert [[{{2024, 12, 22}, {12, 20, 0, _milliseconds = 123}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2024-12-22 12:20:00.123000]]] = Duckdbex.fetch_all(r)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{2000, 05, 12}, {10, 20, 0, _milliseconds = 0}}
+                 ~N[2000-05-12 10:20:00.000000]
                ])
 
-      assert [[{{2000, 05, 12}, {10, 20, 0, _milliseconds = 0}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2000-05-12 10:20:00.000000]]] = Duckdbex.fetch_all(r)
     end
 
     test "binary input, native output", %{conn: conn} do
@@ -938,7 +973,7 @@ defmodule Duckdbex.TypesTest do
                  "2024-12-22 12:20:00.123"
                ])
 
-      assert [[{{2024, 12, 22}, {12, 20, 0, _milliseconds = 123}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2024-12-22 12:20:00.123000]]] = Duckdbex.fetch_all(r)
     end
 
     test "invalid input", %{conn: conn} do
@@ -979,17 +1014,19 @@ defmodule Duckdbex.TypesTest do
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{1992, 09, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}
+                 %Duckdbex.TimestampNs{datetime: ~N[1992-09-20 11:30:00.999999], nanosecond: 999}
                ])
 
-      assert [[{{1992, 9, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.TimestampNs{datetime: ~N[1992-09-20 11:30:00.999999], nanosecond: 999}]] =
+               Duckdbex.fetch_all(r)
 
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{2024, 12, 22}, {12, 20, 0, _nanoseconds = 1}}
+                 %Duckdbex.TimestampNs{datetime: ~N[2024-12-22 12:20:00.000000], nanosecond: 1}
                ])
 
-      assert [[{{2024, 12, 22}, {12, 20, 0, _nanoseconds = 1}}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.TimestampNs{datetime: ~N[2024-12-22 12:20:00.000000], nanosecond: 1}]] =
+               Duckdbex.fetch_all(r)
     end
 
     test "binary input, native output", %{conn: conn} do
@@ -998,7 +1035,8 @@ defmodule Duckdbex.TypesTest do
                  "1992-09-20 11:30:00.999999999"
                ])
 
-      assert [[{{1992, 9, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}]] = Duckdbex.fetch_all(r)
+      assert [[%Duckdbex.TimestampNs{datetime: ~N[1992-09-20 11:30:00.999999], nanosecond: 999}]] =
+               Duckdbex.fetch_all(r)
     end
 
     test "invalid input", %{conn: conn} do
@@ -1037,10 +1075,20 @@ defmodule Duckdbex.TypesTest do
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{1992, 09, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}
+                 %Duckdbex.TimestampTzNs{
+                   datetime: ~U[1992-09-20 11:30:00.999999Z],
+                   nanosecond: 999
+                 }
                ])
 
-      assert [[{{1992, 9, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}]] = Duckdbex.fetch_all(r)
+      assert [
+               [
+                 %Duckdbex.TimestampTzNs{
+                   datetime: ~U[1992-09-20 11:30:00.999999Z],
+                   nanosecond: 999
+                 }
+               ]
+             ] = Duckdbex.fetch_all(r)
     end
   end
 
@@ -1072,14 +1120,12 @@ defmodule Duckdbex.TypesTest do
                  conn,
                  "SELECT * FROM table1 WHERE col1 = $1;",
                  [
-                   {{2022, 10, 20},
-                    {_hh = 11, _mm = 30, _ss = 0, _zzzzzz = 123_456,
-                     {_TT = 5, _tt = _microseconds = 30}}}
+                   ~U[2022-10-20 06:00:00.123456Z]
                  ]
                )
 
       # TIMESTAMPTZ converted to utc TIMESTAMP, so, OFFSET substracted and result is of UTC TIMESTAMP format
-      assert [[{{2022, 10, 20}, {6, 0, 0, _microseconds = 123_456}}]] =
+      assert [[~U[2022-10-20 06:00:00.123456Z]]] =
                Duckdbex.fetch_all(r)
     end
 
@@ -1088,11 +1134,11 @@ defmodule Duckdbex.TypesTest do
                Duckdbex.query(
                  conn,
                  "SELECT * FROM table1 WHERE col1 = $1;",
-                 [{{2022, 10, 20}, {10, 30, 10, _microseconds = 123_456, {-14, 21}}}]
+                 [~U[2022-10-21 00:51:10.123456Z]]
                )
 
       # TIMESTAMPTZ converted to utc TIMESTAMP, so, OFFSET substracted and result is of UTC TIMESTAMP format
-      assert [[{{2022, 10, 21}, {0, 51, 10, _microseconds = 123_456}}]] =
+      assert [[~U[2022-10-21 00:51:10.123456Z]]] =
                Duckdbex.fetch_all(r)
     end
 
@@ -1102,7 +1148,7 @@ defmodule Duckdbex.TypesTest do
                  "2022-10-20 11:30:00.123456+05:30"
                ])
 
-      assert [[{{2022, 10, 20}, {6, 0, 0, 123_456}}]] = Duckdbex.fetch_all(r)
+      assert [[~U[2022-10-20 06:00:00.123456Z]]] = Duckdbex.fetch_all(r)
     end
   end
 
@@ -1124,10 +1170,10 @@ defmodule Duckdbex.TypesTest do
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {{2022, 10, 20}, {23, 59, 59, _microseconds = 999_000}}
+                 ~N[2022-10-20 23:59:59.999000]
                ])
 
-      assert [[{{2022, 10, 20}, {23, 59, 59, _microseconds = 999_000}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2022-10-20 23:59:59.999000]]] = Duckdbex.fetch_all(r)
     end
 
     test "binary input, native output", %{conn: conn} do
@@ -1136,7 +1182,7 @@ defmodule Duckdbex.TypesTest do
                  "2022-10-20 23:59:59.999"
                ])
 
-      assert [[{{2022, 10, 20}, {23, 59, 59, _microseconds = 999_000}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2022-10-20 23:59:59.999000]]] = Duckdbex.fetch_all(r)
     end
 
     test "invalid input", %{conn: conn} do
@@ -1183,12 +1229,11 @@ defmodule Duckdbex.TypesTest do
                  conn,
                  "SELECT * FROM table1 WHERE col1 = $1;",
                  [
-                   {_hh = 11, _mm = 30, _ss = 0, _zzzzzz = _microseconds = 123_456,
-                    {_TT = 5, _tt = 30}}
+                   %Duckdbex.TimeTz{time: ~T[11:30:00.123456], offset: 19_800}
                  ]
                )
 
-      assert [[{11, 30, 0, _microseconds = 123_456, {5, 30}}]] =
+      assert [[%Duckdbex.TimeTz{time: ~T[11:30:00.123456], offset: 19_800}]] =
                Duckdbex.fetch_all(r)
     end
 
@@ -1197,10 +1242,10 @@ defmodule Duckdbex.TypesTest do
                Duckdbex.query(
                  conn,
                  "SELECT * FROM table1 WHERE col1 = $1;",
-                 [{10, 30, 10, _microseconds = 123_456, {-14, 21}}]
+                 [%Duckdbex.TimeTz{time: ~T[10:30:10.123456], offset: -51_660}]
                )
 
-      assert [[{10, 30, 10, _microseconds = 123_456, {-14, 21}}]] =
+      assert [[%Duckdbex.TimeTz{time: ~T[10:30:10.123456], offset: -51_660}]] =
                Duckdbex.fetch_all(r)
     end
 
@@ -1212,7 +1257,7 @@ defmodule Duckdbex.TypesTest do
                  ["10:30:10.123456-14:21"]
                )
 
-      assert [[{10, 30, 10, _microseconds = 123_456, {-14, 21}}]] =
+      assert [[%Duckdbex.TimeTz{time: ~T[10:30:10.123456], offset: -51_660}]] =
                Duckdbex.fetch_all(r)
     end
 
@@ -1252,10 +1297,10 @@ defmodule Duckdbex.TypesTest do
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
-                 {1, 59, 59, _microseconds = 999_000}
+                 ~T[01:59:59.999000]
                ])
 
-      assert [[{1, 59, 59, _microseconds = 999_000}]] = Duckdbex.fetch_all(r)
+      assert [[~T[01:59:59.999000]]] = Duckdbex.fetch_all(r)
     end
 
     test "binary input, native output", %{conn: conn} do
@@ -1266,7 +1311,7 @@ defmodule Duckdbex.TypesTest do
                  ["00:00:00"]
                )
 
-      assert [[{0, 0, 0, _microseconds = 0}]] = Duckdbex.fetch_all(r)
+      assert [[~T[00:00:00.000000]]] = Duckdbex.fetch_all(r)
     end
 
     test "invalid input", %{conn: conn} do
@@ -1300,9 +1345,9 @@ defmodule Duckdbex.TypesTest do
 
     test "native input/output", %{conn: conn} do
       assert {:ok, r} =
-               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [{2024, 9, 20}])
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [~D[2024-09-20]])
 
-      assert [[{2024, 9, 20}]] = Duckdbex.fetch_all(r)
+      assert [[~D[2024-09-20]]] = Duckdbex.fetch_all(r)
     end
 
     test "binary input, native output", %{conn: conn} do
@@ -1313,7 +1358,7 @@ defmodule Duckdbex.TypesTest do
                  ["2024-09-20"]
                )
 
-      assert [[{2024, 9, 20}]] = Duckdbex.fetch_all(r)
+      assert [[~D[2024-09-20]]] = Duckdbex.fetch_all(r)
     end
 
     test "invalid input", %{conn: conn} do

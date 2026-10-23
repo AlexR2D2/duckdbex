@@ -31,7 +31,7 @@ defmodule Duckdbex.AppenderTest do
 
     {:ok, r} = Duckdbex.query(conn, "SELECT * FROM appender_test_1;")
 
-    assert [[123, true, "the one", {{2022, 10, 20}, {23, 59, 59, 999_000}}]] =
+    assert [[123, true, "the one", ~N[2022-10-20 23:59:59.999000]]] =
              Duckdbex.fetch_all(r)
   end
 

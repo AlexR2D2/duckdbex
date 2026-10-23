@@ -103,6 +103,70 @@ static bool children_to_term(ErlNifEnv* env, const std::vector<duckdb::Value>& v
   return true;
 }
 
+
+static ERL_NIF_TERM
+make_date_term(ErlNifEnv* env, int32_t year, int32_t month, int32_t day) {
+  return nif::make_struct(env, "Elixir.Date", {
+    {"calendar", nif::make_atom(env, "Elixir.Calendar.ISO")},
+    {"year", enif_make_int(env, year)},
+    {"month", enif_make_int(env, month)},
+    {"day", enif_make_int(env, day)},
+  });
+}
+
+static ERL_NIF_TERM
+make_time_term(ErlNifEnv* env, int32_t hour, int32_t minute, int32_t second, int32_t micros) {
+  return nif::make_struct(env, "Elixir.Time", {
+    {"calendar", nif::make_atom(env, "Elixir.Calendar.ISO")},
+    {"hour", enif_make_int(env, hour)},
+    {"minute", enif_make_int(env, minute)},
+    {"second", enif_make_int(env, second)},
+    {"microsecond", enif_make_tuple2(env, enif_make_int(env, micros), enif_make_int(env, 6))},
+  });
+}
+
+static ERL_NIF_TERM
+make_naive_datetime_term(ErlNifEnv* env, int32_t year, int32_t month, int32_t day,
+                         int32_t hour, int32_t minute, int32_t second, int32_t micros) {
+  return nif::make_struct(env, "Elixir.NaiveDateTime", {
+    {"calendar", nif::make_atom(env, "Elixir.Calendar.ISO")},
+    {"year", enif_make_int(env, year)},
+    {"month", enif_make_int(env, month)},
+    {"day", enif_make_int(env, day)},
+    {"hour", enif_make_int(env, hour)},
+    {"minute", enif_make_int(env, minute)},
+    {"second", enif_make_int(env, second)},
+    {"microsecond", enif_make_tuple2(env, enif_make_int(env, micros), enif_make_int(env, 6))},
+  });
+}
+
+static ERL_NIF_TERM
+make_datetime_term(ErlNifEnv* env, int32_t year, int32_t month, int32_t day,
+                   int32_t hour, int32_t minute, int32_t second, int32_t micros) {
+  return nif::make_struct(env, "Elixir.DateTime", {
+    {"calendar", nif::make_atom(env, "Elixir.Calendar.ISO")},
+    {"year", enif_make_int(env, year)},
+    {"month", enif_make_int(env, month)},
+    {"day", enif_make_int(env, day)},
+    {"hour", enif_make_int(env, hour)},
+    {"minute", enif_make_int(env, minute)},
+    {"second", enif_make_int(env, second)},
+    {"microsecond", enif_make_tuple2(env, enif_make_int(env, micros), enif_make_int(env, 6))},
+    {"time_zone", nif::make_binary_term(env, "Etc/UTC")},
+    {"zone_abbr", nif::make_binary_term(env, "UTC")},
+    {"utc_offset", enif_make_int(env, 0)},
+    {"std_offset", enif_make_int(env, 0)},
+  });
+}
+
+static ERL_NIF_TERM
+make_hugeint_term(ErlNifEnv* env, int64_t upper, uint64_t lower) {
+  return nif::make_struct(env, "Elixir.Duckdbex.Hugeint", {
+    {"upper", enif_make_int64(env, upper)},
+    {"lower", enif_make_uint64(env, lower)},
+  });
+}
+
 bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM& sink) {
   // <dbg>
   // std::cout << "value_to_term: value_type: " << value.type().ToString() << std::endl;
@@ -146,10 +210,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         auto date = value.GetValueUnsafe<duckdb::date_t>();
         int32_t out_year, out_month, out_day;
         duckdb::Date::Convert(date, out_year, out_month, out_day);
-        sink = enif_make_tuple3(env,
-          enif_make_int(env, out_year),
-          enif_make_int(env, out_month),
-          enif_make_int(env, out_day));
+        sink = make_date_term(env, out_year, out_month, out_day);
         return true;
       }
     case duckdb::LogicalTypeId::DOUBLE: {
@@ -175,54 +236,39 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
 
         auto internal_type = type.InternalType();
 
+        ERL_NIF_TERM unscaled;
+
         if (internal_type == duckdb::PhysicalType::INT16) {
-          sink = enif_make_tuple3(env,
-            enif_make_int(env, duckdb::SmallIntValue::Get(value)),
-            enif_make_uint(env, width),
-            enif_make_uint(env, scale));
-          return true;
+          unscaled = enif_make_int(env, duckdb::SmallIntValue::Get(value));
         } else if (internal_type == duckdb::PhysicalType::INT32) {
-          sink = enif_make_tuple3(env,
-            enif_make_int(env, duckdb::IntegerValue::Get(value)),
-            enif_make_uint(env, width),
-            enif_make_uint(env, scale));
-          return true;
+          unscaled = enif_make_int(env, duckdb::IntegerValue::Get(value));
         } else if (internal_type == duckdb::PhysicalType::INT64) {
-          sink = enif_make_tuple3(env,
-            enif_make_int(env, duckdb::BigIntValue::Get(value)),
-            enif_make_uint(env, width),
-            enif_make_uint(env, scale));
-          return true;
+          unscaled = enif_make_int64(env, duckdb::BigIntValue::Get(value));
         } else {
           D_ASSERT(internal_type == duckdb::PhysicalType::INT128);
           duckdb::hugeint_t hugeint = duckdb::HugeIntValue::Get(value);
-          sink = enif_make_tuple3(env,
-            enif_make_tuple2(env,
-              enif_make_uint64(env, hugeint.lower),
-              enif_make_int64(env, hugeint.upper)
-            ),
-            enif_make_uint(env, width),
-            enif_make_uint(env, scale)
-          );
-          return true;
+          unscaled = make_hugeint_term(env, hugeint.upper, hugeint.lower);
         }
 
-        return false;
+        sink = nif::make_struct(env, "Elixir.Duckdbex.Decimal", {
+          {"unscaled", unscaled},
+          {"width", enif_make_uint(env, width)},
+          {"scale", enif_make_uint(env, scale)},
+        });
+
+        return true;
       }
     case duckdb::LogicalTypeId::HUGEINT: {
         duckdb::hugeint_t hugeint = duckdb::HugeIntValue::Get(value);
-        sink = enif_make_tuple2(env,
-              enif_make_int64(env, hugeint.upper),
-              enif_make_uint64(env, hugeint.lower)
-            );
+        sink = make_hugeint_term(env, hugeint.upper, hugeint.lower);
         return true;
       }
     case duckdb::LogicalTypeId::UHUGEINT: {
         duckdb::uhugeint_t uhugeint = duckdb::UhugeIntValue::Get(value);
-        sink = enif_make_tuple2(env,
-              enif_make_uint64(env, uhugeint.upper),
-              enif_make_uint64(env, uhugeint.lower)
-            );
+        sink = nif::make_struct(env, "Elixir.Duckdbex.Hugeint", {
+          {"upper", enif_make_uint64(env, uhugeint.upper)},
+          {"lower", enif_make_uint64(env, uhugeint.lower)},
+        });
         return true;
       }
     case duckdb::LogicalTypeId::INTEGER: {
@@ -266,11 +312,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         duckdb::dtime_t time = duckdb::TimeValue::Get(value);
         int32_t time_units[4];
         duckdb::Time::Convert(time, time_units[0], time_units[1], time_units[2], time_units[3]);
-        sink = enif_make_tuple4(env,
-          enif_make_int(env, time_units[0]),
-          enif_make_int(env, time_units[1]),
-          enif_make_int(env, time_units[2]),
-          enif_make_int(env, time_units[3]));
+        sink = make_time_term(env, time_units[0], time_units[1], time_units[2], time_units[3]);
         return true;
       }
     case duckdb::LogicalTypeId::TIME_TZ: {
@@ -279,19 +321,10 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         int32_t time_units[4];
         duckdb::Time::Convert(time.time(), time_units[0], time_units[1], time_units[2], time_units[3]);
 
-        int32_t offset_hour = int32_t(time.offset() / duckdb::Interval::SECS_PER_HOUR);
-        int32_t offset_min = std::abs(int32_t((time.offset() % duckdb::Interval::SECS_PER_HOUR) / duckdb::Interval::SECS_PER_MINUTE));
-
-        sink = enif_make_tuple5(env,
-          enif_make_int(env, time_units[0]),
-          enif_make_int(env, time_units[1]),
-          enif_make_int(env, time_units[2]),
-          enif_make_int(env, time_units[3]),
-          enif_make_tuple2(env,
-            enif_make_int(env, offset_hour),
-            enif_make_int(env, offset_min)
-          )
-        );
+        sink = nif::make_struct(env, "Elixir.Duckdbex.TimeTz", {
+          {"time", make_time_term(env, time_units[0], time_units[1], time_units[2], time_units[3])},
+          {"offset", enif_make_int(env, int32_t(time.offset()))},
+        });
         return true;
       }
     case duckdb::LogicalTypeId::TIMESTAMP:
@@ -307,17 +340,10 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         int32_t out_hour, out_min, out_sec, out_micros;
         duckdb::Time::Convert(out_time, out_hour, out_min, out_sec, out_micros);
 
-        sink = enif_make_tuple2(env,
-          enif_make_tuple3(env,
-            enif_make_int(env, out_year),
-            enif_make_int(env, out_month),
-            enif_make_int(env, out_day)),
-          enif_make_tuple4(env,
-            enif_make_int(env, out_hour),
-            enif_make_int(env, out_min),
-            enif_make_int(env, out_sec),
-            enif_make_int(env, out_micros))
-        );
+        if (type.id() == duckdb::LogicalTypeId::TIMESTAMP_TZ)
+          sink = make_datetime_term(env, out_year, out_month, out_day, out_hour, out_min, out_sec, out_micros);
+        else
+          sink = make_naive_datetime_term(env, out_year, out_month, out_day, out_hour, out_min, out_sec, out_micros);
 
         return true;
       }
@@ -339,19 +365,10 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         int32_t out_hour, out_min, out_sec, out_micros;
         duckdb::Time::Convert(out_time, out_hour, out_min, out_sec, out_micros);
 
-        int32_t nanoseconds = out_micros * duckdb::Interval::NANOS_PER_MICRO + out_nanos;
-
-        sink = enif_make_tuple2(env,
-          enif_make_tuple3(env,
-            enif_make_int(env, out_year),
-            enif_make_int(env, out_month),
-            enif_make_int(env, out_day)),
-          enif_make_tuple4(env,
-            enif_make_int(env, out_hour),
-            enif_make_int(env, out_min),
-            enif_make_int(env, out_sec),
-            enif_make_int(env, nanoseconds))
-        );
+        sink = nif::make_struct(env, "Elixir.Duckdbex.TimestampNs", {
+          {"datetime", make_naive_datetime_term(env, out_year, out_month, out_day, out_hour, out_min, out_sec, out_micros)},
+          {"nanosecond", enif_make_int(env, out_nanos)},
+        });
 
         return true;
       }
@@ -370,19 +387,10 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         int32_t out_hour, out_min, out_sec, out_micros;
         duckdb::Time::Convert(out_time, out_hour, out_min, out_sec, out_micros);
 
-        int32_t nanoseconds = out_micros * duckdb::Interval::NANOS_PER_MICRO + out_nanos;
-
-        sink = enif_make_tuple2(env,
-          enif_make_tuple3(env,
-            enif_make_int(env, out_year),
-            enif_make_int(env, out_month),
-            enif_make_int(env, out_day)),
-          enif_make_tuple4(env,
-            enif_make_int(env, out_hour),
-            enif_make_int(env, out_min),
-            enif_make_int(env, out_sec),
-            enif_make_int(env, nanoseconds))
-        );
+        sink = nif::make_struct(env, "Elixir.Duckdbex.TimestampTzNs", {
+          {"datetime", make_datetime_term(env, out_year, out_month, out_day, out_hour, out_min, out_sec, out_micros)},
+          {"nanosecond", enif_make_int(env, out_nanos)},
+        });
 
         return true;
       }
@@ -399,19 +407,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         int32_t out_hour, out_min, out_sec, out_micros;
         duckdb::Time::Convert(out_time, out_hour, out_min, out_sec, out_micros);
 
-        int32_t out_msec = out_micros / duckdb::Interval::MICROS_PER_MSEC;
-
-        sink = enif_make_tuple2(env,
-          enif_make_tuple3(env,
-            enif_make_int(env, out_year),
-            enif_make_int(env, out_month),
-            enif_make_int(env, out_day)),
-          enif_make_tuple4(env,
-            enif_make_int(env, out_hour),
-            enif_make_int(env, out_min),
-            enif_make_int(env, out_sec),
-            enif_make_int(env, out_msec))
-        );
+        sink = make_naive_datetime_term(env, out_year, out_month, out_day, out_hour, out_min, out_sec, out_micros);
 
         return true;
       }
@@ -428,17 +424,7 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         int32_t out_hour, out_min, out_sec, out_micros;
         duckdb::Time::Convert(out_time, out_hour, out_min, out_sec, out_micros);
 
-        sink = enif_make_tuple2(env,
-          enif_make_tuple3(env,
-            enif_make_int(env, out_year),
-            enif_make_int(env, out_month),
-            enif_make_int(env, out_day)),
-          enif_make_tuple4(env,
-            enif_make_int(env, out_hour),
-            enif_make_int(env, out_min),
-            enif_make_int(env, out_sec),
-            enif_make_int(env, out_micros))
-        );
+        sink = make_naive_datetime_term(env, out_year, out_month, out_day, out_hour, out_min, out_sec, out_micros);
 
         return true;
       }
@@ -448,11 +434,11 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         int64_t months, days, micros;
         interval.Normalize(months, days, micros);
 
-        sink = enif_make_tuple3(env,
-              enif_make_int(env, months),
-              enif_make_int(env, days),
-              enif_make_int64(env, micros)
-            );
+        sink = nif::make_struct(env, "Elixir.Duckdbex.Interval", {
+          {"months", enif_make_int64(env, months)},
+          {"days", enif_make_int64(env, days)},
+          {"micros", enif_make_int64(env, micros)},
+        });
 
         return true;
       }
@@ -559,7 +545,10 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
       if (!value_to_term(env, member_value, union_value_term))
         return false;
 
-      sink = enif_make_tuple2(env, union_tag_name_term, union_value_term);
+      sink = nif::make_struct(env, "Elixir.Duckdbex.Union", {
+        {"tag", union_tag_name_term},
+        {"value", union_value_term},
+      });
 
       return true;
     }

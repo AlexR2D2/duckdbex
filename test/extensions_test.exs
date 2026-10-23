@@ -10,10 +10,10 @@ defmodule Duckdbex.ExtensionsTest do
   describe "core_functions" do
     test "now() and current_timestamp return timestamps", %{conn: conn} do
       assert {:ok, r} = Duckdbex.query(conn, "SELECT now();")
-      assert [[{{_, _, _}, {_, _, _, _}}]] = Duckdbex.fetch_all(r)
+      assert [[%DateTime{}]] = Duckdbex.fetch_all(r)
 
       assert {:ok, r} = Duckdbex.query(conn, "SELECT current_timestamp;")
-      assert [[{{_, _, _}, {_, _, _, _}}]] = Duckdbex.fetch_all(r)
+      assert [[%DateTime{}]] = Duckdbex.fetch_all(r)
     end
 
     # bump this together with scripts/regen_duckdb.sh <ref>
@@ -72,7 +72,7 @@ defmodule Duckdbex.ExtensionsTest do
                  "SELECT timezone('America/New_York', TIMESTAMPTZ '2024-01-15 12:00:00+00');"
                )
 
-      assert [[{{2024, 1, 15}, {7, 0, 0, 0}}]] = Duckdbex.fetch_all(r)
+      assert [[~N[2024-01-15 07:00:00.000000]]] = Duckdbex.fetch_all(r)
     end
   end
 
@@ -88,7 +88,7 @@ defmodule Duckdbex.ExtensionsTest do
                """)
 
       assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM '#{path}';")
-      assert [[42, 3.14, "hello", {{2024, 1, 15}, {10, 30, 0, 0}}]] = Duckdbex.fetch_all(r)
+      assert [[42, 3.14, "hello", ~N[2024-01-15 10:30:00.000000]]] = Duckdbex.fetch_all(r)
     end
 
     test "parquet_scan reads a file written by COPY", %{conn: conn} do

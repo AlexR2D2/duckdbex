@@ -33,7 +33,7 @@ defmodule Duckdbex.IssuesTest do
       assert :ok =
                Duckdbex.appender_add_row(appender, [
                  # attributes col
-                 [{"key1", {"single_text", "sval1"}}]
+                 [{"key1", %Duckdbex.Union{tag: "single_text", value: "sval1"}}]
                ])
 
       # rows
@@ -42,12 +42,12 @@ defmodule Duckdbex.IssuesTest do
                  # row
                  [
                    # attributes col
-                   [{"key2", {"multiple_text", ["mval1", "mval2"]}}]
+                   [{"key2", %Duckdbex.Union{tag: "multiple_text", value: ["mval1", "mval2"]}}]
                  ],
                  # row
                  [
                    # attributes col
-                   [{"key3", {"single_text", "sval2"}}]
+                   [{"key3", %Duckdbex.Union{tag: "single_text", value: "sval2"}}]
                  ]
                ])
 
@@ -56,9 +56,9 @@ defmodule Duckdbex.IssuesTest do
       {:ok, r} = Duckdbex.query(conn, "SELECT * FROM schema_1.appender_test_1;")
 
       assert [
-               [[{"key1", {"single_text", "sval1"}}]],
-               [[{"key2", {"multiple_text", ["mval1", "mval2"]}}]],
-               [[{"key3", {"single_text", "sval2"}}]]
+               [[{"key1", %Duckdbex.Union{tag: "single_text", value: "sval1"}}]],
+               [[{"key2", %Duckdbex.Union{tag: "multiple_text", value: ["mval1", "mval2"]}}]],
+               [[{"key3", %Duckdbex.Union{tag: "single_text", value: "sval2"}}]]
              ] = Duckdbex.fetch_all(r)
     end
   end
@@ -87,7 +87,7 @@ defmodule Duckdbex.IssuesTest do
 
       assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT * FROM test_table;")
       assert {:ok, res} = Duckdbex.execute_statement(stmt)
-      assert [[{"single_text", "test"}]] = Duckdbex.fetch_all(res)
+      assert [[%Duckdbex.Union{tag: "single_text", value: "test"}]] = Duckdbex.fetch_all(res)
     end
 
     test "insert union with params", %{conn: conn} do
@@ -111,14 +111,17 @@ defmodule Duckdbex.IssuesTest do
 
       assert {:ok, _res} =
                Duckdbex.execute_statement(stmt, [
-                 {"multiple_text", ["one", "two"]},
-                 {"single_text", "one"}
+                 %Duckdbex.Union{tag: "multiple_text", value: ["one", "two"]},
+                 %Duckdbex.Union{tag: "single_text", value: "one"}
                ])
 
       assert {:ok, stmt} = Duckdbex.prepare_statement(conn, "SELECT * FROM test_table;")
       assert {:ok, res} = Duckdbex.execute_statement(stmt)
 
-      assert [[{"multiple_text", ["one", "two"]}], [{"single_text", "one"}]] =
+      assert [
+               [%Duckdbex.Union{tag: "multiple_text", value: ["one", "two"]}],
+               [%Duckdbex.Union{tag: "single_text", value: "one"}]
+             ] =
                Duckdbex.fetch_all(res)
     end
 

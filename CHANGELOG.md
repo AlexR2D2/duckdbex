@@ -1,5 +1,12 @@
 # Changelog
 
+0.7.0
+- Breaking: DuckDB values now use native Elixir types and structs instead of ad-hoc tuples.
+  - `DATE` -> `Date`, `TIME` -> `Time`, `TIMESTAMP` -> `NaiveDateTime`, `TIMESTAMPTZ` -> `DateTime` (UTC), `TIMESTAMP_NS`/`TIMESTAMPTZ_NS` -> `%Duckdbex.TimestampNs{}` / `%Duckdbex.TimestampTzNs{}`.
+  - `DECIMAL` -> `%Duckdbex.Decimal{}`, `HUGEINT`/`UHUGEINT` -> `%Duckdbex.Hugeint{}`, `INTERVAL` -> `%Duckdbex.Interval{}`, `TIMETZ` -> `%Duckdbex.TimeTz{}`, `UNION` -> `%Duckdbex.Union{}`.
+  - Parameters accept the same representations; the old tuples are no longer accepted.
+  - `Duckdbex.hugeint_to_integer/1` and `integer_to_hugeint/1` now use `%Duckdbex.Hugeint{}`.
+
 0.6.0
 - [DuckDB v2.0.0](https://github.com/duckdb/duckdb/releases/tag/v2.0.0) ([#60](https://github.com/AlexR2D2/duckdbex/pull/60))
 - Building from source now requires a C++17 compiler.

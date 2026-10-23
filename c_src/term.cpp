@@ -119,6 +119,43 @@ bool nif::is_atom(ErlNifEnv* env, ERL_NIF_TERM term, const char* expected_atom) 
   return std::strcmp(&atom[0], expected_atom) == 0;
 }
 
+ERL_NIF_TERM
+nif::make_struct(ErlNifEnv* env, const char* module,
+                 const std::initializer_list<std::pair<const char*, ERL_NIF_TERM>>& fields) {
+  std::vector<ERL_NIF_TERM> keys;
+  std::vector<ERL_NIF_TERM> values;
+
+  keys.reserve(fields.size() + 1);
+  values.reserve(fields.size() + 1);
+
+  keys.push_back(nif::make_atom(env, "__struct__"));
+  values.push_back(nif::make_atom(env, module));
+
+  for (auto& field : fields) {
+    keys.push_back(nif::make_atom(env, field.first));
+    values.push_back(field.second);
+  }
+
+  ERL_NIF_TERM result;
+  enif_make_map_from_arrays(env, keys.data(), values.data(), keys.size(), &result);
+  return result;
+}
+
+bool
+nif::struct_is(ErlNifEnv* env, ERL_NIF_TERM term, const char* module) {
+  ERL_NIF_TERM struct_atom;
+
+  if (!enif_get_map_value(env, term, nif::make_atom(env, "__struct__"), &struct_atom))
+    return false;
+
+  return nif::is_atom(env, struct_atom, module);
+}
+
+bool
+nif::get_struct_field(ErlNifEnv* env, ERL_NIF_TERM term, const char* field, ERL_NIF_TERM& sink) {
+  return enif_get_map_value(env, term, nif::make_atom(env, field), &sink);
+}
+
 bool nif::get_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string& sink) {
   ErlNifBinary bin;
   if (enif_inspect_binary(env, term, &bin)) {

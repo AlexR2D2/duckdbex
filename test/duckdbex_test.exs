@@ -184,40 +184,44 @@ defmodule DuckdbexTest do
   end
 
   test "integer_to_hugeint/1" do
-    assert {0, 0} =
+    assert %Duckdbex.Hugeint{upper: 0, lower: 0} =
              Duckdbex.integer_to_hugeint(-0)
 
-    assert {0, 1} =
+    assert %Duckdbex.Hugeint{upper: 0, lower: 1} =
              Duckdbex.integer_to_hugeint(1)
 
-    assert {0, 18_446_744_073_709_551_615} =
+    assert %Duckdbex.Hugeint{upper: 0, lower: 18_446_744_073_709_551_615} =
              Duckdbex.integer_to_hugeint(0xFFFFFFFFFFFFFFFF)
 
-    assert {-1, 1} =
+    assert %Duckdbex.Hugeint{upper: -1, lower: 1} =
              Duckdbex.integer_to_hugeint(-0x0FFFFFFFFFFFFFFFF)
 
-    assert {-16, 16} =
+    assert %Duckdbex.Hugeint{upper: -16, lower: 16} =
              Duckdbex.integer_to_hugeint(-0xFFFFFFFFFFFFFFFF0)
 
-    assert {18_446_744_073_709_551_615, 18_446_744_073_709_551_615} =
+    assert %Duckdbex.Hugeint{upper: 18_446_744_073_709_551_615, lower: 18_446_744_073_709_551_615} =
              Duckdbex.integer_to_hugeint(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
   end
 
   test "hugeint_to_integer/1" do
-    assert 0 = Duckdbex.hugeint_to_integer({0, 0})
+    assert 0 = Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{upper: 0, lower: 0})
 
-    assert 1 = Duckdbex.hugeint_to_integer({0, 1})
+    assert 1 = Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{upper: 0, lower: 1})
 
-    assert 18_446_744_073_709_551_616 = Duckdbex.hugeint_to_integer({1, 0})
+    assert 18_446_744_073_709_551_616 =
+             Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{upper: 1, lower: 0})
 
     assert 18_446_744_073_709_551_615 =
-             Duckdbex.hugeint_to_integer({0, 0xFFFFFFFFFFFFFFFF})
+             Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{upper: 0, lower: 0xFFFFFFFFFFFFFFFF})
 
     assert 340_282_366_920_938_463_444_927_863_358_058_659_840 =
-             Duckdbex.hugeint_to_integer({0xFFFFFFFFFFFFFFFF, 0})
+             Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{upper: 0xFFFFFFFFFFFFFFFF, lower: 0})
 
     assert -340_282_366_920_938_463_426_481_119_284_349_108_225 =
-             Duckdbex.hugeint_to_integer({-0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF})
+             Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{
+               upper: -0xFFFFFFFFFFFFFFFF,
+               lower: 0xFFFFFFFFFFFFFFFF
+             })
   end
 
   test "library_version/0" do

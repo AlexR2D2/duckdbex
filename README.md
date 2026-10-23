@@ -536,29 +536,71 @@ Now we can use this extension
 
 Documentation generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 
-## Huge numbers (hugeint)
+## Elixir representation of DuckDB types
 
-The BIGINT and HUGEINT types are designed to be used when the range of the integer type is insufficient. Hugeint in DuckDB is 128bit integer. Because max native integer in C++ is 64bit integer, HUGEINT is represented as combination of two 64bit integers. There is no efficient way to pass HUGEINT from DuckDB(C++) to Elixir(Erlang) than to pass it as is - combination of two 64bit integers. But in Elixir there is no restrictions to integers, so if you will get instead of integer a tuple of two integers you should convert it to integer via `DuckDB.hugeint_to_integer({upper_int, lower_int})`.
+Scalar DuckDB types map to Elixir's built-in types where they exist, and to
+`Duckdbex.*` structs where Elixir has no equivalent.
+
+| DuckDB | Elixir |
+| --- | --- |
+| `DATE` | `Date` |
+| `TIME` | `Time` |
+| `TIMESTAMP` | `NaiveDateTime` |
+| `TIMESTAMPTZ` | `DateTime` (UTC) |
+| `TIMESTAMP_S` / `_MS` | `NaiveDateTime` |
+| `TIMESTAMP_NS` | `%Duckdbex.TimestampNs{datetime: NaiveDateTime, nanosecond: 0..999}` |
+| `TIMESTAMPTZ_NS` | `%Duckdbex.TimestampTzNs{datetime: DateTime, nanosecond: 0..999}` |
+| `TIMETZ` | `%Duckdbex.TimeTz{time: Time, offset: seconds}` |
+| `INTERVAL` | `%Duckdbex.Interval{months, days, micros}` |
+| `DECIMAL` | `%Duckdbex.Decimal{unscaled, width, scale}` |
+| `HUGEINT` / `UHUGEINT` | `%Duckdbex.Hugeint{upper, lower}` |
+| `UNION` | `%Duckdbex.Union{tag, value}` |
+| `MAP` | `[{key, value}]` |
+| `LIST` / `ARRAY` / `TUPLE` | list |
+
+Parameters accept the same representations (strings are still accepted for
+date, time, timestamp and interval columns).
+
+### Huge numbers (hugeint)
+
+`HUGEINT` is a 128-bit integer. The NIF API cannot build Erlang bignums, so the
+value is returned as two 64-bit halves. Convert it when you need an integer:
 
 ```elixir
 > {:ok, r} = Duckdbex.query(conn, "SELECT SUM(1);")
 > Duckdbex.fetch_all(r)
-[[{0, 1}]]
-> Duckdbex.hugeint_to_integer({0, 1})
+[[%Duckdbex.Hugeint{upper: 0, lower: 1}]]
+> Duckdbex.hugeint_to_integer(%Duckdbex.Hugeint{upper: 0, lower: 1})
 1
 ```
 
-And vice versa, if you should pass HUGEINT as argument to sql query, you should convert this argument to 'native' representation
+Passing a huge value works the same way:
 
 ```elixir
 > hi = Duckdbex.integer_to_hugeint(123456789123456789123456789)
-{6692605, 17502027875430457109}
+%Duckdbex.Hugeint{upper: 6692605, lower: 17502027875430457109}
 > {:ok, r} = Duckdbex.query(conn, "SELECT SUM(1234567891234567891234567891) > $1;", [hi])
 > Duckdbex.fetch_all(r)
 [[true]]
 ```
 
-Currently Duckdbex lib didn't convert automatically `hugeint_to_integer` for you because this is additional extra pass through your collection of rows which will be executed inside the library.
+The conversion is not automatic because it would add a pass over every fetched
+row.
+
+### Decimal
+
+`DECIMAL` keeps the unscaled integer, width and scale. `unscaled` is a plain
+integer when it fits in 64 bits and a `Duckdbex.Hugeint` otherwise. If the
+optional [`decimal`](https://hex.pm/packages/decimal) package is available:
+
+```elixir
+> {:ok, r} = Duckdbex.query(conn, "SELECT 123.45::DECIMAL(10,2);")
+> [[decimal]] = Duckdbex.fetch_all(r)
+> %Duckdbex.Decimal{unscaled: 12345, width: 10, scale: 2} = decimal
+> {:ok, decimal} = Duckdbex.Decimal.to_decimal(decimal)
+> Decimal.to_string(decimal)
+"123.45"
+```
 
 ## Remote access (Quack)
 
@@ -593,6 +635,12 @@ needs network access to install the extension: `mix test --include quack`.
 DuckDB 2.0 has a new storage format, so database files written by 2.0 cannot be opened by
 DuckDB 1.x. DuckDB 2.0 still reads and writes files created by earlier versions, so upgrading an
 existing database is safe as long as you do not need to go back.
+
+duckdbex 0.7 changes how DuckDB types are represented in Elixir: dates and
+timestamps are `Date`/`Time`/`NaiveDateTime`/`DateTime` instead of tuples, and
+`DECIMAL`, `HUGEINT`, `INTERVAL`, `TIMETZ` and `UNION` are `Duckdbex.*` structs
+instead of tuples. See "Elixir representation of DuckDB types" above. Inputs
+must use the new representation.
 
 Other changes that affect duckdbex users:
 

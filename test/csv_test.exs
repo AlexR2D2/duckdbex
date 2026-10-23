@@ -49,6 +49,6 @@ defmodule Duckdbex.CSVTest do
     assert [[2]] = Duckdbex.fetch_all(res)
 
     assert {:ok, res} = Duckdbex.query(conn, "SELECT * FROM 'test/support/recorded.csv';")
-    assert [[{2000, 1, 1}, 5], [{2022, 1, 31}, 10]] = Duckdbex.fetch_all(res)
+    assert [[~D[2000-01-01], 5], [~D[2022-01-31], 10]] = Duckdbex.fetch_all(res)
   end
 end

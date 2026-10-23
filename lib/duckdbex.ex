@@ -619,12 +619,12 @@ defmodule Duckdbex do
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE hugeints(value HUGEINT);")
     iex> {:ok, _res} = Duckdbex.query(conn, "INSERT INTO hugeints VALUES (98233720368547758080000::hugeint);")
     iex> hugeint = Duckdbex.integer_to_hugeint(98233720368547758080000)
+    iex> %Duckdbex.Hugeint{upper: 5325, lower: 4808176044395724800} = hugeint
     iex> {:ok, res} = Duckdbex.query(conn, "SELECT * FROM hugeints WHERE value = $1", [hugeint])
-    iex> [[{5325, 4808176044395724800}]] = Duckdbex.fetch_all(res)
+    iex> [[%Duckdbex.Hugeint{upper: 5325, lower: 4808176044395724800}]] = Duckdbex.fetch_all(res)
   """
-  def integer_to_hugeint(integer) when is_integer(integer) do
-    {:erlang.bsr(integer, 64), :erlang.band(integer, 0xFFFFFFFFFFFFFFFF)}
-  end
+  def integer_to_hugeint(integer) when is_integer(integer),
+    do: Duckdbex.Hugeint.from_integer(integer)
 
   @doc """
   Convert a duckdb hugeint record to erlang/elixir integer.
@@ -636,11 +636,8 @@ defmodule Duckdbex do
     iex> {:ok, _res} = Duckdbex.query(conn, "CREATE TABLE hugeints(value HUGEINT);")
     iex> {:ok, _res} = Duckdbex.query(conn, "INSERT INTO hugeints VALUES (98233720368547758080000::hugeint);")
     iex> {:ok, res} = Duckdbex.query(conn, "SELECT * FROM hugeints;")
-    iex> [[hugeint = {5325, 4808176044395724800}]] = Duckdbex.fetch_all(res)
+    iex> [[hugeint = %Duckdbex.Hugeint{upper: 5325, lower: 4808176044395724800}]] = Duckdbex.fetch_all(res)
     iex> 98233720368547758080000 = Duckdbex.hugeint_to_integer(hugeint)
   """
-  def hugeint_to_integer({upper, lower})
-      when is_integer(upper) and is_integer(lower) and lower >= 0 do
-    upper |> :erlang.bsl(64) |> :erlang.bor(lower)
-  end
+  def hugeint_to_integer(hugeint), do: Duckdbex.Hugeint.to_integer(hugeint)
 end

@@ -161,6 +161,145 @@ bool nif::term_to_enum(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   return term_to_string(env, term, sink);
 }
 
+
+static bool
+get_int_field(ErlNifEnv* env, ERL_NIF_TERM term, const char* field, int& sink) {
+  ERL_NIF_TERM value;
+  return nif::get_struct_field(env, term, field, value) && enif_get_int(env, value, &sink);
+}
+
+static bool
+get_int64_field(ErlNifEnv* env, ERL_NIF_TERM term, const char* field, int64_t& sink) {
+  ERL_NIF_TERM value;
+  ErlNifSInt64 parsed;
+
+  if (!nif::get_struct_field(env, term, field, value) || !enif_get_int64(env, value, &parsed))
+    return false;
+
+  sink = parsed;
+  return true;
+}
+
+static bool
+get_uint_field(ErlNifEnv* env, ERL_NIF_TERM term, const char* field, unsigned int& sink) {
+  ERL_NIF_TERM value;
+  return nif::get_struct_field(env, term, field, value) && enif_get_uint(env, value, &sink);
+}
+
+static bool
+get_time_struct(ErlNifEnv* env, ERL_NIF_TERM term, int32_t& hour, int32_t& minute, int32_t& second,
+                int32_t& micros) {
+  if (!nif::struct_is(env, term, "Elixir.Time"))
+    return false;
+
+  int h, m, s, us;
+  ERL_NIF_TERM micro_term;
+  int arity = 0;
+  const ERL_NIF_TERM* parts = nullptr;
+
+  if (!get_int_field(env, term, "hour", h) ||
+      !get_int_field(env, term, "minute", m) ||
+      !get_int_field(env, term, "second", s) ||
+      !nif::get_struct_field(env, term, "microsecond", micro_term) ||
+      !enif_get_tuple(env, micro_term, &arity, &parts) || arity != 2 ||
+      !enif_get_int(env, parts[0], &us))
+    return false;
+
+  hour = h;
+  minute = m;
+  second = s;
+  micros = us;
+  return true;
+}
+
+static bool
+read_datetime_fields(ErlNifEnv* env, ERL_NIF_TERM term, int32_t& year, int32_t& month,
+                     int32_t& day, int32_t& hour, int32_t& minute, int32_t& second,
+                     int32_t& micros) {
+  int y, mo, d, h, mi, s, us;
+  ERL_NIF_TERM micro_term;
+  int arity = 0;
+  const ERL_NIF_TERM* parts = nullptr;
+
+  if (!get_int_field(env, term, "year", y) ||
+      !get_int_field(env, term, "month", mo) ||
+      !get_int_field(env, term, "day", d) ||
+      !get_int_field(env, term, "hour", h) ||
+      !get_int_field(env, term, "minute", mi) ||
+      !get_int_field(env, term, "second", s) ||
+      !nif::get_struct_field(env, term, "microsecond", micro_term) ||
+      !enif_get_tuple(env, micro_term, &arity, &parts) || arity != 2 ||
+      !enif_get_int(env, parts[0], &us))
+    return false;
+
+  year = y;
+  month = mo;
+  day = d;
+  hour = h;
+  minute = mi;
+  second = s;
+  micros = us;
+  return true;
+}
+
+static bool
+get_naive_datetime_struct(ErlNifEnv* env, ERL_NIF_TERM term, int32_t& year, int32_t& month,
+                          int32_t& day, int32_t& hour, int32_t& minute, int32_t& second,
+                          int32_t& micros) {
+  if (!nif::struct_is(env, term, "Elixir.NaiveDateTime"))
+    return false;
+
+  return read_datetime_fields(env, term, year, month, day, hour, minute, second, micros);
+}
+
+static bool
+get_hugeint_struct(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::hugeint_t& sink) {
+  if (!nif::struct_is(env, term, "Elixir.Duckdbex.Hugeint"))
+    return false;
+
+  ERL_NIF_TERM upper_term, lower_term;
+  ErlNifSInt64 upper;
+  ErlNifUInt64 lower;
+
+  if (!nif::get_struct_field(env, term, "upper", upper_term) ||
+      !nif::get_struct_field(env, term, "lower", lower_term) ||
+      !enif_get_int64(env, upper_term, &upper) ||
+      !enif_get_uint64(env, lower_term, &lower))
+    return false;
+
+  sink.upper = upper;
+  sink.lower = lower;
+  return true;
+}
+
+static bool
+get_naive_datetime_value(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  int32_t year, month, day, hour, minute, second, micros;
+
+  if (!get_naive_datetime_struct(env, term, year, month, day, hour, minute, second, micros))
+    return false;
+
+  sink = duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, micros);
+  return true;
+}
+
+static bool
+get_datetime_value(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  if (!nif::struct_is(env, term, "Elixir.DateTime"))
+    return false;
+
+  int32_t year, month, day, hour, minute, second, micros;
+  if (!read_datetime_fields(env, term, year, month, day, hour, minute, second, micros))
+    return false;
+
+  const duckdb::timestamp_t timestamp = duckdb::Timestamp::FromDatetime(
+    duckdb::Date::FromDate(year, month, day),
+    duckdb::Time::FromTime(hour, minute, second, micros));
+
+  sink = duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp));
+  return true;
+}
+
 bool nif::term_to_any(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   if (term_to_null(env, term, sink) || term_to_boolean(env, term, sink))
     return true;
@@ -296,29 +435,12 @@ bool nif::term_to_utinyint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
 }
 
 bool nif::term_to_hugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  if (enif_is_tuple(env, term)) {
-    int arity = 0;
-    const ERL_NIF_TERM* hugeint_tuple;
-    if (!enif_get_tuple(env, term, &arity, &hugeint_tuple) || arity != 2)
+  if (nif::struct_is(env, term, "Elixir.Duckdbex.Hugeint")) {
+    duckdb::hugeint_t hugeint;
+    if (!get_hugeint_struct(env, term, hugeint))
       return false;
 
-    ErlNifSInt64 hugeint_upper;
-    if (!enif_get_int64(env, hugeint_tuple[0], &hugeint_upper))
-      return false;
-
-    ErlNifUInt64 hugeint_lower;
-    if (!enif_get_uint64(env, hugeint_tuple[1], &hugeint_lower))
-      return false;
-
-    duckdb::hugeint_t hugeint = 0;
-    hugeint.lower = hugeint_lower;
-    hugeint.upper = hugeint_upper;
-
-    duckdb::hugeint_t result;
-    if (!duckdb::Hugeint::TryConvert(hugeint, result))
-      return false;
-
-    sink = std::move(duckdb::Value::HUGEINT(result));
+    sink = std::move(duckdb::Value::HUGEINT(hugeint));
     return true;
   }
 
@@ -327,11 +449,11 @@ bool nif::term_to_hugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
     return try_convert_to_hugeint(std::string((const char*)bin.data, bin.size).c_str(), sink);
 
   double a_double;
-  if(enif_get_double(env, term, &a_double))
+  if (enif_get_double(env, term, &a_double))
     return try_convert_to_hugeint(a_double, sink);
 
   unsigned int an_uint;
-  if(enif_get_uint(env, term, &an_uint))
+  if (enif_get_uint(env, term, &an_uint))
     return try_convert_to_hugeint(an_uint, sink);
 
   ErlNifUInt64 an_uint64;
@@ -339,7 +461,7 @@ bool nif::term_to_hugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
     return try_convert_to_hugeint(static_cast<uint64_t>(an_uint64), sink);
 
   int an_int;
-  if(enif_get_int(env, term, &an_int))
+  if (enif_get_int(env, term, &an_int))
     return try_convert_to_hugeint(an_int, sink);
 
   ErlNifSInt64 an_int64;
@@ -350,29 +472,21 @@ bool nif::term_to_hugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 }
 
 bool nif::term_to_uhugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  if (enif_is_tuple(env, term)) {
-    int arity = 0;
-    const ERL_NIF_TERM* uhugeint_tuple;
-    if (!enif_get_tuple(env, term, &arity, &uhugeint_tuple) || arity != 2)
-      return false;
+  if (nif::struct_is(env, term, "Elixir.Duckdbex.Hugeint")) {
+    ERL_NIF_TERM upper_term, lower_term;
+    ErlNifUInt64 upper, lower;
 
-    ErlNifUInt64 uhugeint_upper;
-    if (!enif_get_uint64(env, uhugeint_tuple[0], &uhugeint_upper))
-      return false;
-
-    ErlNifUInt64 uhugeint_lower;
-    if (!enif_get_uint64(env, uhugeint_tuple[1], &uhugeint_lower))
+    if (!nif::get_struct_field(env, term, "upper", upper_term) ||
+        !nif::get_struct_field(env, term, "lower", lower_term) ||
+        !enif_get_uint64(env, upper_term, &upper) ||
+        !enif_get_uint64(env, lower_term, &lower))
       return false;
 
     duckdb::uhugeint_t uhugeint = 0;
-    uhugeint.lower = uhugeint_lower;
-    uhugeint.upper = uhugeint_upper;
+    uhugeint.upper = upper;
+    uhugeint.lower = lower;
 
-    duckdb::uhugeint_t result;
-    if (!duckdb::Uhugeint::TryConvert(uhugeint, result))
-      return false;
-
-    sink = std::move(duckdb::Value::UHUGEINT(result));
+    sink = std::move(duckdb::Value::UHUGEINT(uhugeint));
     return true;
   }
 
@@ -381,11 +495,11 @@ bool nif::term_to_uhugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
     return try_convert_to_uhugeint(std::string((const char*)bin.data, bin.size).c_str(), sink);
 
   double a_double;
-  if(enif_get_double(env, term, &a_double))
+  if (enif_get_double(env, term, &a_double))
     return try_convert_to_uhugeint(a_double, sink);
 
   unsigned int an_uint;
-  if(enif_get_uint(env, term, &an_uint))
+  if (enif_get_uint(env, term, &an_uint))
     return try_convert_to_uhugeint(an_uint, sink);
 
   ErlNifUInt64 an_uint64;
@@ -393,7 +507,7 @@ bool nif::term_to_uhugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
     return try_convert_to_uhugeint(static_cast<uint64_t>(an_uint64), sink);
 
   int an_int;
-  if(enif_get_int(env, term, &an_int))
+  if (enif_get_int(env, term, &an_int))
     return try_convert_to_uhugeint(an_int, sink);
 
   ErlNifSInt64 an_int64;
@@ -404,31 +518,34 @@ bool nif::term_to_uhugeint(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sin
 }
 
 bool nif::term_to_decimal(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  int arity = 0;
-  const ERL_NIF_TERM* decimal_tuple;
-  if (enif_get_tuple(env, term, &arity, &decimal_tuple) && arity == 3) {
-    ErlNifSInt64 value;
-    if (!enif_get_int64(env, decimal_tuple[0], &value))
+  if (nif::struct_is(env, term, "Elixir.Duckdbex.Decimal")) {
+    ERL_NIF_TERM unscaled_term;
+    unsigned int width, scale;
+
+    if (!nif::get_struct_field(env, term, "unscaled", unscaled_term) ||
+        !get_uint_field(env, term, "width", width) ||
+        !get_uint_field(env, term, "scale", scale))
       return false;
 
-    unsigned int width;
-    if(!enif_get_uint(env, decimal_tuple[1], &width))
+    if (nif::struct_is(env, unscaled_term, "Elixir.Duckdbex.Hugeint")) {
+      duckdb::hugeint_t hugeint;
+      if (!get_hugeint_struct(env, unscaled_term, hugeint))
+        return false;
+
+      sink = std::move(duckdb::Value::DECIMAL(hugeint, width, scale));
+      return true;
+    }
+
+    ErlNifSInt64 unscaled;
+    if (!enif_get_int64(env, unscaled_term, &unscaled))
       return false;
 
-    unsigned int scale;
-    if(!enif_get_uint(env, decimal_tuple[2], &scale))
-      return false;
-
-    sink = std::move(duckdb::Value::DECIMAL((int64_t)value, width, scale));
-
+    sink = std::move(duckdb::Value::DECIMAL((int64_t)unscaled, width, scale));
     return true;
   }
 
   if (enif_is_binary(env, term))
     return term_to_string(env, term, sink);
-
-  if (enif_is_tuple(env, term))
-    return term_to_hugeint(env, term, sink);
 
   if (enif_is_number(env, term))
     return term_to_double(env, term, sink) || term_to_integer(env, term, sink) || term_to_bigint(env, term, sink);
@@ -461,9 +578,12 @@ bool nif::term_to_uuid(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 }
 
 bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  if (enif_is_tuple(env, term)) {
+  if (nif::struct_is(env, term, "Elixir.Date")) {
     int year, month, day;
-    if (!enif_get_date(env, term, year, month, day))
+
+    if (!get_int_field(env, term, "year", year) ||
+        !get_int_field(env, term, "month", month) ||
+        !get_int_field(env, term, "day", day))
       return false;
 
     duckdb::date_t date;
@@ -475,7 +595,7 @@ bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   }
 
   ErlNifBinary bin;
-  if(enif_inspect_binary(env, term, &bin)) {
+  if (enif_inspect_binary(env, term, &bin)) {
     duckdb::idx_t pos = 0;
     duckdb::date_t date;
     bool special = false;
@@ -485,10 +605,6 @@ bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
     if (result == duckdb::DateCastResult::SUCCESS) {
       sink = std::move(duckdb::Value::DATE(date));
       return true;
-    } else {
-      // TODO: Forward cast error to the client
-      // enum class DateCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_RANGE };
-      // return false;
     }
   }
 
@@ -496,18 +612,15 @@ bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 }
 
 bool nif::term_to_time(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  if (enif_is_tuple(env, term)) {
-    int hour, minute, second, micros;
-    if (!enif_get_time(env, term, hour, minute, second, micros))
-      return false;
+  int32_t hour, minute, second, micros;
 
-    sink = std::move(duckdb::Value::TIME((int32_t)hour, (int32_t)minute, (int32_t)second, (int32_t)micros));
-
+  if (get_time_struct(env, term, hour, minute, second, micros)) {
+    sink = std::move(duckdb::Value::TIME(hour, minute, second, micros));
     return true;
   }
 
   ErlNifBinary bin;
-  if(enif_inspect_binary(env, term, &bin)) {
+  if (enif_inspect_binary(env, term, &bin)) {
     duckdb::idx_t pos = 0;
     duckdb::dtime_t time;
     bool special = false;
@@ -522,9 +635,16 @@ bool nif::term_to_time(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 }
 
 bool nif::term_to_time_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  if (enif_is_tuple(env, term)) {
-    int hour, minute, second, micros, offset_hour, offset_minute;
-    if (!enif_get_time_tz(env, term, hour, minute, second, micros, offset_hour, offset_minute))
+  if (nif::struct_is(env, term, "Elixir.Duckdbex.TimeTz")) {
+    ERL_NIF_TERM time_term;
+    int offset;
+
+    if (!nif::get_struct_field(env, term, "time", time_term) ||
+        !get_int_field(env, term, "offset", offset))
+      return false;
+
+    int32_t hour, minute, second, micros;
+    if (!get_time_struct(env, time_term, hour, minute, second, micros))
       return false;
 
     int64_t time_in_microseconds =
@@ -533,17 +653,12 @@ bool nif::term_to_time_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
       second * duckdb::Interval::MICROS_PER_SEC +
       micros;
 
-    int32_t offset =
-      (std::abs(offset_hour) * duckdb::Interval::SECS_PER_HOUR +
-      offset_minute * duckdb::Interval::SECS_PER_MINUTE) * (offset_hour < 0 ? -1 : 1);
-
     sink = std::move(duckdb::Value::TIMETZ(duckdb::dtime_tz_t(duckdb::dtime_t(time_in_microseconds), offset)));
-
     return true;
   }
 
   ErlNifBinary bin;
-  if(enif_inspect_binary(env, term, &bin)) {
+  if (enif_inspect_binary(env, term, &bin)) {
     duckdb::idx_t pos = 0;
     duckdb::dtime_tz_t result;
     bool has_offset = false;
@@ -558,19 +673,13 @@ bool nif::term_to_time_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 }
 
 bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  ErlNifBinary bin;
-
-  if (enif_is_tuple(env, term)) {
-    int year, month, day, hour, minute, second, micros = 0;
-    if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, micros))
-      return false;
-
-    sink = std::move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
-
+  if (get_naive_datetime_value(env, term, sink))
     return true;
-  } else if(enif_inspect_binary(env, term, &bin)) {
+
+  ErlNifBinary bin;
+  if (enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_t result;
-    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, false)) {
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, true)) {
       sink = std::move(duckdb::Value::TIMESTAMP(result));
       return true;
     }
@@ -580,51 +689,22 @@ bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& si
 }
 
 bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  if (enif_is_tuple(env, term)) {
-    int year, month, day;
-    int hour, minute, second, micros;
-    int offset_hour, offset_minute;
-    if (!enif_get_date_time_tz(env, term, year, month, day, hour, minute, second, micros, offset_hour, offset_minute))
-      return false;
-
-    duckdb::date_t date;
-    if (!duckdb::Date::TryFromDate((int32_t)year, (int32_t)month, (int32_t)day, date))
-      return false;
-
-    int64_t time_in_microseconds =
-      hour * duckdb::Interval::MICROS_PER_HOUR +
-      minute * duckdb::Interval::MICROS_PER_MINUTE +
-      second * duckdb::Interval::MICROS_PER_SEC +
-      micros;
-
-    int32_t offset =
-      (std::abs(offset_hour) * duckdb::Interval::SECS_PER_HOUR +
-      offset_minute * duckdb::Interval::SECS_PER_MINUTE) * (offset_hour < 0 ? -1 : 1);
-
-    duckdb::dtime_tz_t timez(duckdb::dtime_t(time_in_microseconds), offset);
-
-    duckdb::timestamp_t timestamp;
-    if (!duckdb::Timestamp::TryFromDatetime(date, timez, timestamp))
-      return false;
-
-    sink = std::move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
+  if (get_datetime_value(env, term, sink))
     return true;
-  }
 
   ErlNifBinary bin;
-  if(enif_inspect_binary(env, term, &bin)) {
+  if (enif_inspect_binary(env, term, &bin)) {
     bool has_offset = false;
     duckdb::string_t tz;
     duckdb::timestamp_t timestamp;
 
-    duckdb::TimestampCastResult result = duckdb::Timestamp::TryConvertTimestampTZ((const char*)bin.data, bin.size, timestamp, true, has_offset, tz);
-    if (result == duckdb::TimestampCastResult::SUCCESS) {
+    const char* data = (const char*)bin.data;
+    bool notz = duckdb::Timestamp::TryConvertTimestamp(data, bin.size, timestamp, true) == duckdb::TimestampCastResult::SUCCESS;
+    bool withtz = duckdb::Timestamp::TryConvertTimestampTZ(data, bin.size, timestamp, true, has_offset, tz) == duckdb::TimestampCastResult::SUCCESS;
+
+    if (notz || withtz) {
       sink = std::move(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp)));
       return true;
-    } else {
-      // TODO: Return the cast result to client
-      // enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE, ERROR_RANGE };
-      // return false;
     }
   }
 
@@ -632,28 +712,32 @@ bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 }
 
 bool nif::term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  ErlNifBinary bin;
+  if (nif::struct_is(env, term, "Elixir.Duckdbex.TimestampNs")) {
+    ERL_NIF_TERM datetime_term;
+    int nanosecond;
 
-  if (enif_is_tuple(env, term)) {
-    int year, month, day, hour, minute, second, nanosecond = 0;
-    if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, nanosecond))
+    if (!nif::get_struct_field(env, term, "datetime", datetime_term) ||
+        !get_int_field(env, term, "nanosecond", nanosecond))
       return false;
 
-    int32_t micros = nanosecond / duckdb::Interval::NANOS_PER_MICRO;
-    int32_t nanos = nanosecond % duckdb::Interval::NANOS_PER_MICRO;
+    int32_t year, month, day, hour, minute, second, micros;
+    if (!get_naive_datetime_struct(env, datetime_term, year, month, day, hour, minute, second, micros))
+      return false;
 
     const duckdb::timestamp_t timestamp = duckdb::Timestamp::FromDatetime(
       duckdb::Date::FromDate(year, month, day),
       duckdb::Time::FromTime(hour, minute, second, micros));
 
     duckdb::timestamp_ns_t timestamp_ns;
-    if (!duckdb::Timestamp::TryFromTimestampNanos(timestamp, nanos, timestamp_ns))
+    if (!duckdb::Timestamp::TryFromTimestampNanos(timestamp, nanosecond, timestamp_ns))
       return false;
 
     sink = std::move(duckdb::Value::CreateValue(timestamp_ns));
-
     return true;
-  } else if(enif_inspect_binary(env, term, &bin)) {
+  }
+
+  ErlNifBinary bin;
+  if (enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_ns_t result;
     if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, true)) {
       sink = std::move(duckdb::Value::CreateValue(result));
@@ -665,21 +749,13 @@ bool nif::term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 }
 
 bool nif::term_to_timestamp_ms(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  ErlNifBinary bin;
-
-  if (enif_is_tuple(env, term)) {
-    int year, month, day, hour, minute, second, milliseconds = 0;
-    if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, milliseconds))
-      return false;
-
-    int32_t micros = (int32_t)(milliseconds * duckdb::Interval::MICROS_PER_MSEC);
-
-    sink = std::move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, micros));
-
+  if (get_naive_datetime_value(env, term, sink))
     return true;
-  } else if(enif_inspect_binary(env, term, &bin)) {
+
+  ErlNifBinary bin;
+  if (enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_t result;
-    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, false)) {
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, true)) {
       sink = std::move(duckdb::Value::TIMESTAMP(result));
       return true;
     }
@@ -689,20 +765,14 @@ bool nif::term_to_timestamp_ms(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 }
 
 bool nif::term_to_timestamp_sec(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  ErlNifBinary bin;
-
-  if (enif_is_tuple(env, term)) {
-    int year, month, day, hour, minute, second, precision = 0;
-    if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, precision))
-      return false;
-
-    sink = std::move(duckdb::Value::TIMESTAMP(year, month, day, hour, minute, second, 0));
-
+  if (get_naive_datetime_value(env, term, sink))
     return true;
-  } else if(enif_inspect_binary(env, term, &bin)) {
-    duckdb::timestamp_t timestamp;
-    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, timestamp, false)) {
-      sink = std::move(duckdb::Value::TIMESTAMP(timestamp));
+
+  ErlNifBinary bin;
+  if (enif_inspect_binary(env, term, &bin)) {
+    duckdb::timestamp_t result;
+    if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, true)) {
+      sink = std::move(duckdb::Value::TIMESTAMP(result));
       return true;
     }
   }
@@ -730,20 +800,16 @@ bool nif::term_to_blob(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
 }
 
 bool nif::term_to_interval(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  if (enif_is_tuple(env, term)) {
-    int arity = 0;
-    const ERL_NIF_TERM* interval_parts;
-    if (!enif_get_tuple(env, term, &arity, &interval_parts) || arity != 3)
+  if (nif::struct_is(env, term, "Elixir.Duckdbex.Interval")) {
+    int months, days;
+    int64_t micros;
+
+    if (!get_int_field(env, term, "months", months) ||
+        !get_int_field(env, term, "days", days) ||
+        !get_int64_field(env, term, "micros", micros))
       return false;
 
-    int32_t months, days;
-    ErlNifSInt64 micros;
-    if (!enif_get_int(env, interval_parts[0], &months) ||
-        !enif_get_int(env, interval_parts[1], &days) ||
-        !enif_get_int64(env, interval_parts[2], &micros))
-      return false;
-
-    sink = std::move(duckdb::Value::INTERVAL(months, days, micros));
+    sink = std::move(duckdb::Value::INTERVAL((int32_t)months, (int32_t)days, micros));
     return true;
   }
 
@@ -932,22 +998,22 @@ bool nif::term_to_struct(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logica
 }
 
 bool nif::term_to_union(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& union_type, duckdb::Value& sink) {
-  int arity = 0;
-  const ERL_NIF_TERM* tuple;
-  ErlNifBinary bin;
-  if (!enif_is_tuple(env, term) ||
-      !enif_get_tuple(env, term, &arity, &tuple) || arity != 2 ||
-      !enif_is_binary(env, tuple[0]) ||
-      !enif_inspect_binary(env, tuple[0], &bin))
+  if (!nif::struct_is(env, term, "Elixir.Duckdbex.Union"))
     return false;
 
-  auto union_tag_name = std::string((const char*)bin.data, bin.size);
+  ERL_NIF_TERM tag_term, value_term;
+  std::string union_tag_name;
+
+  if (!nif::get_struct_field(env, term, "tag", tag_term) ||
+      !nif::get_struct_field(env, term, "value", value_term) ||
+      !nif::get_string(env, tag_term, union_tag_name))
+    return false;
 
   auto member_types = duckdb::UnionType::CopyMemberTypes(union_type);
 
   auto it = std::find_if(member_types.begin(), member_types.end(),
-                          [=](const duckdb::child_list_t<duckdb::LogicalType>::value_type &it) -> bool {
-                            return it.first == union_tag_name;
+                          [&](const duckdb::child_list_t<duckdb::LogicalType>::value_type &member) -> bool {
+                            return member.first == union_tag_name;
                           });
 
   if (it == member_types.end())
@@ -956,11 +1022,10 @@ bool nif::term_to_union(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
   std::size_t union_tag_index = std::distance(member_types.begin(), it);
 
   duckdb::Value union_value;
-  if (!term_to_value(env, tuple[1], it->second, union_value))
+  if (!term_to_value(env, value_term, it->second, union_value))
     return false;
 
   sink = duckdb::Value::UNION(member_types, union_tag_index, std::move(union_value));
-
   return true;
 }
 
@@ -1009,27 +1074,29 @@ bool nif::term_to_tuple(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::Logical
 }
 
 bool nif::term_to_timestamp_tz_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
-  ErlNifBinary bin;
+  if (nif::struct_is(env, term, "Elixir.Duckdbex.TimestampTzNs")) {
+    ERL_NIF_TERM datetime_term;
+    int nanosecond;
 
-  if (enif_is_tuple(env, term)) {
-    int year, month, day, hour, minute, second, nanosecond = 0;
-    if (!enif_get_date_time(env, term, year, month, day, hour, minute, second, nanosecond))
+    if (!nif::get_struct_field(env, term, "datetime", datetime_term) ||
+        !get_int_field(env, term, "nanosecond", nanosecond))
       return false;
 
-    int32_t micros = nanosecond / duckdb::Interval::NANOS_PER_MICRO;
-    int32_t nanos = nanosecond % duckdb::Interval::NANOS_PER_MICRO;
+    duckdb::Value datetime;
+    if (!get_datetime_value(env, datetime_term, datetime))
+      return false;
 
-    const duckdb::timestamp_t timestamp = duckdb::Timestamp::FromDatetime(
-      duckdb::Date::FromDate(year, month, day),
-      duckdb::Time::FromTime(hour, minute, second, micros));
-
+    duckdb::timestamp_t timestamp = duckdb::TimestampValue::Get(datetime);
     duckdb::timestamp_ns_t timestamp_ns;
-    if (!duckdb::Timestamp::TryFromTimestampNanos(timestamp, nanos, timestamp_ns))
+    if (!duckdb::Timestamp::TryFromTimestampNanos(timestamp, nanosecond, timestamp_ns))
       return false;
 
     sink = duckdb::Value::TIMESTAMPTZNS(duckdb::timestamp_tz_ns_t(timestamp_ns));
     return true;
-  } else if (enif_inspect_binary(env, term, &bin)) {
+  }
+
+  ErlNifBinary bin;
+  if (enif_inspect_binary(env, term, &bin)) {
     duckdb::timestamp_ns_t result;
     if (duckdb::TimestampCastResult::SUCCESS == duckdb::Timestamp::TryConvertTimestamp((const char*)bin.data, bin.size, result, true)) {
       sink = duckdb::Value::TIMESTAMPTZNS(duckdb::timestamp_tz_ns_t(result));
