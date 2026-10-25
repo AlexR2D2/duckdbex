@@ -33,15 +33,19 @@ namespace nif {
   bool term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
+  bool term_to_timestamp_tz_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_timestamp_ms(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_timestamp_sec(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_blob(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
+  bool term_to_geometry(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
+  bool term_to_variant(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_interval(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink);
   bool term_to_list(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& child_type, duckdb::Value& sink);
   bool term_to_array(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& child_type, duckdb::Value& sink);
   bool term_to_map(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& map_type, duckdb::Value& sink);
   bool term_to_struct(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& struct_type, duckdb::Value& sink);
   bool term_to_union(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& union_type, duckdb::Value& sink);
+  bool term_to_tuple(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& tuple_type, duckdb::Value& sink);
 
   bool term_to_value(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& value_type, duckdb::Value& sink);
 }

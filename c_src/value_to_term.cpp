@@ -49,6 +49,8 @@ ERL_NIF_TERM nif::logical_type_to_term(ErlNifEnv* env, const duckdb::LogicalType
       return make_atom(env, "timestamp");
     case duckdb::LogicalTypeId::TIMESTAMP_TZ:
       return make_atom(env, "timestamp_tz");
+    case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS:
+      return make_atom(env, "timestamp_tz_ns");
     case duckdb::LogicalTypeId::TIMESTAMP_NS:
       return make_atom(env, "timestamp_ns");
     case duckdb::LogicalTypeId::TIMESTAMP_MS:
@@ -69,8 +71,14 @@ ERL_NIF_TERM nif::logical_type_to_term(ErlNifEnv* env, const duckdb::LogicalType
       return make_atom(env, "map");
     case duckdb::LogicalTypeId::STRUCT:
       return make_atom(env, "struct");
+    case duckdb::LogicalTypeId::TUPLE:
+      return make_atom(env, "tuple");
     case duckdb::LogicalTypeId::UNION:
       return make_atom(env, "union");
+    case duckdb::LogicalTypeId::VARIANT:
+      return make_atom(env, "variant");
+    case duckdb::LogicalTypeId::GEOMETRY:
+      return make_atom(env, "geometry");
     case duckdb::LogicalTypeId::ANY:
       return make_atom(env, "any");
     default:
@@ -122,6 +130,12 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
     case duckdb::LogicalTypeId::BLOB: {
         auto blob = duckdb::StringValue::Get(value);
         sink = make_binary_term(env, blob);
+        return true;
+      }
+    // GEOMETRY is exposed as its WKB binary.
+    case duckdb::LogicalTypeId::GEOMETRY: {
+        auto& geometry = duckdb::StringValue::Get(value);
+        sink = make_binary_term(env, geometry.data(), geometry.size());
         return true;
       }
     case duckdb::LogicalTypeId::DATE: {
@@ -344,6 +358,39 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
 
         return true;
       }
+    case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS: {
+        duckdb::timestamp_ns_t timestamp_ns(duckdb::TimestampTZNSValue::Get(value));
+        if (infinite_value_to_term(env, timestamp_ns, sink))
+          return true;
+
+        duckdb::date_t out_date;
+        duckdb::dtime_t out_time;
+        int32_t out_nanos = 0;
+
+        duckdb::Timestamp::Convert(timestamp_ns, out_date, out_time, out_nanos);
+
+        int32_t out_year, out_month, out_day;
+        duckdb::Date::Convert(out_date, out_year, out_month, out_day);
+
+        int32_t out_hour, out_min, out_sec, out_micros;
+        duckdb::Time::Convert(out_time, out_hour, out_min, out_sec, out_micros);
+
+        int32_t nanoseconds = out_micros * duckdb::Interval::NANOS_PER_MICRO + out_nanos;
+
+        sink = enif_make_tuple2(env,
+          enif_make_tuple3(env,
+            enif_make_int(env, out_year),
+            enif_make_int(env, out_month),
+            enif_make_int(env, out_day)),
+          enif_make_tuple4(env,
+            enif_make_int(env, out_hour),
+            enif_make_int(env, out_min),
+            enif_make_int(env, out_sec),
+            enif_make_int(env, nanoseconds))
+        );
+
+        return true;
+      }
     case duckdb::LogicalTypeId::TIMESTAMP_MS: {
         if (infinite_value_to_term(env, duckdb::TimestampMSValue::Get(value), sink))
           return true;
@@ -490,6 +537,28 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
 
         sink = enif_make_list_from_array(env, &terms[0], terms.size());
         return true;
+      }
+    // TUPLE is positional like a list, so it is returned as one.
+    case duckdb::LogicalTypeId::TUPLE: {
+        auto& values = duckdb::StructValue::GetChildren(value);
+
+        if (!values.size()) {
+          sink = enif_make_list(env, 0);
+          return true;
+        }
+
+        std::vector<ERL_NIF_TERM> terms(values.size());
+
+        for (size_t i = 0; i < values.size(); i++) {
+          if (!value_to_term(env, values[i], terms[i]))
+            return false;
+        }
+
+        sink = enif_make_list_from_array(env, &terms[0], terms.size());
+        return true;
+      }
+    case duckdb::LogicalTypeId::VARIANT: {
+        return nif::value_to_term(env, duckdb::VariantValue::GetValue(value), sink);
       }
     case duckdb::LogicalTypeId::MAP: {
         std::vector<duckdb::Value> pairs = duckdb::MapValue::GetChildren(value);

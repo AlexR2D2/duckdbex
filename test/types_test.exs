@@ -173,6 +173,110 @@ defmodule Duckdbex.TypesTest do
     end
   end
 
+  # TUPLE A fixed-size sequence of positional values (DuckDB 2.0), exposed as a list.
+  describe "TUPLE" do
+    setup %{conn: conn} do
+      assert {:ok, _} =
+               Duckdbex.query(conn, "CREATE TABLE table1 (col1 TUPLE(INTEGER, VARCHAR));")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, "INSERT INTO table1 VALUES ((1, 'a')), ((2, NULL));")
+
+      %{conn: conn}
+    end
+
+    test "list input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [[1, "a"]])
+      assert [[[1, "a"]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "query output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 ORDER BY col1;")
+      assert [[[1, "a"]], [[2, nil]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "list of the wrong length is rejected", %{conn: conn} do
+      for invalid <- [[1], [1, "a", 3]] do
+        assert {:error, "invalid type of parameter #1"} =
+                 Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [invalid])
+      end
+    end
+  end
+
+  # VARIANT A dynamically typed value that can hold any other data type.
+  # https://duckdb.org/docs/sql/data_types/variant
+  describe "VARIANT" do
+    setup %{conn: conn} do
+      assert {:ok, _} = Duckdbex.query(conn, "CREATE TABLE table1 (col1 VARIANT);")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, """
+               INSERT INTO table1 VALUES
+                 (CAST(123 AS VARIANT)), (CAST('abc' AS VARIANT)), (CAST([1, 2] AS VARIANT));
+               """)
+
+      %{conn: conn}
+    end
+
+    test "scalar input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [123])
+      assert [[123]] = Duckdbex.fetch_all(r)
+
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", ["abc"])
+      assert [["abc"]] = Duckdbex.fetch_all(r)
+    end
+
+    test "nested output", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = CAST([1, 2] AS VARIANT);")
+
+      assert [[[1, 2]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "list input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [[1, 2]])
+      assert [[[1, 2]]] = Duckdbex.fetch_all(r)
+    end
+
+    test "struct input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [%{"a" => 1}])
+      assert [[%{"a" => 1}]] = Duckdbex.fetch_all(r)
+    end
+
+    test "nested input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [%{"a" => [1, 2]}])
+      assert [[%{"a" => [1, 2]}]] = Duckdbex.fetch_all(r)
+    end
+
+    test "empty list and map input/output", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [[]])
+      assert [[[]]] = Duckdbex.fetch_all(r)
+
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT $1::VARIANT;", [%{}])
+      assert [[%{}]] = Duckdbex.fetch_all(r)
+    end
+  end
+
+  # GEOMETRY Geometry values, exposed as WKB binaries.
+  # https://duckdb.org/docs/sql/data_types/geometry
+  describe "GEOMETRY" do
+    setup %{conn: conn} do
+      assert {:ok, _} = Duckdbex.query(conn, "CREATE TABLE table1 (col1 GEOMETRY);")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, "INSERT INTO table1 VALUES ('POINT(1 2)'::GEOMETRY);")
+
+      %{conn: conn}
+    end
+
+    test "WKB input/output", %{conn: conn} do
+      wkb = <<1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 240, 63, 0, 0, 0, 0, 0, 0, 0, 64>>
+
+      assert {:ok, r} = Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [wkb])
+      assert [[^wkb]] = Duckdbex.fetch_all(r)
+    end
+  end
+
   # LIST An ordered sequence of data values of the same type.
   # https://duckdb.org/docs/sql/data_types/list
   describe "LIST" do
@@ -924,6 +1028,38 @@ defmodule Duckdbex.TypesTest do
     end
   end
 
+  # Timestamp (uses time zone), with nanosecond precision; same tuple shape as TIMESTAMP_NS, in UTC.
+  describe "TIMESTAMPTZ_NS" do
+    setup %{conn: conn} do
+      assert {:ok, _} = Duckdbex.query(conn, "CREATE TABLE table1(col1 TIMESTAMPTZ_NS);")
+
+      assert {:ok, _} =
+               Duckdbex.query(conn, """
+               INSERT INTO table1 VALUES (TIMESTAMPTZ_NS '1992-09-20 11:30:00.999999999+00');
+               """)
+
+      %{conn: conn}
+    end
+
+    test "native input/output", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
+                 {{1992, 9, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}
+               ])
+
+      assert [[{{1992, 9, 20}, {11, 30, 0, _nanoseconds = 999_999_999}}]] = Duckdbex.fetch_all(r)
+    end
+
+    test "binary input, native output", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
+                 "1992-09-20 14:30:00.999999999+03"
+               ])
+
+      assert [[{{1992, 9, 20}, {11, 30, 0, 999_999_999}}]] = Duckdbex.fetch_all(r)
+    end
+  end
+
   # Timestamp (uses time zone), with microsecond precision
   # https://duckdb.org/docs/sql/data_types/timestamp
   describe "TIMESTAMPTZ" do
@@ -1211,7 +1347,7 @@ defmodule Duckdbex.TypesTest do
 
   # 'infinity'/'-infinity' are stored as sentinels; they must not decode as dates or crash the VM.
   describe "infinite DATE and TIMESTAMP" do
-    @infinite_types ~w(DATE TIMESTAMP TIMESTAMPTZ TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS)
+    @infinite_types ~w(DATE TIMESTAMP TIMESTAMPTZ TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS TIMESTAMPTZ_NS)
 
     test "output", %{conn: conn} do
       for type <- @infinite_types do
