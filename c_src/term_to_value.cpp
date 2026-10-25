@@ -3,6 +3,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "term.h"
+#include "map_iterator.h"
 
 namespace {
   template <class T>
@@ -938,21 +939,36 @@ bool nif::term_to_map(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalTy
 }
 
 bool nif::term_to_struct(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::LogicalType& map_type, duckdb::Value& sink) {
-  size_t map_size = 0;
-  if (!enif_get_map_size(env, term, &map_size))
+  // Keys follow DuckDB Identifier semantics, i.e. are matched case-insensitively.
+  duckdb::identifier_map_t<ERL_NIF_TERM> entries;
+
+  nif::ErlangMapIterator iter(env, term);
+  if (!iter.valid)
+    return false;
+
+  while (iter.next()) {
+    std::string name;
+    if (!nif::get_string(env, iter.key, name) || !entries.emplace(duckdb::Identifier(name), iter.value).second)
+      return false;
+  }
+
+  const duckdb::idx_t child_count = duckdb::StructType::GetChildCount(map_type);
+
+  // Unknown or duplicate keys are rejected instead of being silently dropped.
+  if (entries.size() != child_count)
     return false;
 
   duckdb::child_list_t<duckdb::Value> children;
 
-  for (duckdb::idx_t child_idx = 0; child_idx < map_size; child_idx++) {
-    auto field_name = duckdb::StructType::GetChildName(map_type, child_idx);
+  for (duckdb::idx_t child_idx = 0; child_idx < child_count; child_idx++) {
+    auto& field_name = duckdb::StructType::GetChildName(map_type, child_idx);
+    auto entry = entries.find(field_name);
 
-    ERL_NIF_TERM value_term;
-    if (!enif_get_map_value(env, term, nif::make_binary_term(env, field_name.GetIdentifierName()), &value_term))
+    if (entry == entries.end())
       return false;
 
     duckdb::Value value_sink;
-    if (!term_to_value(env, value_term, duckdb::StructType::GetChildType(map_type, child_idx), value_sink))
+    if (!term_to_value(env, entry->second, duckdb::StructType::GetChildType(map_type, child_idx), value_sink))
       return false;
 
     children.push_back(make_pair(field_name, std::move(value_sink)));
@@ -1058,33 +1074,21 @@ term_to_variant_source(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   if (enif_is_map(env, term)) {
     duckdb::child_list_t<duckdb::Value> children;
 
-    ErlNifMapIterator iter;
-    if (!enif_map_iterator_create(env, term, &iter, ERL_NIF_MAP_ITERATOR_FIRST))
+    nif::ErlangMapIterator iter(env, term);
+    if (!iter.valid)
       return false;
 
-    bool map_ok = true;
-    ERL_NIF_TERM key, value;
-    while (enif_map_iterator_get_pair(env, &iter, &key, &value)) {
+    while (iter.next()) {
       std::string name;
-      if (!nif::get_string(env, key, name)) {
-        map_ok = false;
-        break;
-      }
+      if (!nif::get_string(env, iter.key, name))
+        return false;
 
       duckdb::Value child;
-      if (!term_to_variant_source(env, value, child)) {
-        map_ok = false;
-        break;
-      }
+      if (!term_to_variant_source(env, iter.value, child))
+        return false;
 
       children.emplace_back(duckdb::Identifier(name), std::move(child));
-      enif_map_iterator_next(env, &iter);
     }
-
-    enif_map_iterator_destroy(env, &iter);
-
-    if (!map_ok)
-      return false;
 
     sink = duckdb::Value::STRUCT(std::move(children));
     return true;

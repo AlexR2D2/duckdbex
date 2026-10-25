@@ -13,7 +13,8 @@ namespace nif {
     }
 
     virtual ~ErlangMapIterator() {
-      enif_map_iterator_destroy(env, &iterator);
+      if (valid)
+        enif_map_iterator_destroy(env, &iterator);
       env = 0;
       valid = false;
     }

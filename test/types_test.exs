@@ -105,6 +105,28 @@ defmodule Duckdbex.TypesTest do
 
       assert [[%{"age" => 25, "name" => "Alice"}]] = Duckdbex.fetch_all(r)
     end
+
+    test "'map' keys are matched case-insensitively", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [
+                 %{"Name" => "Alice", "AGE" => 25}
+               ])
+
+      assert [[%{"age" => 25, "name" => "Alice"}]] = Duckdbex.fetch_all(r)
+    end
+
+    test "'map' with missing, extra or duplicate keys is rejected", %{conn: conn} do
+      invalid_inputs = [
+        %{"name" => "Alice"},
+        %{"name" => "Alice", "age" => 25, "extra" => 1},
+        %{"name" => "Alice", "NAME" => "Bob", "age" => 25}
+      ]
+
+      for invalid_input <- invalid_inputs do
+        assert {:error, "invalid type of parameter #1"} =
+                 Duckdbex.query(conn, "SELECT * FROM table1 WHERE col1 = $1", [invalid_input])
+      end
+    end
   end
 
   # MAP A dictionary of multiple named values, each key having the same type and each value having the same type.

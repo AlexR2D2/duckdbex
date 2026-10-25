@@ -1,4 +1,5 @@
 #include "config.h"
+#include "map_iterator.h"
 #include "resource.h"
 #include "term.h"
 #include "term_to_value.h"
@@ -222,39 +223,28 @@ bind_named_values(ErlNifEnv* env, ERL_NIF_TERM term,
                   const duckdb::case_insensitive_map_t<duckdb::LogicalType>& param_types,
                   duckdb::identifier_map_t<duckdb::BoundParameterData>& sink,
                   std::string& failing_name) {
-  ErlNifMapIterator iter;
-  if (!enif_map_iterator_create(env, term, &iter, ERL_NIF_MAP_ITERATOR_FIRST))
+  nif::ErlangMapIterator iter(env, term);
+  if (!iter.valid)
     return NamedBindResult::INVALID_NAME;
 
-  NamedBindResult result = NamedBindResult::OK;
-
-  ERL_NIF_TERM key, value;
-  while (enif_map_iterator_get_pair(env, &iter, &key, &value)) {
+  while (iter.next()) {
     failing_name.clear();
 
-    if (!nif::get_string(env, key, failing_name)) {
-      result = NamedBindResult::INVALID_NAME;
-      break;
-    }
+    if (!nif::get_string(env, iter.key, failing_name))
+      return NamedBindResult::INVALID_NAME;
 
     auto type_it = param_types.find(failing_name);
-    if (type_it == param_types.end()) {
-      result = NamedBindResult::UNKNOWN_NAME;
-      break;
-    }
+    if (type_it == param_types.end())
+      return NamedBindResult::UNKNOWN_NAME;
 
     duckdb::Value bound;
-    if (!nif::term_to_value(env, value, type_it->second, bound)) {
-      result = NamedBindResult::INVALID_VALUE;
-      break;
-    }
+    if (!nif::term_to_value(env, iter.value, type_it->second, bound))
+      return NamedBindResult::INVALID_VALUE;
 
     sink.emplace(duckdb::Identifier(failing_name), duckdb::BoundParameterData(std::move(bound)));
-    enif_map_iterator_next(env, &iter);
   }
 
-  enif_map_iterator_destroy(env, &iter);
-  return result;
+  return NamedBindResult::OK;
 }
 
 static ERL_NIF_TERM
