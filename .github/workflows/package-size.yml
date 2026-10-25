@@ -24,6 +24,8 @@ jobs:
         run: |
           mix local.hex --force
           mix deps.get
+          # checksum.exs is generated at release time (gitignored); hex.build only needs it to exist.
+          touch checksum.exs
           mix hex.build --output package.tar
 
       - name: Check package size
