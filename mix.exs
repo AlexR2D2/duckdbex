@@ -22,6 +22,8 @@ defmodule Duckdbex.MixProject do
       make_precompiler_url:
         "https://github.com/AlexR2D2/duckdbex/releases/download/v#{@version}/@{artefact_filename}",
       make_precompiler_filename: "duckdb_nif",
+      # elixir_make only honours the :make_force_build option, not an env var.
+      make_force_build: System.get_env("ELIXIR_MAKE_FORCE_BUILD") in ["1", "true"],
       make_precompiler_nif_versions: [
         versions: &nif_versions/1,
         fallback_version: &fallback_nif_versions/1
