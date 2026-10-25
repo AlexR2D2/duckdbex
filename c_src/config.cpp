@@ -39,16 +39,6 @@ namespace {
   }
 }
 
-bool nif::get_config_name(ErlNifEnv* env, ERL_NIF_TERM term, std::string& sink) {
-  ErlNifBinary bin;
-  if (enif_inspect_binary(env, term, &bin)) {
-    sink = std::string((const char*)bin.data, bin.size);
-    return true;
-  }
-
-  return nif::atom_to_string(env, term, sink);
-}
-
 bool nif::term_to_option_value(ErlNifEnv* env, ERL_NIF_TERM term, const duckdb::ConfigurationOption& option, duckdb::Value& sink) {
   auto value_type = duckdb::DBConfig::ParseLogicalType(option.parameter_type);
   return nif::term_to_value(env, term, value_type, sink);

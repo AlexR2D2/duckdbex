@@ -119,6 +119,16 @@ bool nif::is_atom(ErlNifEnv* env, ERL_NIF_TERM term, const char* expected_atom) 
   return std::strcmp(&atom[0], expected_atom) == 0;
 }
 
+bool nif::get_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string& sink) {
+  ErlNifBinary bin;
+  if (enif_inspect_binary(env, term, &bin)) {
+    sink = std::string((const char*)bin.data, bin.size);
+    return true;
+  }
+
+  return nif::atom_to_string(env, term, sink);
+}
+
 bool nif::atom_to_string(ErlNifEnv* env, ERL_NIF_TERM term, std::string& sink) {
   if (!enif_is_atom(env, term))
     return false;
