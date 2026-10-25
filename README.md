@@ -405,6 +405,53 @@ The ENUM type represents a dictionary data structure with all possible unique va
 [["Pagliacci", "sad"]] = Duckdbex.fetch_all(r)
 ```
 
+### Dates and timestamps
+
+Dates and times are returned as Erlang-style tuples. All `TIMESTAMP*` types share the shape `{{year, month, day}, {hour, minute, second, fraction}}`, but **the unit of `fraction` depends on the column type**:
+
+| Type | Value | `fraction` |
+| --- | --- | --- |
+| `DATE` | `{2024, 5, 1}` | |
+| `TIME` | `{12, 34, 56, 123456}` | microseconds |
+| `TIMESTAMP` | `{{2024, 5, 1}, {12, 34, 56, 123456}}` | microseconds |
+| `TIMESTAMPTZ` | same as `TIMESTAMP`, converted to UTC | microseconds |
+| `TIMESTAMP_S` | `{{2024, 5, 1}, {12, 34, 56, 0}}` | always `0` |
+| `TIMESTAMP_MS` | `{{2024, 5, 1}, {12, 34, 56, 123}}` | **milliseconds** |
+| `TIMESTAMP_NS`, `TIMESTAMPTZ_NS` | `{{2024, 5, 1}, {12, 34, 56, 123456789}}` | **nanoseconds** |
+
+`'infinity'` and `'-infinity'` values of any of these types are returned as `:infinity` and `:"-infinity"`, and the same atoms are accepted as parameters.
+
+The tuples are not accepted by `NaiveDateTime.from_erl!/1` as is (it expects a 3-element time and the fraction as a separate argument). Convert them like this:
+
+```elixir
+# DATE and TIME
+Date.from_erl!({2024, 5, 1})
+# => ~D[2024-05-01]
+{h, mi, s, us} = {12, 34, 56, 123456}
+Time.from_erl!({h, mi, s}, {us, 6})
+# => ~T[12:34:56.123456]
+
+# TIMESTAMP (microseconds)
+{date, {h, mi, s, us}} = {{2024, 5, 1}, {12, 34, 56, 123456}}
+NaiveDateTime.from_erl!({date, {h, mi, s}}, {us, 6})
+# => ~N[2024-05-01 12:34:56.123456]
+
+# TIMESTAMPTZ (microseconds, UTC)
+{date, {h, mi, s, us}} = {{2024, 5, 1}, {12, 34, 56, 123456}}
+DateTime.from_naive!(NaiveDateTime.from_erl!({date, {h, mi, s}}, {us, 6}), "Etc/UTC")
+# => ~U[2024-05-01 12:34:56.123456Z]
+
+# TIMESTAMP_MS (milliseconds)
+{date, {h, mi, s, ms}} = {{2024, 5, 1}, {12, 34, 56, 123}}
+NaiveDateTime.from_erl!({date, {h, mi, s}}, {ms * 1000, 3})
+# => ~N[2024-05-01 12:34:56.123]
+
+# TIMESTAMP_NS / TIMESTAMPTZ_NS (nanoseconds); NaiveDateTime stops at microseconds
+{date, {h, mi, s, ns}} = {{2024, 5, 1}, {12, 34, 56, 123456789}}
+NaiveDateTime.from_erl!({date, {h, mi, s}}, {div(ns, 1000), 6})
+# => ~N[2024-05-01 12:34:56.123456]
+```
+
 ## Extensions
 
 DuckDB allows to load and use extensions. By default extensions are downloaded from the remote source. These extensions are verified and signed. Also you can use you own unsigned extensions. By default, extensions are installed under the user's home directory:
