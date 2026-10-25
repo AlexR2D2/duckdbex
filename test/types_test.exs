@@ -1209,6 +1209,33 @@ defmodule Duckdbex.TypesTest do
     end
   end
 
+  # 'infinity'/'-infinity' are stored as sentinels; they must not decode as dates or crash the VM.
+  describe "infinite DATE and TIMESTAMP" do
+    @infinite_types ~w(DATE TIMESTAMP TIMESTAMPTZ TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS)
+
+    test "output", %{conn: conn} do
+      for type <- @infinite_types do
+        assert {:ok, r} =
+                 Duckdbex.query(conn, "SELECT 'infinity'::#{type}, '-infinity'::#{type}")
+
+        assert [[:infinity, :"-infinity"]] = Duckdbex.fetch_all(r), type
+      end
+    end
+
+    test "input", %{conn: conn} do
+      for type <- @infinite_types do
+        assert {:ok, r} =
+                 Duckdbex.query(
+                   conn,
+                   "SELECT $1::#{type} = 'infinity'::#{type}, $2::#{type} = '-infinity'::#{type}",
+                   [:infinity, :"-infinity"]
+                 )
+
+        assert [[true, true]] = Duckdbex.fetch_all(r), type
+      end
+    end
+  end
+
   # "https://duckdb.org/docs/sql/data_types/overview"
   describe "UUID" do
     setup %{conn: conn} do

@@ -460,7 +460,28 @@ bool nif::term_to_uuid(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
   return false;
 }
 
+static bool
+get_infinity_atom(ErlNifEnv* env, ERL_NIF_TERM term, bool& negative) {
+  if (nif::is_atom(env, term, "infinity")) {
+    negative = false;
+    return true;
+  }
+
+  if (nif::is_atom(env, term, "-infinity")) {
+    negative = true;
+    return true;
+  }
+
+  return false;
+}
+
 bool nif::term_to_date(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+  if (get_infinity_atom(env, term, negative)) {
+    sink = duckdb::Value::DATE(negative ? duckdb::date_t::ninfinity() : duckdb::date_t::infinity());
+    return true;
+  }
+
   if (enif_is_tuple(env, term)) {
     int year, month, day;
     if (!enif_get_date(env, term, year, month, day))
@@ -558,6 +579,12 @@ bool nif::term_to_time_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink
 }
 
 bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+  if (get_infinity_atom(env, term, negative)) {
+    sink = duckdb::Value::TIMESTAMP(negative ? duckdb::timestamp_t::ninfinity() : duckdb::timestamp_t::infinity());
+    return true;
+  }
+
   ErlNifBinary bin;
 
   if (enif_is_tuple(env, term)) {
@@ -580,6 +607,13 @@ bool nif::term_to_timestamp(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& si
 }
 
 bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+  if (get_infinity_atom(env, term, negative)) {
+    auto timestamp = negative ? duckdb::timestamp_t::ninfinity() : duckdb::timestamp_t::infinity();
+    sink = duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(timestamp));
+    return true;
+  }
+
   if (enif_is_tuple(env, term)) {
     int year, month, day;
     int hour, minute, second, micros;
@@ -632,6 +666,12 @@ bool nif::term_to_timestamp_tz(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 }
 
 bool nif::term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+  if (get_infinity_atom(env, term, negative)) {
+    sink = duckdb::Value::TIMESTAMPNS(negative ? duckdb::timestamp_ns_t::ninfinity() : duckdb::timestamp_ns_t::infinity());
+    return true;
+  }
+
   ErlNifBinary bin;
 
   if (enif_is_tuple(env, term)) {
@@ -665,6 +705,12 @@ bool nif::term_to_timestamp_ns(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 }
 
 bool nif::term_to_timestamp_ms(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+  if (get_infinity_atom(env, term, negative)) {
+    sink = duckdb::Value::TIMESTAMP(negative ? duckdb::timestamp_t::ninfinity() : duckdb::timestamp_t::infinity());
+    return true;
+  }
+
   ErlNifBinary bin;
 
   if (enif_is_tuple(env, term)) {
@@ -689,6 +735,12 @@ bool nif::term_to_timestamp_ms(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value&
 }
 
 bool nif::term_to_timestamp_sec(ErlNifEnv* env, ERL_NIF_TERM term, duckdb::Value& sink) {
+  bool negative;
+  if (get_infinity_atom(env, term, negative)) {
+    sink = duckdb::Value::TIMESTAMP(negative ? duckdb::timestamp_t::ninfinity() : duckdb::timestamp_t::infinity());
+    return true;
+  }
+
   ErlNifBinary bin;
 
   if (enif_is_tuple(env, term)) {

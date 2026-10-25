@@ -78,6 +78,18 @@ ERL_NIF_TERM nif::logical_type_to_term(ErlNifEnv* env, const duckdb::LogicalType
   }
 }
 
+// DuckDB stores 'infinity'/'-infinity' as sentinel values; converting them
+// as ordinary dates gives bogus results, and Timestamp::GetTime throws.
+template <class T>
+static bool
+infinite_value_to_term(ErlNifEnv* env, T value, ERL_NIF_TERM& sink) {
+  if (value.IsFinite())
+    return false;
+
+  sink = nif::make_atom(env, value == T::infinity() ? "infinity" : "-infinity");
+  return true;
+}
+
 bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM& sink) {
   // <dbg>
   // std::cout << "value_to_term: value_type: " << value.type().ToString() << std::endl;
@@ -114,6 +126,9 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
       }
     case duckdb::LogicalTypeId::DATE: {
         auto date = value.GetValueUnsafe<duckdb::date_t>();
+        if (infinite_value_to_term(env, date, sink))
+          return true;
+
         int32_t out_year, out_month, out_day;
         duckdb::Date::Convert(date, out_year, out_month, out_day);
         sink = enif_make_tuple3(env,
@@ -267,6 +282,8 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
     case duckdb::LogicalTypeId::TIMESTAMP:
     case duckdb::LogicalTypeId::TIMESTAMP_TZ: {
         duckdb::timestamp_t timestamp = duckdb::TimestampValue::Get(value);
+        if (infinite_value_to_term(env, timestamp, sink))
+          return true;
 
         duckdb::date_t out_date = duckdb::Timestamp::GetDate(timestamp);
         duckdb::dtime_t out_time = duckdb::Timestamp::GetTime(timestamp);
@@ -296,6 +313,8 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
 
         duckdb::timestamp_ns_t timestamp_ns;
         timestamp_ns.value = timestamp_ns_really.value;
+        if (infinite_value_to_term(env, timestamp_ns, sink))
+          return true;
 
         duckdb::date_t out_date;
         duckdb::dtime_t out_time;
@@ -326,6 +345,9 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         return true;
       }
     case duckdb::LogicalTypeId::TIMESTAMP_MS: {
+        if (infinite_value_to_term(env, duckdb::TimestampMSValue::Get(value), sink))
+          return true;
+
         auto date_value = value.DefaultCastAs(duckdb::LogicalType::DATE);
         auto time_value = value.DefaultCastAs(duckdb::LogicalType::TIME);
 
@@ -355,6 +377,9 @@ bool nif::value_to_term(ErlNifEnv* env, const duckdb::Value& value, ERL_NIF_TERM
         return true;
       }
     case duckdb::LogicalTypeId::TIMESTAMP_SEC: {
+        if (infinite_value_to_term(env, duckdb::TimestampSValue::Get(value), sink))
+          return true;
+
         auto date_value = value.DefaultCastAs(duckdb::LogicalType::DATE);
         auto time_value = value.DefaultCastAs(duckdb::LogicalType::TIME);
 
