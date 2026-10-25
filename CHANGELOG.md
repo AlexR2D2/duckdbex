@@ -1,5 +1,14 @@
 # Changelog
 
+0.7.0
+- Named query parameters: `Duckdbex.query/3` and `execute_statement/2` accept a map keyed by `$name` (case-insensitive, atom keys work), plus `get_named_parameters/1`.
+- Added the DuckDB 2.0 types `TUPLE` (as a list), `TIMESTAMPTZ_NS` (same tuple as `TIMESTAMP_NS`, in UTC), `VARIANT` (decoded to the underlying value) and `GEOMETRY` (WKB binaries).
+- Fixed a VM crash when fetching an infinite `TIMESTAMP`. Infinite `DATE` and `TIMESTAMP*` values are now returned as `:infinity` / `:"-infinity"` instead of a bogus date, and the same atoms are accepted as parameters.
+- Fixed a VM crash when a `STRUCT` parameter map has an extra key. `STRUCT` keys are now matched case-insensitively, and maps with missing, extra or duplicate keys are rejected with `{:error, "invalid type of parameter #N"}`.
+- Fixed `DECIMAL(10..18, _)` values being truncated to 32 bits ([#61](https://github.com/AlexR2D2/duckdbex/pull/61)).
+- The vendored DuckDB archive is now `c_src/duckdb.tar.xz`; building from source needs `xz`.
+- Thanks to [@gilbertwong96](https://github.com/gilbertwong96) for [#62](https://github.com/AlexR2D2/duckdbex/pull/62), which most of this release is ported from, and to [@nivertech](https://github.com/nivertech) for #61.
+
 0.6.0
 - [DuckDB v2.0.0](https://github.com/duckdb/duckdb/releases/tag/v2.0.0) ([#60](https://github.com/AlexR2D2/duckdbex/pull/60))
 - Building from source now requires a C++17 compiler.
