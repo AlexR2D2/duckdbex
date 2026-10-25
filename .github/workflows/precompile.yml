@@ -13,6 +13,24 @@ env:
   DUCKDB_VERSION: "2.0.0"
 
 jobs:
+  # The Hex package ships only c_src/duckdb.tar.xz.sha256; source builds download
+  # the archive from this release, so it must be attached before publishing to Hex.
+  duckdb-archive:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify archive checksum
+        run: |
+          echo "$(cat c_src/duckdb.tar.xz.sha256)  c_src/duckdb.tar.xz" | sha256sum -c -
+
+      - uses: softprops/action-gh-release@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            c_src/duckdb.tar.xz
+
   linux:
     name: Linux Erlang/OTP ${{matrix.otp}} - Elixir ${{matrix.elixir}}
     runs-on: ubuntu-22.04

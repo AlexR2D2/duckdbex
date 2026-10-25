@@ -6,7 +6,8 @@
 - Fixed a VM crash when fetching an infinite `TIMESTAMP`. Infinite `DATE` and `TIMESTAMP*` values are now returned as `:infinity` / `:"-infinity"` instead of a bogus date, and the same atoms are accepted as parameters.
 - Fixed a VM crash when a `STRUCT` parameter map has an extra key. `STRUCT` keys are now matched case-insensitively, and maps with missing, extra or duplicate keys are rejected with `{:error, "invalid type of parameter #N"}`.
 - Fixed `DECIMAL(10..18, _)` values being truncated to 32 bits ([#61](https://github.com/AlexR2D2/duckdbex/pull/61)).
-- The vendored DuckDB archive is now `c_src/duckdb.tar.xz`; building from source needs `xz`.
+- Statically linked the `json` and `icu` extensions, so JSON functions and time zones work without `LOAD` or network access.
+- The vendored DuckDB archive is now `c_src/duckdb.tar.xz` and is no longer shipped in the Hex package (it does not fit Hex's size limit). Source builds from Hex download it from the GitHub release and verify it against `c_src/duckdb.tar.xz.sha256`; set `DUCKDB_ARCHIVE_URL` to use a mirror or a local `file://` path. Building from source needs `curl` and `xz`. Git checkouts still include the archive.
 - Thanks to [@gilbertwong96](https://github.com/gilbertwong96) for [#62](https://github.com/AlexR2D2/duckdbex/pull/62), which most of this release is ported from, and to [@nivertech](https://github.com/nivertech) for #61.
 
 0.6.0

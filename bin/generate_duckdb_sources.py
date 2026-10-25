@@ -23,7 +23,7 @@ def main() -> None:
 
     sources, include_dirs, _originals = build_package(
         target_dir=target,
-        extensions=["core_functions", "parquet"],
+        extensions=["core_functions", "parquet", "json", "icu"],
         linenumbers=False,
         unity_count=32,
         folder_name="",

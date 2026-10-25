@@ -74,7 +74,9 @@ defmodule Duckdbex.MixProject do
         README.md
         LICENSE
       ),
-      exclude_patterns: [~r{^c_src/duckdb(?:/|$)}],
+      # The vendored DuckDB archive does not fit Hex's size limit; the Makefile
+      # downloads it from the GitHub release and checks c_src/duckdb.tar.xz.sha256.
+      exclude_patterns: [~r{^c_src/duckdb(?:/|$)}, ~r{^c_src/duckdb\.tar\.xz$}],
       name: "duckdbex",
       licenses: ["MIT"],
       links: %{

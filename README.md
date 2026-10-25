@@ -8,7 +8,7 @@ To find out where and why you could use DuckDB, please see [why DuckDB](https://
 
 Also, you may find useful the DuckDB [documentation](https://duckdb.org/docs/sql/introduction).
 
-The library vendors the DuckDB C++ sources in `c_src/duckdb/`. That tree is 100% generated from the upstream [duckdb/duckdb](https://github.com/duckdb/duckdb) repository by DuckDB's own `scripts/package_build.py` — see [`bin/regen_duckdb.sh`](bin/regen_duckdb.sh) and [`c_src/duckdb/PROVENANCE.md`](c_src/duckdb/PROVENANCE.md) for the exact version, source id and regeneration workflow. The build statically links the `core_functions` and `parquet` extensions (the upstream build baseline), so functions like `now()` / `version()` and Parquet import/export work out of the box. Other extensions like [JSON](https://duckdb.org/docs/extensions/json), [Full Text Search](https://duckdb.org/docs/extensions/full_text_search), [HTTPFS](https://duckdb.org/docs/extensions/httpfs), [SQLite Scanner](https://duckdb.org/docs/extensions/sqlite_scanner), [Postgres Scanner](https://duckdb.org/docs/extensions/postgres_scanner) and [Substrait](https://duckdb.org/docs/extensions/substrait) are not bundled.
+The library vendors the DuckDB C++ sources in `c_src/duckdb/`. That tree is 100% generated from the upstream [duckdb/duckdb](https://github.com/duckdb/duckdb) repository by DuckDB's own `scripts/package_build.py` — see [`bin/regen_duckdb.sh`](bin/regen_duckdb.sh) and [`c_src/duckdb/PROVENANCE.md`](c_src/duckdb/PROVENANCE.md) for the exact version, source id and regeneration workflow. The build statically links the `core_functions`, `parquet`, `json` and `icu` extensions (the upstream build baseline), so functions like `now()` / `version()`, Parquet import/export, JSON functions and time zones work out of the box, without `LOAD` or network access. Other extensions like [Full Text Search](https://duckdb.org/docs/extensions/full_text_search), [HTTPFS](https://duckdb.org/docs/extensions/httpfs), [SQLite Scanner](https://duckdb.org/docs/extensions/sqlite_scanner), [Postgres Scanner](https://duckdb.org/docs/extensions/postgres_scanner) and [Substrait](https://duckdb.org/docs/extensions/substrait) are not bundled.
 
 All NIF functions implemented as [**Dirty NIF**](https://www.erlang.org/doc/man/erl_nif.html)
 
@@ -22,10 +22,12 @@ by adding `duckdbex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:duckdbex, "~> 0.4.0"}
+    {:duckdbex, "~> 0.7.0"}
   ]
 end
 ```
+
+Precompiled NIFs are downloaded for common targets. On other targets the NIF is built from source, which needs a C++17 compiler, `make`, `curl` and `xz`. The vendored DuckDB sources are too large for Hex, so the build downloads `duckdb.tar.xz` from the GitHub release of the same version and checks it against `c_src/duckdb.tar.xz.sha256`. To build offline or through a mirror, point `DUCKDB_ARCHIVE_URL` at it, e.g. `DUCKDB_ARCHIVE_URL=file:///path/to/duckdb.tar.xz`.
 
 # Usage
 
@@ -549,3 +551,10 @@ And vice versa, if you should pass HUGEINT as argument to sql query, you should 
 ```
 
 Currently Duckdbex lib didn't convert automatically `hugeint_to_integer` for you because this is additional extra pass through your collection of rows which will be executed inside the library.
+
+## Building from source and the vendored DuckDB archive
+
+- `c_src/duckdb.tar.xz` holds the generated DuckDB sources with `core_functions`, `parquet`, `json` and `icu` linked in. It is committed to git, but is too large for Hex, so the Hex package only ships `c_src/duckdb.tar.xz.sha256`.
+- When the archive is missing (a source build from Hex), `make` downloads it from `https://github.com/AlexR2D2/duckdbex/releases/download/v<version>/duckdb.tar.xz` and refuses it if the sha256 does not match. Set `DUCKDB_ARCHIVE_URL` to use a mirror, or `file:///path/to/duckdb.tar.xz` to build offline.
+- Upgrading DuckDB: run `bin/regen_duckdb.sh vX.Y.Z` (needs `gh`, `python3`, `make`, `xz`), then `make verify-sources` and `mix test`, and commit both `c_src/duckdb.tar.xz` and `c_src/duckdb.tar.xz.sha256`.
+- Releasing: pushing the `v<version>` tag runs the precompile workflow, which attaches `duckdb.tar.xz` to the GitHub release next to the precompiled NIFs. Publish to Hex only after that release exists, otherwise source builds get a 404.

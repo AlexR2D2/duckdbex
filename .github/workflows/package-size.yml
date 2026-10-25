@@ -15,6 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Source builds from Hex verify the downloaded archive against this file.
+      - name: Verify archive checksum
+        run: |
+          echo "$(cat c_src/duckdb.tar.xz.sha256)  c_src/duckdb.tar.xz" | sha256sum -c -
+
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27.0"

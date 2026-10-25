@@ -38,17 +38,38 @@ defmodule Duckdbex.ExtensionsTest do
   end
 
   describe "statically linked extensions" do
-    test "core_functions and parquet report STATICALLY_LINKED", %{conn: conn} do
+    test "core_functions, parquet, json and icu report STATICALLY_LINKED", %{conn: conn} do
       assert {:ok, r} =
                Duckdbex.query(
                  conn,
-                 "SELECT extension_name, install_mode FROM duckdb_extensions() WHERE extension_name IN ('core_functions', 'parquet') ORDER BY extension_name;"
+                 "SELECT extension_name, install_mode FROM duckdb_extensions() WHERE extension_name IN ('core_functions', 'parquet', 'json', 'icu') ORDER BY extension_name;"
                )
 
       assert [
                ["core_functions", "STATICALLY_LINKED"],
+               ["icu", "STATICALLY_LINKED"],
+               ["json", "STATICALLY_LINKED"],
                ["parquet", "STATICALLY_LINKED"]
              ] = Duckdbex.fetch_all(r)
+    end
+  end
+
+  describe "json" do
+    test "json functions work without LOAD", %{conn: conn} do
+      assert {:ok, r} = Duckdbex.query(conn, ~S|SELECT json_extract('{"a": [1, 2]}', '$.a[1]');|)
+      assert [["2"]] = Duckdbex.fetch_all(r)
+    end
+  end
+
+  describe "icu" do
+    test "time zone conversion works without LOAD", %{conn: conn} do
+      assert {:ok, r} =
+               Duckdbex.query(
+                 conn,
+                 "SELECT strftime(TIMESTAMPTZ '2024-05-01 12:00:00+00' AT TIME ZONE 'Asia/Tokyo', '%H:%M');"
+               )
+
+      assert [["21:00"]] = Duckdbex.fetch_all(r)
     end
   end
 

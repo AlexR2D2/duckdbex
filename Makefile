@@ -3,6 +3,14 @@ DUCKDB_DIR = $(SRC_DIR)/duckdb
 DUCKDB_ARCHIVE = $(SRC_DIR)/duckdb.tar.xz
 DUCKDB_MANIFEST = $(DUCKDB_DIR)/.sources
 DUCKDB_ARCHIVE_CHECKSUM = $(DUCKDB_DIR)/.archive.checksum
+DUCKDB_ARCHIVE_SHA256 = $(SRC_DIR)/duckdb.tar.xz.sha256
+
+# The archive is committed to git but not shipped in the Hex package (it does
+# not fit Hex's size limit), so a build from the Hex package downloads it from
+# the GitHub release of this version. Override DUCKDB_ARCHIVE_URL to use a
+# mirror, or a file:// URL to build offline.
+DUCKDBEX_VERSION = $(shell sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs)
+DUCKDB_ARCHIVE_URL ?= https://github.com/AlexR2D2/duckdbex/releases/download/v$(DUCKDBEX_VERSION)/duckdb.tar.xz
 
 CXXFLAGS = -O3 -std=c++17
 
@@ -11,9 +19,11 @@ CXXFLAGS = -O3 -std=c++17
 CXXFLAGS += -Wno-psabi
 
 # Statically link the DuckDB build-baseline extensions (see
-# extension/extension_config.cmake upstream): core_functions and parquet.
+# extension/extension_config.cmake upstream): core_functions, parquet, json and icu.
 CXXFLAGS += -DDUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED=1
 CXXFLAGS += -DDUCKDB_EXTENSION_PARQUET_LINKED=1
+CXXFLAGS += -DDUCKDB_EXTENSION_JSON_LINKED=1
+CXXFLAGS += -DDUCKDB_EXTENSION_ICU_LINKED=1
 
 # Include roots emitted by DuckDB's scripts/package_build.py and recorded
 # in c_src/duckdb/.include_dirs at generation time (see bin/regen_duckdb.sh).
@@ -85,9 +95,23 @@ all: prepare-duckdb
 
 build: $(PRIV_DIR) $(SRC) $(LIB_NAME)
 
-prepare-duckdb:
+$(DUCKDB_ARCHIVE):
 	@set -eu; \
-	test -f "$(DUCKDB_ARCHIVE)" || { echo "ERROR: missing $(DUCKDB_ARCHIVE)"; exit 1; }; \
+	echo "Downloading vendored DuckDB sources from $(DUCKDB_ARCHIVE_URL)"; \
+	tmp="$$(mktemp "$(SRC_DIR)/duckdb.download.XXXXXX")"; \
+	trap 'rm -f "$$tmp"' EXIT; \
+	curl -fsSL --retry 3 -o "$$tmp" "$(DUCKDB_ARCHIVE_URL)" || { \
+		echo "ERROR: could not download $(DUCKDB_ARCHIVE_URL); set DUCKDB_ARCHIVE_URL to a mirror or a file:// path"; exit 1; }; \
+	if command -v sha256sum >/dev/null 2>&1; then actual="$$(sha256sum < "$$tmp")"; else actual="$$(shasum -a 256 < "$$tmp")"; fi; \
+	actual="$${actual%% *}"; \
+	expected="$$(cat "$(DUCKDB_ARCHIVE_SHA256)")"; \
+	if [ "$$actual" != "$$expected" ]; then \
+		echo "ERROR: sha256 mismatch for $(DUCKDB_ARCHIVE_URL): expected $$expected, got $$actual"; exit 1; \
+	fi; \
+	mv "$$tmp" "$(DUCKDB_ARCHIVE)"
+
+prepare-duckdb: $(DUCKDB_ARCHIVE)
+	@set -eu; \
 	archive_checksum="$$(cksum < "$(DUCKDB_ARCHIVE)")"; \
 	installed_checksum="$$(cat "$(DUCKDB_ARCHIVE_CHECKSUM)" 2>/dev/null || true)"; \
 	if [ ! -f "$(DUCKDB_MANIFEST)" ] || [ "$$archive_checksum" != "$$installed_checksum" ]; then \
