@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create a deterministic archive of generated DuckDB sources."""
 
-import gzip
+import lzma
 import os
 from pathlib import Path
 import stat
@@ -39,7 +39,8 @@ def normalize(info: tarfile.TarInfo) -> tarfile.TarInfo:
 
 def create_archive(source: Path, destination: Path) -> None:
     with destination.open("wb") as output:
-        with gzip.GzipFile(fileobj=output, mode="wb", filename="", mtime=0) as compressed:
+        # xz is ~30% smaller than gzip, which keeps the Hex package under 8 MB.
+        with lzma.LZMAFile(output, mode="wb", preset=9 | lzma.PRESET_EXTREME) as compressed:
             with tarfile.open(
                 fileobj=compressed,
                 mode="w",

@@ -9,7 +9,7 @@ set -euo pipefail
 # leading "v" stripped when <ref> looks like a release tag; pass it explicitly
 # for non-tag refs (it becomes DUCKDB_VERSION, e.g. "1.6.0-dev").
 #
-# Requirements: gh CLI (authenticated), python3, make.
+# Requirements: gh CLI (authenticated), python3, make, xz.
 #
 # package_build.py has no CLI. The driver script
 # (bin/generate_duckdb_sources.py) calls build_package() directly, and the
@@ -24,7 +24,7 @@ set -euo pipefail
 #   1. bin/regen_duckdb.sh v1.6.0
 #   2. make verify-sources             # verify the generated archive
 #   3. mix test                        # full suite
-#   4. commit c_src/duckdb.tar.gz
+#   4. commit c_src/duckdb.tar.xz
 #
 # The Makefile reads .sources / .include_dirs from the generated tree, so a
 # version bump normally needs no Makefile changes. gh is used for two things:
@@ -41,7 +41,7 @@ else
   exit 1
 fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ARCHIVE="$ROOT/c_src/duckdb.tar.gz"
+ARCHIVE="$ROOT/c_src/duckdb.tar.xz"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -82,9 +82,9 @@ regenerate instead:
   \`SETUPTOOLS_SCM_PRETEND_HASH\`
 EOF
 
-python3 "$ROOT/bin/archive_duckdb_sources.py" "$WORK/out" "$WORK/duckdb.tar.gz"
+python3 "$ROOT/bin/archive_duckdb_sources.py" "$WORK/out" "$WORK/duckdb.tar.xz"
 
-mv "$WORK/duckdb.tar.gz" "$ARCHIVE"
+mv "$WORK/duckdb.tar.xz" "$ARCHIVE"
 
 echo "==> materializing archive through Makefile"
 make -C "$ROOT" prepare-duckdb

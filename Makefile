@@ -1,6 +1,6 @@
 SRC_DIR = c_src
 DUCKDB_DIR = $(SRC_DIR)/duckdb
-DUCKDB_ARCHIVE = $(SRC_DIR)/duckdb.tar.gz
+DUCKDB_ARCHIVE = $(SRC_DIR)/duckdb.tar.xz
 DUCKDB_MANIFEST = $(DUCKDB_DIR)/.sources
 DUCKDB_ARCHIVE_CHECKSUM = $(DUCKDB_DIR)/.archive.checksum
 
@@ -94,7 +94,7 @@ prepare-duckdb:
 		echo "Extracting vendored DuckDB sources"; \
 		extract_dir="$$(mktemp -d "$(SRC_DIR)/duckdb.extract.XXXXXX")"; \
 		trap 'rm -rf "$$extract_dir"' EXIT; \
-		tar -xzf "$(DUCKDB_ARCHIVE)" -C "$$extract_dir"; \
+		tar -xJf "$(DUCKDB_ARCHIVE)" -C "$$extract_dir"; \
 		test -f "$$extract_dir/duckdb/.sources" || { echo "ERROR: invalid $(DUCKDB_ARCHIVE)"; exit 1; }; \
 		rm -rf "$(DUCKDB_DIR)"; \
 		mv "$$extract_dir/duckdb" "$(DUCKDB_DIR)"; \

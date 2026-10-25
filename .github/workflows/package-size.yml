@@ -1,0 +1,36 @@
+name: package-size
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hex-package-size:
+    runs-on: ubuntu-22.04
+    env:
+      # Hex rejects packages over 8 MB; fail early with some headroom.
+      MAX_PACKAGE_BYTES: "7500000"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.0"
+          elixir-version: "1.17.3"
+
+      - name: Build Hex package
+        run: |
+          mix local.hex --force
+          mix deps.get
+          mix hex.build --output package.tar
+
+      - name: Check package size
+        run: |
+          size=$(stat -c %s package.tar)
+          echo "Hex package: ${size} bytes (limit ${MAX_PACKAGE_BYTES})"
+          if [ "$size" -gt "$MAX_PACKAGE_BYTES" ]; then
+            echo "::error::Hex package is ${size} bytes, over ${MAX_PACKAGE_BYTES}"
+            exit 1
+          fi
