@@ -22,7 +22,7 @@ by adding `duckdbex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:duckdbex, "~> 0.7.0"}
+    {:duckdbex, "~> 0.7.1"}
   ]
 end
 ```

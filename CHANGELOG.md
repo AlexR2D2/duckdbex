@@ -1,5 +1,8 @@
 # Changelog
 
+0.7.1
+- [DuckDB v2.0.1 Bugfix Release](https://github.com/duckdb/duckdb/releases/tag/v2.0.1)
+
 0.7.0
 - Named query parameters: `Duckdbex.query/3` and `execute_statement/2` accept a map keyed by `$name` (case-insensitive, atom keys work), plus `get_named_parameters/1`.
 - Added the DuckDB 2.0 types `TUPLE` (as a list), `TIMESTAMPTZ_NS` (same tuple as `TIMESTAMP_NS`, in UTC), `VARIANT` (decoded to the underlying value) and `GEOMETRY` (WKB binaries).
