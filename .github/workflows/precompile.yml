@@ -113,7 +113,7 @@ jobs:
             cache/*.tar.gz
 
   macos:
-    runs-on: macos-14
+    runs-on: ${{ matrix.runner }}
     env:
       MIX_ENV: prod
       CC_PRECOMPILER_PRECOMPILE_ONLY_LOCAL: "true"
@@ -126,6 +126,11 @@ jobs:
           - {otp: "27.0.1", elixir: "1.17.2"}
           - {otp: "25.3.2.13", elixir: "1.16.3"}
           - {otp: "29.0", elixir: "1.20"}
+        include:
+          - arch: x86_64-apple-darwin
+            runner: macos-15-intel
+          - arch: arm64-apple-darwin
+            runner: macos-15
 
     name: Mac ${{ matrix.arch }} - OTP ${{ matrix.job.otp }} - Elixir ${{ matrix.job.elixir }}
     steps:
@@ -140,7 +145,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.asdf
-          key: asdf-${{ runner.os }}-build-${{ matrix.job.otp }}-${{ matrix.job.elixir }}
+          key: asdf-${{ matrix.runner }}-build-${{ matrix.job.otp }}-${{ matrix.job.elixir }}
 
       - if: ${{ steps.asdf-cache.outputs.cache-hit != 'true' }}
         name: Install Erlang & Elixir
